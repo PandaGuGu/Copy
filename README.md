@@ -6,8 +6,6 @@
 
 ## 界面截图
 
-> 截图文件放在 `docs/images/`，请将你的实际截图命名替换下方占位文件名。
-
 <table>
   <tr>
     <td align="center"><b>首页</b><br><img src="docs/images/homepage.png" alt="首页" width="400"/></td>
