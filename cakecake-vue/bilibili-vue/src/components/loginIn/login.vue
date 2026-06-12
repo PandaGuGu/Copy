@@ -236,7 +236,16 @@ export default {
   },
   watch: {
     activeMode() { this.btnErrorText = ""; },
-    showRegister() { this.btnErrorText = ""; }
+    showRegister() { this.btnErrorText = ""; },
+    nowindex(val) {
+      if (val === 1) {
+        this.showRegister = true;
+        this.activeMode = 0;
+      } else {
+        this.showRegister = false;
+        this.activeMode = 0;
+      }
+    }
   },
   methods: {
     ...mapMutations({

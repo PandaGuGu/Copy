@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,9 @@ import (
 
 const defaultFavoriteFolderTitle = "默认收藏夹"
 
+// ensureDefaultFolderMu serializes ensureDefaultFavoriteFolder calls per user to prevent TOCTOU duplicate creation.
+var ensureDefaultFolderMu sync.Map // map[uint64]*sync.Mutex
+
 type createFavoriteFolderJSON struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -32,6 +36,11 @@ type createFavoriteFolderJSON struct {
 }
 
 func (a *API) ensureDefaultFavoriteFolder(userID uint64) (model.FavoriteFolder, error) {
+	muI, _ := ensureDefaultFolderMu.LoadOrStore(userID, &sync.Mutex{})
+	mu := muI.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
 	var f model.FavoriteFolder
 	err := a.DB.Where("user_id = ? AND is_default = ?", userID, true).First(&f).Error
 	if err == nil {

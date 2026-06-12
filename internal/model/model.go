@@ -154,6 +154,7 @@ type FavoriteFolder struct {
 	CoverURL    string `gorm:"size:1024;not null;default:''"`
 	IsPublic    bool   `gorm:"not null;default:1"`
 	IsDefault   bool   `gorm:"not null;default:0"`
+	// Migration: CREATE UNIQUE INDEX idx_fav_folder_user_default ON favorite_folders(user_id) WHERE is_default = 1;
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

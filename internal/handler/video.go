@@ -966,6 +966,13 @@ func deleteVideoCascade(tx *gorm.DB, videoID uint64) error {
 	if err := tx.Where("video_id = ?", videoID).Delete(&model.Danmaku{}).Error; err != nil {
 		return err
 	}
+	if len(cids) > 0 {
+		notifTypes := []string{"like_aggregation", "reply_received", "video_comment_received"}
+		if err := tx.Where("type IN ? AND related_id IN ?", notifTypes, cids).
+			Delete(&model.Notification{}).Error; err != nil {
+			return err
+		}
+	}
 	return tx.Where("id = ?", videoID).Delete(&model.Video{}).Error
 }
 

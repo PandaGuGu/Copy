@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
@@ -387,6 +388,7 @@ func (a *API) DeleteComment(c *gin.Context) {
 
 func collectDescendantIDs(db *gorm.DB, root uint64) ([]uint64, error) {
 	var all []uint64
+	visited := map[uint64]struct{}{root: {}}
 	queue := []uint64{root}
 	for len(queue) > 0 {
 		id := queue[0]
@@ -396,7 +398,12 @@ func collectDescendantIDs(db *gorm.DB, root uint64) ([]uint64, error) {
 		if err := db.Model(&model.Comment{}).Where("parent_id = ?", id).Pluck("id", &children).Error; err != nil {
 			return nil, err
 		}
-		queue = append(queue, children...)
+		for _, child := range children {
+			if _, ok := visited[child]; !ok {
+				visited[child] = struct{}{}
+				queue = append(queue, child)
+			}
+		}
 	}
 	return all, nil
 }
@@ -654,7 +661,8 @@ func (a *API) likeAggTopLikerNames(commentID uint64, article bool, limit int) []
 // consolidateLikeAggregationNotifs merges duplicate inbox rows for the same comment (SPEC AC-11).
 func (a *API) consolidateLikeAggregationNotifs(recipientID, relatedID uint64) {
 	var rows []model.Notification
-	if err := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ?",
+	if err := a.DB.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("recipient_id = ? AND type = ? AND related_id = ?",
 		recipientID, "like_aggregation", relatedID).
 		Order("id ASC").Find(&rows).Error; err != nil || len(rows) <= 1 {
 		return
