@@ -41,6 +41,7 @@
             @click="searchALL()"
           ></button>
         </div>
+        <!-- 搜索建议（有输入时） -->
         <ul v-if="suggestShow" class="bilibili-suggest">
           <li class="kw">
             <div class="b-line">
@@ -59,6 +60,32 @@
             ></a>
           </li>
         </ul>
+        <!-- 热搜榜（无输入且聚焦时） -->
+        <div
+          v-else-if="hotSearchPanelShow"
+          class="bilibili-suggest hot-search-panel"
+        >
+          <div class="hot-search-head">
+            <span class="hot-search-title">热搜榜</span>
+          </div>
+          <div class="hot-search-grid">
+            <a
+              href="javascript:;"
+              class="hot-search-item"
+              v-for="item in hotSearchItems"
+              :key="`hot_${item.rank}`"
+              @mousedown.prevent="searchByHistory(item.title)"
+            >
+              <span
+                class="hot-search-rank"
+                :class="{ 'top3': item.rank <= 3 }"
+              >{{ item.rank }}</span>
+              <span class="hot-search-text">{{ item.title }}</span>
+              <span v-if="item.badge" class="hot-search-badge">{{ item.badge }}</span>
+            </a>
+          </div>
+        </div>
+        <!-- 历史搜索（无输入、无热搜时） -->
         <div
           v-else-if="historyPanelShow"
           class="bilibili-suggest search-history-panel"
@@ -536,6 +563,7 @@ export default {
       // 搜索相关
       suggestShow: false,
       historyPanelVisible: false,
+      hotSearchVisible: false,
       searchHistory: [],
       _hideSearchPanelTimer: null,
       hotPlaceholderIndex: 0,
@@ -597,7 +625,15 @@ export default {
       return (
         this.historyPanelVisible &&
         !this.suggestShow &&
+        !this.hotSearchPanelShow &&
         this.searchHistory.length > 0
+      );
+    },
+    hotSearchPanelShow() {
+      return (
+        this.hotSearchVisible &&
+        !this.suggestShow &&
+        this.hotSearchItems.length > 0
       );
     },
     // 使用对象展开运算符将此对象混入到外部对象中
@@ -612,6 +648,9 @@ export default {
     },
     suggest() {
       return this.$store.state.header.suggest;
+    },
+    hotSearchItems() {
+      return this.$store.state.header.hotSearchItems || [];
     },
     /** 顶栏用：兼容 proInfo 初始为 [] */
     navProfileRecord() {
@@ -812,14 +851,24 @@ export default {
       const hasInput = String(this.searchValue || "").length > 0;
       if (hasInput) {
         this.suggestShow = true;
+        this.hotSearchVisible = false;
         this.historyPanelVisible = false;
       } else {
         this.suggestShow = false;
-        this.historyPanelVisible = this.searchHistory.length > 0;
+        // 无输入时优先显示热搜，其次显示历史
+        if (this.hotSearchItems.length > 0) {
+          this.hotSearchVisible = true;
+          this.historyPanelVisible = false;
+        } else {
+          this.hotSearchVisible = false;
+          this.historyPanelVisible = this.searchHistory.length > 0;
+        }
       }
     },
     onSearchFocus() {
       this.clearHideSearchPanelTimer();
+      // 聚焦时拉取最新热搜
+      this.$store.dispatch("header/setHotSearchItems");
       void loadSearchHistoryAsync().then(list => {
         this.searchHistory = list;
         this.syncSearchPanels();
@@ -829,6 +878,7 @@ export default {
       this.clearHideSearchPanelTimer();
       this._hideSearchPanelTimer = setTimeout(() => {
         this.suggestShow = false;
+        this.hotSearchVisible = false;
         this.historyPanelVisible = false;
         this._hideSearchPanelTimer = null;
       }, 180);
@@ -851,6 +901,7 @@ export default {
       this.searchValue = kw;
       this.searchHistory = addSearchHistory(kw);
       this.suggestShow = false;
+      this.hotSearchVisible = false;
       this.historyPanelVisible = false;
       this.$router.push({ path: "/search/all", query: { keyword: kw } });
     },
@@ -864,6 +915,7 @@ export default {
         }
       }
       this.suggestShow = false;
+      this.hotSearchVisible = false;
       this.historyPanelVisible = false;
       this.$router.push({ path: "/search/all", query: { keyword: kw } });
     }
@@ -907,6 +959,7 @@ export default {
   async created() {
     // 初始化搜索热词
     this.$store.dispatch("header/setSearchDefaultWords");
+    this.$store.dispatch("header/setHotSearchItems");
     this.searchHistory = await loadSearchHistoryAsync();
 
     const login = localStorage.getItem("signIn"); //读取缓存登录状态
@@ -1017,6 +1070,77 @@ export default {
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16);
       padding-bottom: 5px;
       font-size: 12px;
+      // 热搜面板
+      &.hot-search-panel {
+        width: 420px;
+        padding: 0;
+      }
+      .hot-search-head {
+        padding: 10px 12px 6px;
+        border-bottom: 1px solid #e5e9ef;
+      }
+      .hot-search-title {
+        font-size: 13px;
+        font-weight: bold;
+        color: #222;
+      }
+      .hot-search-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        padding: 4px 0 6px;
+      }
+      .hot-search-item {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 12px;
+        cursor: pointer;
+        text-decoration: none;
+        color: #222;
+        transition: background-color 0.15s;
+        &:hover {
+          background-color: #e5e9ef;
+          .hot-search-text {
+            color: #00a1d6;
+          }
+        }
+      }
+      .hot-search-rank {
+        flex: 0 0 18px;
+        width: 18px;
+        height: 16px;
+        line-height: 16px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: #999;
+        margin-right: 8px;
+        &.top3 {
+          color: $pink;
+        }
+      }
+      .hot-search-text {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #222;
+        transition: color 0.15s;
+      }
+      .hot-search-badge {
+        flex: 0 0 auto;
+        margin-left: 4px;
+        padding: 0 4px;
+        height: 16px;
+        line-height: 16px;
+        font-size: 10px;
+        color: $pink;
+        background: #fff0f5;
+        border-radius: 2px;
+      }
       .b-line {
         border-top: 1px solid #e5e9ef;
         position: relative;

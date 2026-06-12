@@ -138,6 +138,29 @@ function buildSearchDefaultFromHotItems(items) {
   };
 }
 
+//热搜榜原始条目（Mini-Bili：含 rank/badge；用于搜索框悬浮热搜面板）
+export function getHotSearchItems(limit = 10) {
+  if (isMinibili) {
+    return http
+      .get("/api/v1/hot-search", { params: { limit } })
+      .then(body => {
+        if (!body || body.code !== 0) {
+          return { items: [] };
+        }
+        return { items: (body.data && body.data.items) || [] };
+      })
+      .catch(() => ({ items: [] }));
+  }
+  // 非 Mini-Bili 模式：用 fallback 占位
+  return Promise.resolve({
+    items: local.HOT_SEARCH_FALLBACK_TITLES.map((title, i) => ({
+      rank: i + 1,
+      title,
+      badge: i === 0 ? "热" : ""
+    }))
+  });
+}
+
 //搜索框默认关键词（Mini-Bili：热搜榜；其余：原站 mock）
 export function getSearchDefaultWords() {
   if (isMinibili) {

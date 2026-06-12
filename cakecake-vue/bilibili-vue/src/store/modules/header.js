@@ -2,7 +2,8 @@ import {
   getLoc,
   getSearchDefaultWords,
   getSuggest,
-  getMenuIcon
+  getMenuIcon,
+  getHotSearchItems
 } from "../../api";
 import { buildHeaderMenuLeftZones } from "@/constants/videoZones";
 import square01 from "../../assets/square_01.jpg";
@@ -192,7 +193,8 @@ const state = {
       fields: []
     }
   ], //主要菜单右侧
-  menuIcon: [] //主要菜单右侧icon
+  menuIcon: [], //主要菜单右侧icon
+  hotSearchItems: [] //热搜榜原始条目 [{rank, title, badge}]
 };
 
 const getters = {};
@@ -212,6 +214,9 @@ const mutations = {
   },
   SET_SUGGEST: (state, data) => {
     state.suggest = data;
+  },
+  SET_HOT_SEARCH_ITEMS: (state, data) => {
+    state.hotSearchItems = Array.isArray(data) ? data : [];
   }
 };
 
@@ -246,6 +251,11 @@ const actions = {
   setMenuIcon({ commit }) {
     getMenuIcon().then(res => {
       commit("SET_MENUICON", res.data);
+    });
+  },
+  setHotSearchItems({ commit }) {
+    getHotSearchItems(10).then(res => {
+      commit("SET_HOT_SEARCH_ITEMS", res.items || []);
     });
   }
 };
