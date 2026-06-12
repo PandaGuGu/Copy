@@ -5,7 +5,10 @@
       <div class="login-close" @click="setLoginShow()">
         <i class="iconfont icon-close"></i>
       </div>
-      <div class="login-logo"></div>
+      <div class="login-logo">
+        <img class="login-char login-char--left" src="@/assets/login-char-left.png" alt="" />
+        <img class="login-char login-char--right" src="@/assets/login-char-right.png" alt="" />
+      </div>
       <div class="login-title">
         <a
           v-for="(item, index) in tab"
@@ -503,10 +506,28 @@ export default {
     }
   }
   .login-logo {
+    position: relative;
     width: 220px;
     height: 72px;
     margin: 0 auto;
     background: url(../../assets/cakelogo.png) center center / contain no-repeat;
+  }
+  .login-char {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+  }
+  .login-char--left {
+    left: -70px;
+    width: 60px;
+    height: auto;
+  }
+  .login-char--right {
+    right: -70px;
+    width: 60px;
+    height: auto;
   }
   .login-title {
     overflow: hidden;

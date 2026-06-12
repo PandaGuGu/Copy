@@ -236,20 +236,26 @@ func (a *API) UploadVideo(c *gin.Context) {
 	}
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
-	if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
-		_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
-		_ = os.Remove(rawPath)
-		if coverPath != "" {
-			_ = os.Remove(coverPath)
+	if a.MQ != nil {
+		if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
+			_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+			_ = os.Remove(rawPath)
+			if coverPath != "" {
+				_ = os.Remove(coverPath)
+			}
+			a.Log.Error("publish transcode", zap.Error(err))
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
 		}
-		a.Log.Error("publish transcode", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
+		a.Log.Info("transcode job queued",
+			zap.Uint64("video_id", v.ID),
+			zap.String("queue", queue.TranscodeQueue),
+		)
+	} else {
+		a.Log.Warn("transcode skipped (rabbitmq unavailable)",
+			zap.Uint64("video_id", v.ID),
+		)
 	}
-	a.Log.Info("transcode job queued",
-		zap.Uint64("video_id", v.ID),
-		zap.String("queue", queue.TranscodeQueue),
-	)
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{
 		"id":         v.ID,
 		"status":     v.Status,

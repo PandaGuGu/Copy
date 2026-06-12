@@ -57,11 +57,17 @@ func main() {
 	if err != nil {
 		log.Fatal("redis", zap.Error(err))
 	}
-	mq, err := queue.Dial(cfg.RabbitMQURL)
-	if err != nil {
-		log.Fatal("rabbitmq", zap.Error(err))
+	var mq *queue.Client
+	if cfg.RabbitMQURL != "" {
+		if m, err := queue.Dial(cfg.RabbitMQURL); err != nil {
+			log.Warn("rabbitmq disabled (video transcode unavailable)", zap.Error(err))
+		} else {
+			mq = m
+			defer func() { _ = mq.Close() }()
+		}
+	} else {
+		log.Info("rabbitmq disabled (RABBITMQ_URL empty)")
 	}
-	defer func() { _ = mq.Close() }()
 
 	jm, err := jwttoken.NewManager(cfg.JWTSecret)
 	if err != nil {
@@ -120,7 +126,11 @@ func main() {
 	}
 	defer func() { _ = esc.Close() }()
 
-	go worker.StartTranscodeConsumer(ctx, cfg, db, mq, ossc, esc)
+	if mq != nil {
+		go worker.StartTranscodeConsumer(ctx, cfg, db, mq, ossc, esc)
+	} else {
+		log.Info("transcode consumer disabled (rabbitmq unavailable)")
+	}
 
 	pc := &service.PlayCounter{Rdb: rdb, DB: db}
 	go func() {
