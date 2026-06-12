@@ -23,36 +23,36 @@ const state = {
     {
       name: "画友",
       class: "hbili",
-      href: "/huayou"
+      href: "https://www.bilibili.com/v/huayou"
     },
     {
       name: "游戏中心",
       class: "game",
-      href: "/"
+      href: "https://game.bilibili.com"
     },
     {
       name: "直播",
       class: "live",
-      href: "/"
+      href: "https://live.bilibili.com"
     },
     {
       name: "会员购",
       class: "buy",
-      href: "/"
+      href: "https://show.bilibili.com"
     },
     {
       name: "赛事",
-      href: "/"
+      href: "https://www.bilibili.com/v/esports"
     },
     {
       name: "BML",
-      href: "/"
+      href: "https://www.bilibili.com/blackboard/bml"
     },
     {
       name: "下载APP",
       class: "mobile",
       icon: "bili-icon",
-      href: "/"
+      href: "https://app.bilibili.com"
     }
   ],
   headBanner: [], //顶部背景、LOGO
@@ -63,7 +63,7 @@ const state = {
     {
       name: "首页",
       class: "home",
-      href: ""
+      href: "/"
     },
     ...buildHeaderMenuLeftZones()
   ], //主要菜单左侧（分区与 constants/videoZones.js 一致）
@@ -72,7 +72,7 @@ const state = {
       name: "专栏",
       class: "zl",
       icon: "zhuanlan",
-      href: "/",
+      href: "https://www.bilibili.com/v/column",
       fieldClass: "",
       fields: []
     },
@@ -80,50 +80,50 @@ const state = {
       name: "广场",
       class: "nav-square",
       icon: "square",
-      href: "/",
+      href: "https://www.bilibili.com/v/cube",
       fieldClass: "square-wrap",
       fields: [
         {
           name: "会员购",
           icon: "icon-vip-buy",
-          href: ""
+          href: "https://show.bilibili.com"
         },
         {
           name: "活动中心",
           icon: "icon-activity",
-          href: ""
+          href: "https://www.bilibili.com/blackboard/activity"
         },
         {
           name: "游戏中心",
           icon: "icon-game",
-          href: ""
+          href: "https://game.bilibili.com"
         },
         {
           name: "新闻中心",
           icon: "icon-news",
-          href: ""
+          href: "https://www.bilibili.com/v/news"
         },
         {
           name: "画友",
           icon: "icon-hy",
-          href: ""
+          href: "https://www.bilibili.com/v/huayou"
         },
         {
           name: "芒果TV",
           icon: "icon-mango",
-          href: ""
+          href: "https://www.bilibili.com"
         }
       ],
       fieldImgClass: "square-field",
       fieldImg: [
         {
           title: "bilibili 活动",
-          href: "",
+          href: "https://www.bilibili.com/blackboard/activity",
           src: square01
         },
         {
           title: "话题列表",
-          href: "",
+          href: "https://www.bilibili.com/v/topic",
           src: square02
         }
       ]
@@ -132,57 +132,57 @@ const state = {
       name: "直播",
       class: "",
       icon: "live",
-      href: "/",
+      href: "https://live.bilibili.com",
       fieldClass: "nav-live",
       fields: [
         {
           name: "推荐主播",
-          href: ""
+          href: "https://live.bilibili.com"
         },
         {
           name: "生活娱乐",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=1"
         },
         {
           name: "绘画专区",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=2"
         },
         {
           name: "唱见舞见",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=3"
         },
         {
           name: "御宅文化",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=4"
         },
         {
           name: "单机联机",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=5"
         },
         {
           name: "网络游戏",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=6"
         },
         {
           name: "电子竞技",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=7"
         },
         {
           name: "手游直播",
-          href: ""
+          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=8"
         }
       ],
       fieldImgClass: "live-field",
       fieldImg: [
         {
           title: "有文画",
-          href: "",
+          href: "https://www.bilibili.com/v/huayou",
           imgclass: "pic",
           src: live01
         },
         {
           title: "小视频",
-          href: "",
+          href: "https://www.bilibili.com/v/short",
           imgclass: "pic",
           src: live02
         }
@@ -192,7 +192,7 @@ const state = {
       name: "小黑屋",
       class: "",
       icon: "blackroom",
-      href: "/",
+      href: "https://www.bilibili.com/blackboard/blackroom",
       fieldClass: "",
       fields: []
     }

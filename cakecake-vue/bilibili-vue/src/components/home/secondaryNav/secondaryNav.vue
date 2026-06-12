@@ -3,7 +3,7 @@
     <div class="sn-inner">
       <!-- 左侧快捷入口 -->
       <div class="sn-left">
-        <a href="javascript:;" class="sn-quick-entry" title="动态">
+        <a href="https://t.bilibili.com" class="sn-quick-entry" title="动态" target="_blank">
           <span class="sn-icon-circle sn-icon-dynamic">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="white" stroke="white" stroke-width="1"/>
@@ -11,7 +11,7 @@
           </span>
           <span class="sn-entry-text">动态</span>
         </a>
-        <a href="javascript:;" class="sn-quick-entry" title="热门">
+        <a href="https://www.bilibili.com/v/popular" class="sn-quick-entry" title="热门" target="_blank">
           <span class="sn-icon-circle sn-icon-hot">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2C12 2 10 7 10 10C10 13 12 16 12 16C12 16 14 13 14 10C14 7 12 2 12 2Z" fill="white"/>
@@ -27,7 +27,8 @@
         <a
           v-for="item in categoryAll"
           :key="item.name"
-          href="javascript:;"
+          :href="item.url"
+          target="_blank"
           class="sn-cat-btn"
         >
           {{ item.name }}
@@ -42,12 +43,12 @@
       <!-- 右侧附加栏目：二行三列 -->
       <div class="sn-right">
         <div class="sn-right-grid">
-          <a href="javascript:;" class="sn-right-link">专栏</a>
-          <a href="javascript:;" class="sn-right-link">活动</a>
-          <a href="javascript:;" class="sn-right-link">社区中心</a>
-          <a href="javascript:;" class="sn-right-link">直播</a>
-          <a href="javascript:;" class="sn-right-link">课堂</a>
-          <a href="javascript:;" class="sn-right-link sn-right-highlight">新歌热榜</a>
+          <a href="https://www.bilibili.com/v/column" target="_blank" class="sn-right-link">专栏</a>
+          <a href="https://www.bilibili.com/blackboard/activity" target="_blank" class="sn-right-link">活动</a>
+          <a href="https://www.bilibili.com/blackboard/community" target="_blank" class="sn-right-link">社区中心</a>
+          <a href="https://live.bilibili.com" target="_blank" class="sn-right-link">直播</a>
+          <a href="https://www.bilibili.com/v/classroom" target="_blank" class="sn-right-link">课堂</a>
+          <a href="https://www.bilibili.com/v/music" target="_blank" class="sn-right-link sn-right-highlight">新歌热榜</a>
         </div>
       </div>
     </div>
@@ -60,28 +61,28 @@ export default {
   data() {
     return {
       categoryAll: [
-        { name: "番剧" },
-        { name: "国创" },
-        { name: "综艺" },
-        { name: "动画" },
-        { name: "鬼畜" },
-        { name: "舞蹈" },
-        { name: "娱乐" },
-        { name: "科技数码" },
-        { name: "美食" },
-        { name: "汽车" },
-        { name: "体育运动" },
-        { name: "电影" },
-        { name: "电视剧" },
-        { name: "纪录片" },
-        { name: "游戏" },
-        { name: "音乐" },
-        { name: "影视" },
-        { name: "知识" },
-        { name: "资讯" },
-        { name: "小剧场" },
-        { name: "时尚美妆" },
-        { name: "更多", hasArrow: true }
+        { name: "番剧", url: "https://www.bilibili.com/v/anime" },
+        { name: "国创", url: "https://www.bilibili.com/v/guochuang" },
+        { name: "综艺", url: "https://www.bilibili.com/v/variety" },
+        { name: "动画", url: "https://www.bilibili.com/v/douga" },
+        { name: "鬼畜", url: "https://www.bilibili.com/v/kichiku" },
+        { name: "舞蹈", url: "https://www.bilibili.com/v/dance" },
+        { name: "娱乐", url: "https://www.bilibili.com/v/ent" },
+        { name: "科技数码", url: "https://www.bilibili.com/v/tech" },
+        { name: "美食", url: "https://www.bilibili.com/v/life" },
+        { name: "汽车", url: "https://www.bilibili.com/v/car" },
+        { name: "体育运动", url: "https://www.bilibili.com/v/sports" },
+        { name: "电影", url: "https://www.bilibili.com/v/movie" },
+        { name: "电视剧", url: "https://www.bilibili.com/v/tv" },
+        { name: "纪录片", url: "https://www.bilibili.com/v/documentary" },
+        { name: "游戏", url: "https://www.bilibili.com/v/game" },
+        { name: "音乐", url: "https://www.bilibili.com/v/music" },
+        { name: "影视", url: "https://www.bilibili.com/v/cinephile" },
+        { name: "知识", url: "https://www.bilibili.com/v/knowledge" },
+        { name: "资讯", url: "https://www.bilibili.com/v/information" },
+        { name: "小剧场", url: "https://www.bilibili.com/v/theatre" },
+        { name: "时尚美妆", url: "https://www.bilibili.com/v/fashion" },
+        { name: "更多", url: "https://www.bilibili.com/v/category", hasArrow: true }
       ]
     };
   }

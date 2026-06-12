@@ -15,7 +15,7 @@
             :key="`leftNav_${index}`"
             :class="item.class"
           >
-            <a class="t" :href="item.href">
+            <a class="t" :href="item.href" target="_blank">
               <i :class="item.icon" v-if="item.icon"></i>
               {{ item.name }}
             </a>
@@ -401,7 +401,7 @@
             </router-link>
             <a
               v-else
-              href="#"
+              href="https://message.bilibili.com"
               target="_blank"
               title="消息"
               class="t"
@@ -435,7 +435,7 @@
                     v-else
                     class="im-list"
                     target="_blank"
-                    href="#"
+                    href="https://message.bilibili.com"
                   >
                     {{ item.label }}
                   </a>
@@ -454,7 +454,7 @@
               </span>
               <span class="nav-label">动态</span>
             </router-link>
-            <a v-else href="#" target="_blank" class="t">
+            <a v-else href="https://t.bilibili.com" target="_blank" class="t">
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="4" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="12" cy="20" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="4" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/><ellipse cx="20" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/></svg>
               </span>
@@ -472,7 +472,7 @@
               </span>
               <span class="nav-label">收藏</span>
             </router-link>
-            <a v-else href="#" target="_blank" class="t">
+            <a v-else href="https://space.bilibili.com/fav" target="_blank" class="t">
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               </span>

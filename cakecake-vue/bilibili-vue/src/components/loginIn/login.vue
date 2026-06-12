@@ -103,7 +103,7 @@
                     <p v-if="!isMinibiliMode" class="error-inline">{{ passError.errorText }}</p>
                   </div>
                 </div>
-                <a class="login-forget" href="javascript:;">忘记密码？</a>
+                <a class="login-forget" href="https://passport.bilibili.com/forget" target="_blank">忘记密码？</a>
                 <div class="btn-row">
                   <span class="btn-outline" @click="showRegister = true">注册</span>
                   <span class="btn-primary" :class="{ on: loginSubmitLooksReady }" @click="onLogin()">登录</span>
@@ -127,7 +127,7 @@
       <img class="login-char login-char--right" src="@/assets/login-char-right.png" alt="" />
       <div class="login-agreement">
         未注册过哔哩哔哩的手机号，我们将自动帮你注册账号<br />
-        登录或完成注册即代表你同意 <a href="javascript:;">用户协议</a> 和 <a href="javascript:;">隐私政策</a>
+        登录或完成注册即代表你同意 <a href="https://www.bilibili.com/protocal/licence.html" target="_blank">用户协议</a> 和 <a href="https://www.bilibili.com/protocal/privacy.html" target="_blank">隐私政策</a>
       </div>
     </div>
   </div>

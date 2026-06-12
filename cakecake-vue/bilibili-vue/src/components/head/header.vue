@@ -17,7 +17,7 @@
             :style="{ background: 'url(' + headBanner.litpic + ')' }"
           ></a>
         </div>
-        <a href="" target="_blank" class="banner-link"></a>
+        <a href="https://www.bilibili.com" target="_blank" class="banner-link"></a>
       </div>
     </template>
   </div>
