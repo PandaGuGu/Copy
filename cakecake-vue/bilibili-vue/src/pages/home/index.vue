@@ -77,6 +77,90 @@
                 <span class="play"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].play) }}</span><span class="danmu"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].video_review) }}</span><span class="star"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].favorites) }}</span><span class="coin"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].coins) }}</span>
             </div>
         </div> -->
+    <!-- 分类导航（移至首页底部） -->
+    <div class="bili-wrapper primary-menu-wrapper">
+      <div class="primary-menu">
+        <ul class="nav-menu">
+          <li
+            v-for="(item, index) in menuLeft"
+            :key="`menuLeft_item_${index}`"
+            :class="item.class"
+          >
+            <a :href="item.href">
+              <div class="num-wrap" v-if="item.num">
+                <span>{{ item.num < 1000 ? item.num : 999 + "+" }}</span>
+              </div>
+              <div class="nav-name">
+                {{ item.name }}
+              </div>
+            </a>
+            <ul class="sub-nav" v-if="item.items">
+              <li
+                v-for="(navitem, ind) in item.items"
+                :key="`sub_navs_item_${ind}`"
+              >
+                <a :href="navitem.href">
+                  <span>{{ navitem.name }}</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="side-nav nav-square"
+            v-for="(item, index) in menuRight"
+            :key="`menuRight_item_${index}`"
+          >
+            <a :href="item.href" class="side-link" :class="item.class">
+              <i :class="item.icon"></i>
+              <span>{{ item.name }}</span>
+            </a>
+            <div
+              class="sub-nav"
+              v-if="item.fieldClass != ''"
+              :class="item.fieldClass"
+            >
+              <ul>
+                <li
+                  v-for="(itemnav, index) in item.fields"
+                  :key="`item_fields_${index}`"
+                >
+                  <a :href="itemnav.href">
+                    <i
+                      class="icon-prim"
+                      :class="itemnav.icon"
+                      v-if="itemnav.icon"
+                    ></i>
+                    <span>{{ itemnav.name }}</span>
+                  </a>
+                </li>
+              </ul>
+              <div :class="item.fieldImgClass">
+                <a
+                  v-for="(itemnavImg, index) in item.fieldImg"
+                  :key="`fieldImg_item_${index}`"
+                  :href="itemnavImg.href"
+                  target="_blank"
+                  :title="itemnavImg.title"
+                  :class="itemnavImg.imgclass"
+                >
+                  <img :alt="itemnavImg.title" :src="itemnavImg.src" />
+                </a>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div class="gif-menu nav-gif" v-if="menuIcon && menuIcon.links">
+          <a
+            :href="menuIcon.links[0]"
+            target="_blank"
+            :title="menuIcon.title"
+            class="random-p"
+          >
+            <img :src="menuIcon.icon" alt="" />
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -123,7 +207,17 @@ export default {
       // "bangumi", //番剧（暂时隐藏）
       // "guochuang", //国创（暂时隐藏）
       "module"
-    ])
+    ]),
+    // 分类导航数据（从 header 模块获取）
+    menuLeft() {
+      return this.$store.state.header.menuLeft;
+    },
+    menuRight() {
+      return this.$store.state.header.menuRight;
+    },
+    menuIcon() {
+      return this.$store.state.header.menuIcon || {};
+    }
   },
   data() {
     return {
@@ -210,6 +304,25 @@ export default {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="scss">
 @import "../../style/mixin";
+
+/* 底部分类导航容器 */
+.primary-menu-wrapper {
+  padding: 20px 0 30px;
+  border-top: 1px solid #e5e9ef;
+  margin-top: 20px;
+
+  /* 子菜单向上展开（因为在页面底部） */
+  .primary-menu .nav-menu > li {
+    .sub-nav {
+      top: auto;
+      bottom: 44px;
+      border-top: 1px solid #e5e9ef;
+      border-bottom: 0;
+      border-radius: 4px 4px 0 0;
+      box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.16);
+    }
+  }
+}
 
 .zone-wrap-module {
   overflow: hidden;

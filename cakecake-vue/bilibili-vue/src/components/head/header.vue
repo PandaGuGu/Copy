@@ -91,90 +91,6 @@
         </div>
         <a href="" target="_blank" class="banner-link"></a>
       </div>
-      <div v-if="showGlobalPrimaryMenu" class="bili-wrapper">
-        <div class="primary-menu">
-          <ul class="nav-menu">
-            <li
-              v-for="(item, index) in menuLeft"
-              :key="`menuLeft_item_${index}`"
-              :class="item.class"
-            >
-              <a :href="item.href">
-                <div class="num-wrap" v-if="item.num">
-                  <!-- eslint-disable-next-line -->
-                  <span>{{ item.num < 1000 ? item.num : 999 + "+" }}</span>
-                </div>
-                <div class="nav-name">
-                  {{ item.name }}
-                </div>
-              </a>
-              <ul class="sub-nav" v-if="item.items">
-                <li
-                  v-for="(navitem, ind) in item.items"
-                  :key="`sub_navs_item_${ind}`"
-                >
-                  <a :href="navitem.href">
-                    <span>{{ navitem.name }}</span>
-                  </a>
-                </li>
-              </ul>
-            </li>
-            <li
-              class="side-nav nav-square"
-              v-for="(item, index) in menuRight"
-              :key="`menuRight_item_${index}`"
-            >
-              <a :href="item.href" class="side-link" :class="item.class">
-                <i :class="item.icon"></i>
-                <span>{{ item.name }}</span>
-              </a>
-              <div
-                class="sub-nav"
-                v-if="item.fieldClass != ''"
-                :class="item.fieldClass"
-              >
-                <ul>
-                  <li
-                    v-for="(itemnav, index) in item.fields"
-                    :key="`item_fields_${index}`"
-                  >
-                    <a :href="itemnav.href">
-                      <i
-                        class="icon-prim"
-                        :class="itemnav.icon"
-                        v-if="itemnav.icon"
-                      ></i>
-                      <span>{{ itemnav.name }}</span>
-                    </a>
-                  </li>
-                </ul>
-                <div :class="item.fieldImgClass">
-                  <a
-                    v-for="(itemnavImg, index) in item.fieldImg"
-                    :key="`fieldImg_item_${index}`"
-                    :href="itemnavImg.href"
-                    target="_blank"
-                    :title="itemnavImg.title"
-                    :class="itemnavImg.imgclass"
-                  >
-                    <img :alt="itemnavImg.title" :src="itemnavImg.src" />
-                  </a>
-                </div>
-              </div>
-            </li>
-          </ul>
-          <div class="gif-menu nav-gif" v-if="menuIcon.links">
-            <a
-              :href="menuIcon.links[0]"
-              target="_blank"
-              :title="menuIcon.title"
-              class="random-p"
-            >
-              <img :src="menuIcon.icon" alt="" />
-            </a>
-          </div>
-        </div>
-      </div>
     </template>
   </div>
 </template>
@@ -226,10 +142,7 @@ export default {
       "leftNav",
       "headBanner", //登录状态获取
       "searchWord",
-      "suggest",
-      "menuLeft",
-      "menuRight",
-      "menuIcon"
+      "suggest"
     ]),
     searchValue: {
       get() {
@@ -248,9 +161,6 @@ export default {
       return shouldShowHomeHeaderChrome(this.$route);
     },
     showGlobalHeadBanner() {
-      return !this.isCompactHeaderRoute;
-    },
-    showGlobalPrimaryMenu() {
       return !this.isCompactHeaderRoute;
     },
     historyPanelShow() {
