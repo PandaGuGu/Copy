@@ -41,6 +41,10 @@ const state = {
       href: "/"
     },
     {
+      name: "赛事",
+      href: "/"
+    },
+    {
       name: "BML",
       href: "/"
     },

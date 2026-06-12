@@ -62,3 +62,24 @@ redis-server --port 6379
 - Elasticsearch 未配置 → 全文搜索不可用
 - DeepSeek AI 未配置 → AI 助手不可用
 - 管理员账号 (admin/admin123) 首次启动自动创建
+- 排行榜链接未迁回导航栏（从搜索区域移除后暂未重新添加）
+
+## 前端重构记录 (2026-06-12)
+
+### 版本历史 (GitHub: PandaGuGu/Copy)
+- v0.0.0: B站风格登录弹窗全面重构
+- v0.0.1: 同 v0.0.0（初始发布）
+- v0.0.2: primary-menu 从 header 移至首页底部
+- v0.0.3: 搜索框从 head-banner 移至顶部导航栏
+
+### 搜索框迁移 (v0.0.3)
+- 搜索框从 `header.vue` head-banner 区迁移至 `navMenu.vue` 导航栏
+- 导航栏结构：左链接 → 搜索框 → 右上传/用户区
+- `navMenu.vue` 使用 `this.$store.state.header.*` 跨命名空间访问
+- App.vue 清理 ~189 行废弃全局样式
+- header.vue 精简为仅导航栏+banner渲染
+
+### 分类导航迁移 (v0.0.2)
+- `primary-menu` 从 `header.vue` 移至 `home/index.vue` 页面底部
+- 子菜单向上展开（`top: auto; bottom: 44px`）
+- header.vue 仍保留 `setMenuIcon()` 初始化 Vuex 数据

@@ -1,5 +1,7 @@
 <template>
   <div class="app-body bili-wrapper">
+    <!-- 二级导航栏 -->
+    <secondary-nav></secondary-nav>
     <div id="chief_recommend" class="chief-recommend-module">
       <!-- 轮播图数据、时间、翻页 -->
       <slide
@@ -169,6 +171,7 @@ import Slide from "../../components/slide/slide";
 import Recommend from "../../components/recommend/recommend";
 import Popularize from "../../components/popularize/popularize";
 import Donghua from "../../components/home/donghua/donghua";
+import SecondaryNav from "../../components/home/secondaryNav/secondaryNav";
 // import Bangumi from "../../components/home/bangumi/bangumi";
 // import Guochuang from "../../components/home/guochuang/guochuang";
 
@@ -192,7 +195,8 @@ export default {
     Slide,
     Recommend,
     Popularize,
-    Donghua
+    Donghua,
+    SecondaryNav
     // Bangumi,
     // Guochuang,
   },

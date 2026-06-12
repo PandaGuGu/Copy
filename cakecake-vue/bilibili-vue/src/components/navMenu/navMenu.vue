@@ -6,8 +6,8 @@
       :style="{ background: 'url(' + headBanner.pic + ')' }"
     ></div>
     <div class="nav-mask"></div>
-    <div class="bili-wrapper">
-      <div class="nav-con fl">
+    <div class="nav-inner">
+      <div class="nav-con nav-con--left">
         <ul>
           <li
             class="nav-item"
@@ -119,18 +119,9 @@
           </ul>
         </div>
       </div>
-      <div class="up-load fr">
-        <a
-          v-if="minibiliUploadOpensModal"
-          href="javascript:;"
-          class="u-link"
-          @click.prevent="onMbUploadNavClick"
-          >投 稿</a
-        >
-        <router-link v-else class="u-link" :to="uploadNavTo">投 稿</router-link>
-      </div>
-      <div class="nav-con fr">
+      <div class="nav-con nav-con--right">
         <ul>
+          <!-- 头像 -->
           <li
             class="nav-item profile-info"
             :class="{ on: signIn == 1 }"
@@ -374,119 +365,130 @@
               </p>
             </div>
           </li>
-          <template v-if="signIn == 1">
-            <li class="nav-item">
-              <a
-                href="https://account.bilibili.com/big"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="t"
-              >
-                大会员
-              </a>
-            </li>
-            <li
-              class="nav-item"
-              @mouseover="messageFadeIn"
-              @mouseout="messageFadeOut"
+          <!-- 大会员、消息、动态、收藏、历史、创作中心（头像右侧，带图标） -->
+          <li class="nav-item nav-item--icon">
+            <a
+              href="https://account.bilibili.com/big"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="t"
             >
-              <router-link
-                v-if="isMinibiliMode"
-                to="/minibili/messages?cat=my_message"
-                class="t"
-                title="消息"
-                @click="messageShow = false"
-              >
-                <div v-if="messageUnreadTotalLabel" class="num">
-                  {{ messageUnreadTotalLabel }}
-                </div>
-                消息
-              </router-link>
-              <a
-                v-else
-                href="#"
-                target="_blank"
-                title="消息"
-                class="t"
-              >
-                <div class="num">
-                  1
-                </div>
-                消息
-              </a>
-              <transition name="nav-trans">
-                <div class="im-list-box" v-show="messageShow">
-                  <template v-for="item in messageNavItems" :key="item.cat">
-                    <router-link
-                      v-if="isMinibiliMode"
-                      class="im-list"
-                      :to="`/minibili/messages?cat=${item.cat}`"
-                      @click="messageShow = false"
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="11" font-weight="bold" fill="currentColor">大</text></svg>
+              </span>
+              <span class="nav-label">大会员</span>
+            </a>
+          </li>
+          <li
+            class="nav-item nav-item--icon"
+            @mouseover="messageFadeIn"
+            @mouseout="messageFadeOut"
+          >
+            <router-link
+              v-if="isMinibiliMode"
+              to="/minibili/messages?cat=my_message"
+              class="t"
+              title="消息"
+              @click="messageShow = false"
+            >
+              <div v-if="messageUnreadTotalLabel" class="num">
+                {{ messageUnreadTotalLabel }}
+              </div>
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 7L12 14L21 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">消息</span>
+            </router-link>
+            <a
+              v-else
+              href="#"
+              target="_blank"
+              title="消息"
+              class="t"
+            >
+              <div class="num">
+                1
+              </div>
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 7L12 14L21 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">消息</span>
+            </a>
+            <transition name="nav-trans">
+              <div class="im-list-box" v-show="messageShow">
+                <template v-for="item in messageNavItems" :key="item.cat">
+                  <router-link
+                    v-if="isMinibiliMode"
+                    class="im-list"
+                    :to="`/minibili/messages?cat=${item.cat}`"
+                    @click="messageShow = false"
+                  >
+                    {{ item.label }}
+                    <div
+                      v-if="formatMessageUnreadBadge(msgUnread[item.cat])"
+                      class="im-notify im-number im-center"
                     >
-                      {{ item.label }}
-                      <div
-                        v-if="formatMessageUnreadBadge(msgUnread[item.cat])"
-                        class="im-notify im-number im-center"
-                      >
-                        {{ formatMessageUnreadBadge(msgUnread[item.cat]) }}
-                      </div>
-                    </router-link>
-                    <a
-                      v-else
-                      class="im-list"
-                      target="_blank"
-                      href="#"
-                    >
-                      {{ item.label }}
-                    </a>
-                  </template>
-                </div>
-              </transition>
-            </li>
-            <li class="nav-item">
-              <router-link
-                v-if="isMinibiliMode && minibiliDynamicsTo"
-                class="t"
-                :to="minibiliDynamicsTo"
-              >
-                动态
-              </router-link>
-              <a v-else href="#" target="_blank" class="t">
-                动态
-              </a>
-            </li>
-            <li class="nav-item">
-              <router-link
-                v-if="isMinibiliMode"
-                class="t"
-                to="/minibili/watch-later"
-              >
-                稍后再看
-              </router-link>
-              <a v-else href="#" target="_blank" class="t">
-                稍后再看
-              </a>
-            </li>
-            <li class="nav-item">
-              <router-link
-                v-if="isMinibiliMode && minibiliCollectTo"
-                class="t"
-                :to="minibiliCollectTo"
-              >
-                收藏夹
-              </router-link>
-              <a v-else href="#" target="_blank" class="t">
-                收藏夹
-              </a>
-            </li>
-          </template>
-          <li class="nav-item">
+                      {{ formatMessageUnreadBadge(msgUnread[item.cat]) }}
+                    </div>
+                  </router-link>
+                  <a
+                    v-else
+                    class="im-list"
+                    target="_blank"
+                    href="#"
+                  >
+                    {{ item.label }}
+                  </a>
+                </template>
+              </div>
+            </transition>
+          </li>
+          <li class="nav-item nav-item--icon">
+            <router-link
+              v-if="isMinibiliMode && minibiliDynamicsTo"
+              class="t"
+              :to="minibiliDynamicsTo"
+            >
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="4" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="12" cy="20" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="4" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/><ellipse cx="20" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/></svg>
+              </span>
+              <span class="nav-label">动态</span>
+            </router-link>
+            <a v-else href="#" target="_blank" class="t">
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="4" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="12" cy="20" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="4" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/><ellipse cx="20" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/></svg>
+              </span>
+              <span class="nav-label">动态</span>
+            </a>
+          </li>
+          <li class="nav-item nav-item--icon">
+            <router-link
+              v-if="isMinibiliMode && minibiliCollectTo"
+              class="t"
+              :to="minibiliCollectTo"
+            >
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">收藏</span>
+            </router-link>
+            <a v-else href="#" target="_blank" class="t">
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">收藏</span>
+            </a>
+          </li>
+          <li class="nav-item nav-item--icon">
             <router-link
               v-if="isMinibiliMode"
               class="t"
               :to="minibiliHistoryTo"
             >
-              历史
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">历史</span>
             </router-link>
             <a
               v-else
@@ -494,10 +496,46 @@
               target="_blank"
               class="t"
             >
-              历史
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">历史</span>
+            </a>
+          </li>
+          <li class="nav-item nav-item--icon">
+            <router-link
+              v-if="isMinibiliMode"
+              class="t"
+              :to="{ name: 'upload' }"
+            >
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M10 21H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 18H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 2C8 2 6 5.5 6 9C6 12 7.5 14 9 15.5V17H15V15.5C16.5 14 18 12 18 9C18 5.5 16 2 12 2Z" stroke="currentColor" stroke-width="1.3"/><path d="M12 6L10 10.5H11.5L11 14L14 9.5H12.5L13 6H12Z" fill="currentColor"/></svg>
+              </span>
+              <span class="nav-label">创作中心</span>
+            </router-link>
+            <a
+              v-else
+              href="https://member.bilibili.com/v2#/home"
+              target="_blank"
+              class="t"
+            >
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M10 21H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 18H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 2C8 2 6 5.5 6 9C6 12 7.5 14 9 15.5V17H15V15.5C16.5 14 18 12 18 9C18 5.5 16 2 12 2Z" stroke="currentColor" stroke-width="1.3"/><path d="M12 6L10 10.5H11.5L11 14L14 9.5H12.5L13 6H12Z" fill="currentColor"/></svg>
+              </span>
+              <span class="nav-label">创作中心</span>
             </a>
           </li>
         </ul>
+      </div>
+      <div class="up-load">
+        <a
+          v-if="minibiliUploadOpensModal"
+          href="javascript:;"
+          class="u-link"
+          @click.prevent="onMbUploadNavClick"
+          >投 稿</a
+        >
+        <router-link v-else class="u-link" :to="uploadNavTo">投 稿</router-link>
       </div>
     </div>
   </div>
@@ -1009,15 +1047,15 @@ export default {
     margin: 0 auto;
     width: 1160px;
   }
-  // 导航栏搜索框
+  // 导航栏搜索框（居中，宽度与悬浮面板一致）
   .nav-search {
-    position: relative;
-    float: left;
-    width: 260px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 420px;
     height: 42px;
     display: flex;
     align-items: center;
-    margin-left: 10px;
     z-index: 10;
     .searchform {
       position: relative;
@@ -1062,7 +1100,7 @@ export default {
       position: absolute;
       top: 100%;
       left: 0;
-      width: 258px;
+      width: 420px;
       border: 1px solid #e5e9ef;
       background: $white;
       z-index: 99999;
@@ -1267,57 +1305,104 @@ export default {
         -webkit-box-shadow: none;
         box-shadow: none;
       }
-      .bili-wrapper .nav-con .nav-item {
+      .nav-inner .nav-con .nav-item {
         background-color: #fff !important;
         &:hover {
           background-color: #fff !important;
         }
       }
     }
-    .bili-wrapper {
+    .nav-inner {
       position: relative;
       z-index: 1;
-      .nav-con {
-        .nav-item {
-          float: left;
-          text-align: center;
-          line-height: 42px;
-          height: 42px;
-          position: relative;
-          background-color: hsla(0, 0%, 100%, 0);
-          @include transition(0.3s);
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-width: 1856px;
+      margin: 0 auto;
+      padding: 0 20px;
+      box-sizing: border-box;
+    }
+    .nav-con {
+      &--left {
+        flex-shrink: 0;
+      }
+      &--right {
+        flex-shrink: 0;
+        margin-left: auto;
+      }
+      .nav-item {
+        float: left;
+        text-align: center;
+        line-height: 42px;
+        height: 42px;
+        position: relative;
+        background-color: hsla(0, 0%, 100%, 0);
+        @include transition(0.3s);
+        &:hover {
+          background-color: hsla(0, 0%, 100%, 0.3);
+        }
+        a {
+          &.t {
+            color: $black;
+            height: 100%;
+            display: block;
+            padding: 0 11px;
+          }
+        }
+        // icon + label 纵向布局
+        &--icon {
+          a.t {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            padding: 0 9px;
+          }
+          .nav-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            color: #555;
+            svg {
+              width: 20px;
+              height: 20px;
+            }
+          }
+          .nav-label {
+            font-size: 11px;
+            margin-top: 2px;
+            color: #555;
+            line-height: 1;
+          }
           &:hover {
-            background-color: hsla(0, 0%, 100%, 0.3);
+            .nav-icon { color: #00a1d6; }
+            .nav-label { color: #00a1d6; }
           }
+        }
+        &.home {
+          margin-left: -10px;
+          padding-left: 12px;
           a {
-            &.t {
-              color: $black;
-              height: 100%;
-              display: block;
-              padding: 0 11px;
-            }
+            padding-left: 20px;
           }
-          &.home {
-            margin-left: -10px;
-            padding-left: 12px;
-            a {
-              padding-left: 20px;
-            }
-            i {
-              position: absolute;
-              @include wh(17px, 14px);
-              left: 10px;
-              top: 12px;
-              background-position: -919px -88px;
-            }
+          i {
+            position: absolute;
+            @include wh(17px, 14px);
+            left: 10px;
+            top: 12px;
+            background-position: -919px -88px;
           }
-          &.mobile {
-            i {
-              display: inline-block;
-              vertical-align: middle;
-              background-position: -1367px -1175px;
-              @include wh(21px, 21px);
-            }
+        }
+        &.mobile {
+          i {
+            display: inline-block;
+            vertical-align: middle;
+            background-position: -1367px -1175px;
+            @include wh(21px, 21px);
           }
         }
       }
@@ -1367,6 +1452,7 @@ export default {
     }
     .up-load {
       position: relative;
+      flex-shrink: 0;
       @include wh(58px, 42px);
       .u-link {
         position: relative;
