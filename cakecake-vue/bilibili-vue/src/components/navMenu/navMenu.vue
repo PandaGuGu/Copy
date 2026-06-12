@@ -22,6 +22,76 @@
           </li>
         </ul>
       </div>
+      <!-- 搜索框（移入顶部导航栏） -->
+      <div class="nav-search">
+        <div class="searchform">
+          <input
+            v-model="searchValue"
+            type="text"
+            :placeholder="searchPlaceholder"
+            @keyup.enter="searchALL()"
+            @input="onSearchInput"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            class="search-keyword"
+          />
+          <button
+            type="submit"
+            class="search-submit"
+            @click="searchALL()"
+          ></button>
+        </div>
+        <ul v-if="suggestShow" class="bilibili-suggest">
+          <li class="kw">
+            <div class="b-line">
+              <p><span>关键词</span></p>
+            </div>
+          </li>
+          <li
+            class="suggest-item"
+            v-for="(item, index) in suggestTagList"
+            :key="`suggest_item_${index}`"
+          >
+            <a
+              href="javascript:;"
+              @mousedown.prevent="searchByHistory(item.value)"
+              v-html="item.name"
+            ></a>
+          </li>
+        </ul>
+        <div
+          v-else-if="historyPanelShow"
+          class="bilibili-suggest search-history-panel"
+        >
+          <div class="search-history-head">
+            <div class="b-line">
+              <p><span>历史搜索</span></p>
+            </div>
+          </div>
+          <ul class="search-history-list">
+            <li
+              v-for="(kw, index) in searchHistory"
+              :key="`search_hist_${index}_${kw}`"
+              class="search-history-item"
+            >
+              <a
+                href="javascript:;"
+                class="search-history-link"
+                @mousedown.prevent="searchByHistory(kw)"
+                >{{ kw }}</a
+              >
+              <button
+                type="button"
+                class="search-history-del"
+                aria-label="删除"
+                @mousedown.prevent="removeHistoryItem(index)"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
       <div class="up-load fr">
         <a
           v-if="minibiliUploadOpensModal"
@@ -436,6 +506,11 @@ import {
   refreshMessageUnread,
   subscribeMessageUnread
 } from "@/utils/messageUnread";
+import {
+  addSearchHistory,
+  loadSearchHistoryAsync,
+  removeSearchHistoryAt
+} from "@/utils/searchHistory";
 
 const { mapState, mapMutations, mapActions } = createNamespacedHelpers("login");
 
@@ -457,7 +532,14 @@ export default {
       messageShow: false, //消息通知默认隐藏
       userLevelHelpUrl: USER_LEVEL_HELP_URL,
       msgUnread: {},
-      _msgUnreadUnsub: null
+      _msgUnreadUnsub: null,
+      // 搜索相关
+      suggestShow: false,
+      historyPanelVisible: false,
+      searchHistory: [],
+      _hideSearchPanelTimer: null,
+      hotPlaceholderIndex: 0,
+      _hotPlaceholderTimer: null
     };
   },
   computed: {
@@ -475,12 +557,62 @@ export default {
         import.meta.env.VITE_MINIBILI_API === "1"
       );
     },
+    // 搜索相关 computed
+    searchValue: {
+      get() {
+        return this.$store.state.header.searchValue;
+      },
+      set(value) {
+        this.$store.commit("header/SET_SEARCH_WORD", value);
+      }
+    },
+    searchPlaceholder() {
+      const list = this.hotPlaceholderList;
+      if (!list.length) {
+        return "搜索";
+      }
+      return list[this.hotPlaceholderIndex % list.length];
+    },
+    defaultSearchKeyword() {
+      return (
+        this.searchPlaceholder ||
+        String((this.searchWord && this.searchWord.word) || "").trim()
+      );
+    },
+    hotPlaceholderList() {
+      const list = this.searchWord && this.searchWord.hot_list;
+      if (Array.isArray(list) && list.length) {
+        return list.map(s => String(s).trim()).filter(Boolean);
+      }
+      const one = String(
+        (this.searchWord && this.searchWord.show_name) || ""
+      ).trim();
+      return one ? [one] : [];
+    },
+    suggestTagList() {
+      const tags = this.suggest && this.suggest.tag;
+      return Array.isArray(tags) ? tags : [];
+    },
+    historyPanelShow() {
+      return (
+        this.historyPanelVisible &&
+        !this.suggestShow &&
+        this.searchHistory.length > 0
+      );
+    },
     // 使用对象展开运算符将此对象混入到外部对象中
     ...mapState({
       //命名空间获取state
       signIn: state => state.signIn, //登录状态获取
       proInfo: state => state.proInfo //个人信息获取
     }),
+    // header 命名空间的搜索相关 state
+    searchWord() {
+      return this.$store.state.header.searchWord;
+    },
+    suggest() {
+      return this.$store.state.header.suggest;
+    },
     /** 顶栏用：兼容 proInfo 初始为 [] */
     navProfileRecord() {
       const p = this.proInfo;
@@ -652,6 +784,88 @@ export default {
     },
     messageFadeOut() {
       this.messageShow = false;
+    },
+    // 搜索相关方法
+    clearHideSearchPanelTimer() {
+      if (this._hideSearchPanelTimer) {
+        clearTimeout(this._hideSearchPanelTimer);
+        this._hideSearchPanelTimer = null;
+      }
+    },
+    startHotPlaceholderRotate() {
+      const list = this.hotPlaceholderList;
+      if (list.length <= 1) {
+        return;
+      }
+      this._hotPlaceholderTimer = setInterval(() => {
+        this.hotPlaceholderIndex =
+          (this.hotPlaceholderIndex + 1) % list.length;
+      }, 3500);
+    },
+    stopHotPlaceholderRotate() {
+      if (this._hotPlaceholderTimer) {
+        clearInterval(this._hotPlaceholderTimer);
+        this._hotPlaceholderTimer = null;
+      }
+    },
+    syncSearchPanels() {
+      const hasInput = String(this.searchValue || "").length > 0;
+      if (hasInput) {
+        this.suggestShow = true;
+        this.historyPanelVisible = false;
+      } else {
+        this.suggestShow = false;
+        this.historyPanelVisible = this.searchHistory.length > 0;
+      }
+    },
+    onSearchFocus() {
+      this.clearHideSearchPanelTimer();
+      void loadSearchHistoryAsync().then(list => {
+        this.searchHistory = list;
+        this.syncSearchPanels();
+      });
+    },
+    onSearchBlur() {
+      this.clearHideSearchPanelTimer();
+      this._hideSearchPanelTimer = setTimeout(() => {
+        this.suggestShow = false;
+        this.historyPanelVisible = false;
+        this._hideSearchPanelTimer = null;
+      }, 180);
+    },
+    onSearchInput() {
+      this.$store.dispatch("header/setSuggest");
+      this.syncSearchPanels();
+    },
+    removeHistoryItem(index) {
+      this.searchHistory = removeSearchHistoryAt(index);
+      if (!this.searchHistory.length) {
+        this.historyPanelVisible = false;
+      }
+    },
+    searchByHistory(keyword) {
+      const kw = String(keyword || "").trim();
+      if (!kw) {
+        return;
+      }
+      this.searchValue = kw;
+      this.searchHistory = addSearchHistory(kw);
+      this.suggestShow = false;
+      this.historyPanelVisible = false;
+      this.$router.push({ path: "/search/all", query: { keyword: kw } });
+    },
+    searchALL() {
+      const raw = String(this.searchValue || "").trim();
+      const kw = raw || String(this.defaultSearchKeyword || "").trim();
+      if (kw) {
+        this.searchHistory = addSearchHistory(kw);
+        if (!raw) {
+          this.searchValue = kw;
+        }
+      }
+      this.suggestShow = false;
+      this.historyPanelVisible = false;
+      this.$router.push({ path: "/search/all", query: { keyword: kw } });
     }
   },
   watch: {
@@ -666,6 +880,14 @@ export default {
       if (this.isMinibiliMode && this.signIn == 1) {
         void refreshMessageUnread();
       }
+    },
+    hotPlaceholderList: {
+      immediate: true,
+      handler() {
+        this.hotPlaceholderIndex = 0;
+        this.stopHotPlaceholderRotate();
+        this.startHotPlaceholderRotate();
+      }
     }
   },
   mounted() {
@@ -679,8 +901,14 @@ export default {
       this._msgUnreadUnsub();
       this._msgUnreadUnsub = null;
     }
+    this.clearHideSearchPanelTimer();
+    this.stopHotPlaceholderRotate();
   },
   async created() {
+    // 初始化搜索热词
+    this.$store.dispatch("header/setSearchDefaultWords");
+    this.searchHistory = await loadSearchHistoryAsync();
+
     const login = localStorage.getItem("signIn"); //读取缓存登录状态
     if (!login) {
       //无状态即未登录状态，修改state值
@@ -727,6 +955,159 @@ export default {
   .bili-wrapper {
     margin: 0 auto;
     width: 1160px;
+  }
+  // 导航栏搜索框
+  .nav-search {
+    position: relative;
+    float: left;
+    width: 260px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    z-index: 10;
+    .searchform {
+      position: relative;
+      width: 100%;
+      height: 30px;
+      background-color: hsla(0, 0%, 100%, 0.8);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+    .search-keyword {
+      flex: 1;
+      height: 30px;
+      line-height: 30px;
+      padding: 0 40px 0 10px;
+      border: 0;
+      background: transparent;
+      color: $black;
+      font-size: 12px;
+      outline: none;
+      box-shadow: none;
+      min-width: 0;
+    }
+    button.search-submit {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 36px;
+      height: 30px;
+      min-width: 0;
+      cursor: pointer;
+      background: url(../../assets/icons.png) -653px -720px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      &:hover {
+        background-position: -718px -720px;
+      }
+    }
+    .bilibili-suggest {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 258px;
+      border: 1px solid #e5e9ef;
+      background: $white;
+      z-index: 99999;
+      border-radius: 0 0 4px 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16);
+      padding-bottom: 5px;
+      font-size: 12px;
+      .b-line {
+        border-top: 1px solid #e5e9ef;
+        position: relative;
+        height: 10px;
+        margin: 10px 10px 0;
+        p {
+          margin-top: -10px;
+          text-align: center;
+        }
+        span {
+          display: inline-block;
+          padding: 0 10px;
+          height: 18px;
+          font-size: 12px;
+          text-align: center;
+          cursor: pointer;
+          color: $grau;
+          background: $white;
+        }
+      }
+      .suggest-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        word-wrap: break-word;
+        word-break: break-all;
+        display: block;
+        color: $black;
+        position: relative;
+        a {
+          color: $black;
+          display: block;
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        &:hover {
+          background-color: #e5e9ef;
+        }
+      }
+      &.search-history-panel {
+        padding-bottom: 8px;
+      }
+      .search-history-list {
+        list-style: none;
+        margin: 0;
+        padding: 4px 0 0;
+      }
+      .search-history-item {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 8px 0 10px;
+        cursor: default;
+        &:hover {
+          background-color: #e5e9ef;
+        }
+      }
+      .search-history-link {
+        flex: 1;
+        min-width: 0;
+        display: block;
+        height: 32px;
+        line-height: 32px;
+        color: #222;
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        &:hover {
+          color: #00a1d6;
+        }
+      }
+      .search-history-del {
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #99a2aa;
+        font-size: 16px;
+        line-height: 28px;
+        text-align: center;
+        cursor: pointer;
+        &:hover {
+          color: #00a1d6;
+        }
+      }
+    }
   }
   .nav-menu {
     position: relative;
