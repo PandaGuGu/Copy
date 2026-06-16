@@ -140,25 +140,25 @@ const routes = [
     name: "videoPublish",
     path: "/upload/publish",
     component: () => import("@/pages/upload/videoPublish.vue"),
-    meta: { title: "投稿视频 - 创作中心" }
+    meta: { title: "投稿视频 - 创作中心", requireMinibiliAuth: true }
   },
   {
     name: "videoEdit",
     path: "/upload/edit/:id",
     component: () => import("@/pages/upload/videoPublish.vue"),
-    meta: { title: "编辑视频 - 创作中心" }
+    meta: { title: "编辑视频 - 创作中心", requireMinibiliAuth: true }
   },
   {
     name: "articlePublish",
     path: "/upload/article/publish",
     component: () => import("@/pages/upload/articlePublish.vue"),
-    meta: { title: "专栏投稿 - 创作中心" }
+    meta: { title: "专栏投稿 - 创作中心", requireMinibiliAuth: true }
   },
   {
     name: "articleEdit",
     path: "/upload/article/edit/:id",
     component: () => import("@/pages/upload/articlePublish.vue"),
-    meta: { title: "编辑专栏 - 创作中心" }
+    meta: { title: "编辑专栏 - 创作中心", requireMinibiliAuth: true }
   },
   {
     name: "manuscript",
