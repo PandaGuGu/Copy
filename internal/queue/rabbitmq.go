@@ -56,6 +56,9 @@ func (c *Client) Close() error {
 
 // PublishTranscode sends a persistent JSON body to the transcode queue.
 func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
+	if c == nil || c.ch == nil {
+		return fmt.Errorf("rabbitmq client not connected")
+	}
 	return c.ch.PublishWithContext(ctx, "", TranscodeQueue, false, false, amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
 		ContentType:  "application/json",

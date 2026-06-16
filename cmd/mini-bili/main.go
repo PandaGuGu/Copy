@@ -190,8 +190,11 @@ func main() {
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
-		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
+		JWT: jm, Sens: sens, OSS: ossc, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
+	}
+	if mq != nil {
+		deps.MQ = mq
 	}
 	api := &handler.API{Dependencies: deps}
 
