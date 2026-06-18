@@ -221,9 +221,12 @@ body.creator-center-layout {
     box-sizing: border-box;
     padding-bottom: 242px;
 } */
-.bili-wrapper {
+#app .bili-wrapper {
   margin: 0 auto;
-  width: 1160px;
+  width: 100%;
+  max-width: 1160px;
+  padding: 0 60px;
+  box-sizing: border-box;
   .l-con {
     float: left;
     width: 900px;

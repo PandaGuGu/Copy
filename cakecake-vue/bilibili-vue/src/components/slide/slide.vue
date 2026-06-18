@@ -105,15 +105,15 @@ export default {
   @include transition(0.5s);
 }
 .slide-trans-enter {
-  transform: translateX(440px);
+  transform: translateX(640px);
 }
 .slide-trans-old-leave-active {
   @include transition(0.5s);
-  transform: translateX(-440px);
+  transform: translateX(-640px);
 }
 .slide {
   position: relative;
-  @include wh(440px, 220px);
+  @include wh(640px, 220px);
   float: left;
   .slide-img {
     position: absolute;

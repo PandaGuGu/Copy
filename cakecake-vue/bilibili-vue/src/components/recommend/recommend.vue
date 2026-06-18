@@ -160,7 +160,7 @@ export default {
 
 .recommend-module {
   float: left;
-  width: calc(100% - 440px);
+  width: calc(100% - 640px);
   height: 220px;
   position: relative;
   box-sizing: border-box;
@@ -179,13 +179,13 @@ export default {
   }
 }
 
-/* 4×2 网格：在轮播右侧剩余宽度内始终排满 8 格（避免固定 700px 被裁成 3 列） */
+/* 3×2 网格：左侧640px banner + 右侧6小图（3列2行），与 banner 同高 */
 .recommend-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: repeat(2, 100px);
-  gap: 20px;
-  padding-left: 20px;
+  gap: 12px;
+  padding-left: 12px;
   padding-right: 0;
   width: 100%;
   height: 220px;
