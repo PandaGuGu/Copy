@@ -59,21 +59,28 @@ export default {
       const scrollY = window.scrollY || document.documentElement.scrollTop;
       const windowH = window.innerHeight;
       const docH = document.documentElement.offsetHeight;
-      // 距底部 600px 内即触发加载
-      if (scrollY + windowH >= docH - 600) {
+      const shouldLoad = scrollY + windowH >= docH - 600;
+      if (shouldLoad) {
+        console.log("[VideoFeed] 距底部不足600px，触发加载");
+      }
+      if (shouldLoad) {
         this.loadVideos();
       }
     },
 
     async loadVideos() {
-      if (this.loadLock) return;
+      if (this.loadLock) {
+        console.log("[VideoFeed] 被锁住，跳过");
+        return;
+      }
       this.loadLock = true;
+      console.log("[VideoFeed] loadVideos 触发, loopMode=", this.loopMode, "videos.length=", this.videos.length);
 
       // 循环模式：直接追加
       if (this.loopMode) {
+        console.log("[VideoFeed] 循环模式：追加15条视频");
         this.appendLoopVideos();
         setTimeout(() => { this.loadLock = false; }, 800);
-        // 追加完后再次检查（可能还不足一屏）
         this.$nextTick(() => this.checkAndLoad());
         return;
       }
@@ -90,6 +97,7 @@ export default {
         const res = await http.get("/api/v1/videos", { params });
         const data = res.data || res || {};
         const items = (data.items || []).map(this.mapVideoItem);
+        console.log("[VideoFeed] API返回", items.length, "条, next_cursor=", data.next_cursor);
 
         if (this.isFirstLoad) {
           this.baseVideos = items;
@@ -126,11 +134,19 @@ export default {
 
     appendLoopVideos() {
       if (this.baseVideos.length === 0) return;
-      const shuffled = this.shuffle([...this.baseVideos]);
-      const append = shuffled.slice(0, 5);
+      console.log("[VideoFeed] appendLoopVideos: baseVideos=", this.baseVideos.length, "当前videos=", this.videos.length);
+      // 一次追加 15 条（三行五列一整屏）
+      let append = [];
+      while (append.length < 15) {
+        const shuffled = this.shuffle([...this.baseVideos]);
+        append = append.concat(shuffled);
+      }
+      append = append.slice(0, 15);
       this.videos = this.videos.concat(append);
-      if (this.videos.length > 100) {
-        this.videos = this.videos.slice(-60);
+      console.log("[VideoFeed] 追加后 videos=", this.videos.length);
+      // 防止列表无限增长，保留最近 150 条
+      if (this.videos.length > 150) {
+        this.videos = this.videos.slice(-90);
       }
     },
 
