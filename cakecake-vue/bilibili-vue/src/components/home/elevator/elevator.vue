@@ -17,7 +17,7 @@
         <span class="stat-label">投稿</span>
         <span class="stat-num">{{ online.all_count }}</span>
       </div>
-      <div class="item customize"><i class="icon"></i>排序</div>
+      <div class="item customize" @click="refreshPage"><i class="icon refresh-icon"></i>刷新</div>
     </div>
     <div class="s-line"></div>
     <div class="back-top icon" @click="goTop"></div>
@@ -134,6 +134,14 @@ export default {
     goTop() {
       window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     },
+    refreshPage() {
+      // 刷新首页：重新加载视频流
+      this.$emit("refresh");
+      // 如果没用到事件，直接刷新路由
+      if (this.$route.name === "home") {
+        this.$router.go(0);
+      }
+    },
     goPosition(index) {
       document.documentElement.scrollTop = this.module[index].offsetTop - 30;
     }
@@ -229,12 +237,38 @@ export default {
       line-height: 20px;
       padding: 8px 0;
       border-top: 1px solid #e5e9ef;
-      .icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      .refresh-icon {
         display: block;
-        margin: 0 auto 4px;
-        background-position: -663px -151px;
-        height: 18px;
         width: 18px;
+        height: 18px;
+        margin: 0 auto 3px;
+        border: 2px solid #99a2aa;
+        border-top-color: #00a1d6;
+        border-radius: 50%;
+        position: relative;
+        transition: border-color 0.3s;
+        &::after {
+          content: "";
+          position: absolute;
+          top: -3px;
+          right: -2px;
+          width: 0;
+          height: 0;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-bottom: 5px solid #00a1d6;
+          transform: rotate(45deg);
+        }
+      }
+      &:hover .refresh-icon {
+        border-color: #fff;
+        border-top-color: #fff;
+        &::after {
+          border-bottom-color: #fff;
+        }
       }
     }
   }
