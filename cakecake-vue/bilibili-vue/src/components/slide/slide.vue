@@ -115,6 +115,7 @@ export default {
   position: relative;
   @include wh(500px, 368px);
   flex-shrink: 0;
+  margin-right: 18px;
   .slide-img {
     position: absolute;
     @include wh(100%, 100%);
@@ -126,6 +127,11 @@ export default {
       img {
         position: absolute;
         top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
         @include borderRadius(4px);
       }
     }

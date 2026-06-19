@@ -325,6 +325,18 @@ html.chrome-home-top #app .bili-wrapper .l-con {
   width: calc(100% - 280px);
 }
 
+/* 轮播 + 右侧推荐：flex 布局，中间留空隙 */
+#chief_recommend {
+  display: flex !important;
+  align-items: stretch;
+  gap: 18px !important;
+}
+
+/* 确保轮播和推荐模块不浮动 */
+#chief_recommend > * {
+  float: none !important;
+}
+
 /* 首页底部分类导航也撑满 */
 html.chrome-home-top .primary-menu-wrapper .primary-menu {
   width: 100%;
