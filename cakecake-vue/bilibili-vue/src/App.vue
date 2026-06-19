@@ -246,6 +246,8 @@ html.chrome-home-top #app .bili-wrapper {
   width: 100% !important;
   padding-left: 56px !important;
   padding-right: 56px !important;
+  box-sizing: border-box !important;
+  margin: 0 auto;
 }
 /* heaer-banner */
 .app-header {

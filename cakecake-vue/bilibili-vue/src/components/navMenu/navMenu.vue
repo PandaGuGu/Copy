@@ -677,6 +677,7 @@
 import { createNamespacedHelpers } from "vuex";
 import { setMinibiliPostLoginRedirect } from "@/utils/authTokens";
 import akariFace from "../../assets/akari.jpg";
+import http from "../../../utils/http";
 import {
   minibiliUploadOpensLoginModal,
   resolveMinibiliUploadNavTo
@@ -1020,7 +1021,6 @@ export default {
     async loadDynamicData() {
       if (this._dynamicLoaded) return;
       try {
-        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
         const res = await http.get("/api/v1/dynamics", { params: { limit: 8 } }).catch(() => null);
         if (res) {
           const data = res.data || res || {};
@@ -1056,23 +1056,21 @@ export default {
     async loadCollectData() {
       if (this._collectLoaded) return;
       const p = this.navProfileRecord;
-      const userId = p && p.mid ? p.mid : 0;
-      if (!userId) { this._collectLoaded = true; return; }
+      // 已登录用 mid，未登录用默认用户 3
+      const userId = p && p.mid ? p.mid : 3;
       try {
-        const http = require("../../../utils/http").default;
-        // 获取收藏夹列表
         const res = await http.get("/api/v1/space/" + userId + "/favorite-folders").catch(() => null);
-        if (res && res.code === 0 && res.data) {
+        console.log("[收藏夹] API返回:", res);
+        if (res && res.data) {
           const folders = res.data.items || [];
           if (folders.length > 0) {
             this.collectFolders = folders;
-            // 默认选中第一个（默认收藏夹）
             if (!this.collectActiveId) {
               this.selectCollectFolder(folders[0]);
             }
           }
         }
-      } catch (e) { /* 后端无数据则留空 */ }
+      } catch (e) { console.error("[收藏夹] 加载失败:", e); }
       this._collectLoaded = true;
     },
     // 选择收藏夹并加载视频
@@ -1081,15 +1079,14 @@ export default {
       this.collectVideos = [];
       if (!f.id) return;
       const p = this.navProfileRecord;
-      const userId = p && p.mid ? p.mid : 0;
-      if (!userId) return;
+      const userId = p && p.mid ? p.mid : 3;
       try {
-        const http = require("../../../utils/http").default;
         const res = await http.get("/api/v1/space/" + userId + "/favorites", { params: { folder_id: f.id, limit: 6 } }).catch(() => null);
-        if (res && res.code === 0 && res.data) {
+        console.log("[收藏夹视频] API返回:", res);
+        if (res && res.data) {
           this.collectVideos = res.data.items || [];
         }
-      } catch (e) { /* 留空 */ }
+      } catch (e) { console.error("[收藏夹视频] 加载失败:", e); }
     },
     // 格式化视频时长
     formatDuration(sec) {
@@ -1121,7 +1118,6 @@ export default {
     async loadHistoryData() {
       if (this._historyLoaded) return;
       try {
-        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
         const res = await http.get("/api/v1/history", { params: { limit: 20 } }).catch(() => null);
         if (res) {
           const data = res.data || res || {};
