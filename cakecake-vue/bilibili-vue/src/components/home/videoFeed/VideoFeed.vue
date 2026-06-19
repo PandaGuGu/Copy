@@ -209,12 +209,21 @@ export default {
 <style lang="scss" scoped>
 .video-feed-module {
   margin-top: 28px;
+  /* 防止网格内容溢出父容器 */
+  max-width: 100%;
+  overflow: visible;
   .video-feed-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 16px 14px;
+    /* 确保网格列宽度固定一致 */
+    justify-items: stretch;
+    align-items: start;
   }
   .feed-video-card {
+    /* 固定卡片尺寸，防止列宽不一致 */
+    min-width: 0; /* 允许grid子元素缩小到内容宽度以下 */
+    width: 100%;
     .cover-link {
       display: block;
       border-radius: 4px;
@@ -235,6 +244,8 @@ export default {
     }
     .cover-info-bar {
       padding: 8px 0 4px;
+      /* 防止文字溢出撑宽卡片 */
+      overflow: hidden;
       .cover-title {
         display: block;
         font-size: 13px;
@@ -249,6 +260,9 @@ export default {
         display: block;
         font-size: 12px;
         color: #999;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
   }

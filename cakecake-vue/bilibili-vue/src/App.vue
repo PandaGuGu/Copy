@@ -619,8 +619,13 @@ html.chrome-home-top #app .bili-wrapper {
   padding-bottom: 30px;
 }
 .app-body {
-  overflow: hidden;
+  overflow-x: hidden;  /* 只裁剪水平溢出，保留垂直滚动 */
+  overflow-y: visible;
   margin-bottom: 40px;
+}
+/* 首页：视频网格需要完整可见，取消水平裁剪 */
+html.chrome-home-top .app-body {
+  overflow: visible !important;
 }
 .video-info-module {
   position: absolute;
