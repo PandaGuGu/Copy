@@ -929,12 +929,11 @@ export default {
     dynamicFadeOut() {
       this.dynamicShow = false;
     },
-    // 加载动态下拉数据
+    // 加载动态下拉数据（后端无数据则留空，不使用模拟数据）
     async loadDynamicData() {
       if (this._dynamicLoaded) return;
       try {
         const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
-        // 尝试获取动态数据
         const res = await http.get("/api/v1/dynamics", { params: { limit: 8 } }).catch(() => null);
         if (res) {
           const data = res.data || res || {};
@@ -942,13 +941,7 @@ export default {
           if (data.live_users) this.dynamicLiveList = data.live_users;
         }
       } catch (e) {
-        // 使用默认模拟数据
-        this.dynamicFeedList = [
-          { user: { uname: "三角洲经济学教父", face: "" }, desc: "三角洲新赛季标签爆率机制辟谣！我觉得并非针对鼠鼠玩家。", ctime: Date.now() - 240000, cover: "" },
-          { user: { uname: "修2", face: "" }, desc: "一贴一贴近你的心", ctime: Date.now() - 360000, pic: "" },
-          { user: { uname: "白大厨", face: "" }, desc: "秘密实验室长对局实况，做全局流程，从头做局到结束！，秘密实验室小饭堂服务器长对局实...", ctime: Date.now() - 3600000, pic: "" },
-          { user: { uname: "三角洲经济学教父", face: "" }, desc: "三角洲新赛季标签爆率机制辟谣！我觉得并非针对鼠鼠玩家。", ctime: Date.now() - 7200000, cover: "" },
-        ];
+        // 后端无数据则留空
       }
       this._dynamicLoaded = true;
     },
