@@ -158,8 +158,8 @@ export default {
 @import "../../style/mixin";
 
 .recommend-module {
-  float: left;
-  width: calc(100% - 516px);
+  flex: 1;
+  min-width: 0;
   height: 368px;
   position: relative;
   box-sizing: border-box;

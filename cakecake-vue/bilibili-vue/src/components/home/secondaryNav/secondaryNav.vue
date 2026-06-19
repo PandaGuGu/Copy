@@ -104,7 +104,7 @@ export default {
   align-items: flex-start;
   width: 100%;
   margin: 0 auto;
-  padding: 10px 0;
+  padding: 21px 0;
 }
 
 /* 左侧快捷入口 */
@@ -112,10 +112,11 @@ export default {
   display: flex;
   align-items: center;
   gap: 16px;
+  padding-left: 8px;
   padding-right: 16px;
   margin-right: 12px;
   border-right: 1px solid #e5e9ef;
-  flex-shrink: 0;
+  flex: 0 0 7%;
 }
 
 .sn-quick-entry {
@@ -166,7 +167,7 @@ export default {
   transition: color 0.2s;
 }
 
-/* 中部分类标签：2行×11列，均匀占满 */
+/* 中部分类标签：2行×11列，占满剩余空间 */
 .sn-center {
   flex: 1;
   min-width: 0;
@@ -175,6 +176,7 @@ export default {
   grid-template-rows: repeat(2, auto);
   gap: 2px 0;
   align-items: center;
+  margin-right: 12px;
 }
 
 .sn-cat-btn {
@@ -186,6 +188,7 @@ export default {
   color: #555;
   text-decoration: none;
   border-radius: 3px;
+  background: #f5f5f5;
   transition: all 0.2s;
   white-space: nowrap;
   cursor: pointer;
@@ -207,9 +210,10 @@ export default {
   }
 }
 
-/* 右侧附加栏目：二行三列 */
+/* 右侧附加栏目：固定 160px 宽度 */
 .sn-right {
-  flex-shrink: 0;
+  flex: 0 0 240px;
+  min-width: 0;
   padding-left: 12px;
   border-left: 1px solid #e5e9ef;
 }
@@ -227,6 +231,7 @@ export default {
   text-decoration: none;
   padding: 3px 7px;
   border-radius: 3px;
+  background: #f5f5f5;
   transition: all 0.2s;
   white-space: nowrap;
   cursor: pointer;
@@ -239,12 +244,12 @@ export default {
 }
 
 .sn-right-highlight {
-  color: #fb7299;
+  color: #333;
   font-weight: 500;
 
   &:hover {
-    color: #fb7299;
-    background: #fff0f5;
+    color: #333;
+    background: #e5e5e5;
   }
 }
 </style>

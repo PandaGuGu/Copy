@@ -114,8 +114,7 @@ export default {
 .slide {
   position: relative;
   @include wh(500px, 368px);
-  float: left;
-  margin-right: 16px;
+  flex-shrink: 0;
   .slide-img {
     position: absolute;
     @include wh(100%, 100%);

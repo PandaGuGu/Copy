@@ -239,6 +239,14 @@ body.creator-center-layout {
     float: right;
   }
 }
+
+/* 首页：保留与B站一致的边距 */
+html.chrome-home-top #app .bili-wrapper {
+  max-width: none !important;
+  width: 100% !important;
+  padding-left: 56px !important;
+  padding-right: 56px !important;
+}
 /* heaer-banner */
 .app-header {
   .head-banner {
@@ -604,14 +612,9 @@ body.creator-center-layout {
 }
 /* app-body */
 .chief-recommend-module {
+  display: flex;
+  align-items: stretch;
   padding-bottom: 30px;
-  overflow: hidden;
-
-  &::after {
-    content: "";
-    display: table;
-    clear: both;
-  }
 }
 .app-body {
   overflow: hidden;

@@ -313,13 +313,7 @@ export default {
 <style lang="scss">
 @import "../../style/mixin";
 
-/* 首页B站比例容器 */
-html.chrome-home-top #app .bili-wrapper {
-  max-width: 1420px;
-  width: 100%;
-  padding-left: 0;
-  padding-right: 0;
-}
+/* 首页样式：边距由 App.vue 全局统一控制 */
 
 /* 首页隐藏页脚 */
 html.chrome-home-top #app .app-footer {
