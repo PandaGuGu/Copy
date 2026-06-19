@@ -564,28 +564,57 @@
               </div>
             </transition>
           </li>
-          <li class="nav-item nav-item--icon">
-            <router-link
-              v-if="isMinibiliMode"
-              class="t"
-              :to="minibiliHistoryTo"
-            >
-              <span class="nav-icon">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-              </span>
-              <span class="nav-label">历史</span>
-            </router-link>
-            <a
-              v-else
-              href="//www.bilibili.com/account/history"
-              target="_blank"
-              class="t"
-            >
+          <li
+            class="nav-item nav-item--icon"
+            @mouseover="historyFadeIn"
+            @mouseout="historyFadeOut"
+          >
+            <a href="#" class="t" @click.prevent="historyShow = !historyShow" title="历史">
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               </span>
               <span class="nav-label">历史</span>
             </a>
+            <transition name="nav-trans">
+              <div class="history-list-box" v-show="historyShow">
+                <!-- 顶部Tab -->
+                <div class="hist-tabs">
+                  <span
+                    class="hist-tab"
+                    :class="{ active: historyActiveTab === t }"
+                    v-for="(t, idx) in historyTabs"
+                    :key="'ht-'+idx"
+                    @click="switchHistoryTab(t)"
+                  >{{ t }}</span>
+                </div>
+                <!-- 历史记录列表 -->
+                <div class="hist-body">
+                  <!-- 按时间分组 -->
+                  <template v-if="historyGrouped.length > 0">
+                    <div class="hist-group" v-for="(group, gIdx) in historyGrouped" :key="'hg-'+gIdx">
+                      <div class="hist-date-label">{{ group.label }}</div>
+                      <div
+                        class="hist-item"
+                        v-for="(item, iIdx) in group.items"
+                        :key="'hi-'+gIdx+'-'+iIdx"
+                        @click="goHistoryItem(item)"
+                      >
+                        <img class="hist-cover" :src="item.cover || ''" alt="" />
+                        <div class="hist-info">
+                          <div class="hist-title">{{ item.title }}</div>
+                          <div class="hist-meta">
+                            <span class="hist-duration">{{ formatDuration(item.duration_sec || item.duration || 0) }}</span>
+                            <span class="hist-time">{{ formatHistTime(item.viewed_at || item.ctime || '') }}</span>
+                            <span class="hist-uploader" v-if="item.uploader || item.author"><span class="hist-up-icon">UP</span> {{ item.uploader || item.author }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <div class="hist-empty" v-else>暂无历史记录</div>
+                </div>
+              </div>
+            </transition>
           </li>
           <li class="nav-item nav-item--icon">
             <router-link
@@ -689,6 +718,11 @@ export default {
       collectActiveId: 0,    // 当前选中的收藏夹ID
       collectFolders: [],    // 收藏夹列表
       collectVideos: [],     // 当前收藏夹的视频列表
+      // 历史记录下拉数据
+      historyShow: false,
+      historyActiveTab: "视频",
+      historyTabs: ["视频", "直播", "专栏"],
+      historyRawItems: [],   // 原始历史数据
       userLevelHelpUrl: USER_LEVEL_HELP_URL,
       msgUnread: {},
       _msgUnreadUnsub: null,
@@ -1050,6 +1084,76 @@ export default {
         router.push("/video/BV" + id);
       }
       this.collectShow = false;
+    },
+    //历史下拉显示隐藏
+    historyFadeIn() {
+      this.historyShow = true;
+      this.loadHistoryData();
+    },
+    historyFadeOut() {
+      this.historyShow = false;
+    },
+    // 加载历史数据
+    async loadHistoryData() {
+      if (this._historyLoaded) return;
+      try {
+        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
+        const res = await http.get("/api/v1/history", { params: { limit: 20 } }).catch(() => null);
+        if (res) {
+          const data = res.data || res || {};
+          this.historyRawItems = data.items || [];
+        }
+      } catch (e) { /* 留空 */ }
+      this._historyLoaded = true;
+    },
+    // 切换Tab
+    switchHistoryTab(tab) {
+      this.historyActiveTab = tab;
+    },
+    // 按时间分组的历史记录
+    historyGrouped() {
+      if (!this.historyRawItems.length) return [];
+      const groups = {};
+      const now = new Date();
+      const todayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
+      const yesterday = new Date(now - 86400000);
+      const yesterdayStr = yesterday.getFullYear() + "-" + String(yesterday.getMonth()+1).padStart(2,"0") + "-" + String(yesterday.getDate()).padStart(2,"0");
+
+      this.historyRawItems.forEach(item => {
+        const ts = item.viewed_at || item.ctime || item.created_at || "";
+        let label = "";
+        if (ts) {
+          const d = typeof ts === "number" ? (ts > 9999999999 ? new Date(ts) : new Date(ts * 1000)) : new Date(ts);
+          const ds = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+          if (ds === todayStr) label = "今天";
+          else if (ds === yesterdayStr) label = "昨天";
+          else label = d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日";
+        }
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(item);
+      });
+
+      return Object.keys(groups).map(label => ({ label, items: groups[label] }));
+    },
+    // 格式化历史时间（如"今天 16:35"）
+    formatHistTime(ts) {
+      if (!ts) return "";
+      const now = new Date();
+      const t = typeof ts === "number" ? (ts > 9999999999 ? new Date(ts) : new Date(ts * 1000)) : new Date(ts);
+      const h = String(t.getHours()).padStart(2,"0");
+      const m = String(t.getMinutes()).padStart(2,"0");
+      const td = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
+      const td2 = t.getFullYear() + "-" + String(t.getMonth()+1).padStart(2,"0") + "-" + String(t.getDate()).padStart(2,"0");
+      if (td === td2) return "今天 " + h + ":" + m;
+      return h + ":" + m;
+    },
+    // 跳转历史记录
+    goHistoryItem(item) {
+      const id = item.id || item.aid || item.video_id;
+      if (id && this.$router) {
+        this.$router.push("/video/BV" + id);
+      }
+      this.historyShow = false;
     },
     // 搜索相关方法
     clearHideSearchPanelTimer() {
@@ -1911,6 +2015,126 @@ export default {
                 &.cf-play-all { color: $blue; }
                 &:hover { opacity: 0.75; }
               }
+            }
+          }
+        }
+        // 历史记录下拉面板
+        .history-list-box {
+          width: 360px;
+          position: absolute;
+          top: 100%;
+          left: calc(50% - 180px);
+          background: $white;
+          box-shadow: rgba(0, 0, 0, 0.16) 0px 2px 8px;
+          border-radius: 8px;
+          overflow: hidden;
+          z-index: 500;
+
+          // 顶部Tab栏
+          .hist-tabs {
+            display: flex;
+            border-bottom: 1px solid #f0f0f0;
+            padding: 0 16px;
+            .hist-tab {
+              font-size: 14px;
+              color: #222;
+              padding: 12px 18px;
+              cursor: pointer;
+              position: relative;
+              transition: color 0.15s;
+              &:hover { color: $blue; }
+              &.active {
+                color: $blue;
+                font-weight: bold;
+                &::after {
+                  content: "";
+                  position: absolute;
+                  bottom: -1px;
+                  left: 20%;
+                  right: 20%;
+                  height: 2px;
+                  background: $blue;
+                  border-radius: 1px;
+                }
+              }
+            }
+          }
+
+          // 历史列表区域
+          .hist-body {
+            max-height: 380px;
+            overflow-y: auto;
+            padding: 4px 0;
+
+            .hist-group {
+              .hist-date-label {
+                font-size: 13px;
+                color: #222;
+                font-weight: bold;
+                padding: 10px 16px 6px;
+              }
+              .hist-item {
+                display: flex;
+                align-items: flex-start;
+                padding: 7px 12px;
+                cursor: pointer;
+                transition: background 0.15s;
+                &:hover { background: #fafafa; }
+                .hist-cover {
+                  width: 96px;
+                  height: 54px;
+                  border-radius: 4px;
+                  object-fit: cover;
+                  flex-shrink: 0;
+                  background: #e5e9ef;
+                }
+                .hist-info {
+                  margin-left: 10px;
+                  min-width: 0;
+                  flex: 1;
+                  .hist-title {
+                    font-size: 13px;
+                    color: #222;
+                    line-height: 1.35;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                  }
+                  .hist-meta {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    color: #999;
+                    margin-top: 3px;
+                    flex-wrap: wrap;
+                    .hist-duration { color: #222; }
+                    .hist-time { color: #999; }
+                    .hist-uploader {
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 2px;
+                      .hist-up-icon {
+                        display: inline-block;
+                        background: $blue;
+                        color: $white;
+                        font-size: 9px;
+                        padding: 0 3px;
+                        border-radius: 2px;
+                        line-height: 14px;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            .hist-empty {
+              text-align: center;
+              padding: 30px 0;
+              font-size: 13px;
+              color: #99a2aa;
             }
           }
         }
