@@ -1990,6 +1990,7 @@ export default {
   position: relative;
   line-height: 42px;
   height: 42px;
+  color: #99a2aa;
   &:hover {
     color: $blue;
     background-color: #e5e9ef;
