@@ -20,7 +20,6 @@
       </div>
     </div>
     <div class="feed-loading" v-if="loading">加载中...</div>
-    <div ref="feedTrigger" class="feed-trigger"></div>
   </div>
 </template>
 
@@ -32,38 +31,50 @@ export default {
   data() {
     return {
       videos: [],
-      baseVideos: [],   // 原始视频列表（用于循环追加）
+      baseVideos: [],
       cursor: "",
-      isFirstLoad: true, // 是否首次加载（替代 cursor === "" 判断）
+      isFirstLoad: true,
       loading: false,
       loopMode: false,
-      loadLock: false,     // 防止 Observer 短时间多次触发
-      _lockTimer: null,
+      loadLock: false,
     };
   },
   mounted() {
     this.loadVideos();
-    this.$nextTick(() => this.setupObserver());
+    window.addEventListener("scroll", this.handleScroll);
+    // 初始检查一次（内容不足一屏时）
+    this.$nextTick(() => this.checkAndLoad());
   },
   beforeDestroy() {
-    if (this.observer) {
-      this.observer.disconnect();
-    }
-    if (this._lockTimer) {
-      clearTimeout(this._lockTimer);
-    }
+    window.removeEventListener("scroll", this.handleScroll);
   },
   methods: {
+    // scroll 事件处理：距底部 600px 内即触发
+    handleScroll() {
+      this.checkAndLoad();
+    },
+
+    // 检查是否需要加载更多
+    checkAndLoad() {
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const windowH = window.innerHeight;
+      const docH = document.documentElement.offsetHeight;
+      // 距底部 600px 内即触发加载
+      if (scrollY + windowH >= docH - 600) {
+        this.loadVideos();
+      }
+    },
+
     async loadVideos() {
-      // 锁机制：防止 Observer 短时间多次触发
       if (this.loadLock) return;
       this.loadLock = true;
 
-      // 循环模式：直接追加，不做 API 请求
+      // 循环模式：直接追加
       if (this.loopMode) {
         this.appendLoopVideos();
-        // 800ms 后解锁（循环模式用较长锁，避免列表膨胀太快）
-        this._lockTimer = setTimeout(() => { this.loadLock = false; }, 800);
+        setTimeout(() => { this.loadLock = false; }, 800);
+        // 追加完后再次检查（可能还不足一屏）
+        this.$nextTick(() => this.checkAndLoad());
         return;
       }
 
@@ -81,11 +92,9 @@ export default {
         const items = (data.items || []).map(this.mapVideoItem);
 
         if (this.isFirstLoad) {
-          // 首次加载：初始化 baseVideos 和 videos
           this.baseVideos = items;
           if (items.length > 0) {
             this.videos = [...items];
-            // 如果不足 15 条，循环复制填满
             while (this.videos.length < 15 && this.baseVideos.length > 0) {
               const copy = this.shuffle([...this.baseVideos]);
               this.videos = this.videos.concat(copy);
@@ -93,18 +102,13 @@ export default {
             this.videos = this.videos.slice(0, 15);
           }
           this.isFirstLoad = false;
-          // 首次返回不足 15 条 → 后端数据少，直接进入循环模式
-          if (items.length < 15) {
-            this.loopMode = true;
-          }
+          if (items.length < 15) this.loopMode = true;
         } else {
-          // 非首次加载：追加新视频（去重）
           const existingIds = new Set(this.videos.map(v => v.aid));
           const newItems = items.filter(v => !existingIds.has(v.aid));
           if (newItems.length > 0) {
             this.videos = this.videos.concat(newItems);
           }
-          // 返回空或不足 15 条 → 后端没更多数据了
           if (items.length === 0 || items.length < 15) {
             this.loopMode = true;
           }
@@ -115,17 +119,16 @@ export default {
         console.error("加载推荐视频失败", e);
       }
       this.loading = false;
-      // 非循环模式：500ms 后解锁
-      this._lockTimer = setTimeout(() => { this.loadLock = false; }, 500);
+      setTimeout(() => { this.loadLock = false; }, 500);
+      // 加载完后再次检查（内容可能还不足一屏）
+      this.$nextTick(() => this.checkAndLoad());
     },
 
     appendLoopVideos() {
       if (this.baseVideos.length === 0) return;
       const shuffled = this.shuffle([...this.baseVideos]);
-      // 每次追加 5 条（不要一次加 15 条，避免列表跳跃）
       const append = shuffled.slice(0, 5);
       this.videos = this.videos.concat(append);
-      // 防止列表无限增长，保留最近 100 条
       if (this.videos.length > 100) {
         this.videos = this.videos.slice(-60);
       }
@@ -153,22 +156,6 @@ export default {
       if (n >= 10000) return (n / 10000).toFixed(1) + "万";
       if (n >= 1000) return (n / 1000).toFixed(1) + "千";
       return n || 0;
-    },
-
-    setupObserver() {
-      if (!this.$refs.feedTrigger) return;
-      if (this.observer) {
-        this.observer.disconnect();
-      }
-      this.observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) {
-            this.loadVideos();
-          }
-        },
-        { rootMargin: "600px" }
-      );
-      this.observer.observe(this.$refs.feedTrigger);
     },
   },
 };
@@ -225,10 +212,6 @@ export default {
     padding: 28px 0;
     color: #999;
     font-size: 14px;
-  }
-  .feed-trigger {
-    height: 1px;
-    margin-top: 12px;
   }
 }
 </style>
