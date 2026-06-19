@@ -34,8 +34,11 @@ export default {
       videos: [],
       baseVideos: [],   // 原始视频列表（用于循环追加）
       cursor: "",
+      isFirstLoad: true, // 是否首次加载（替代 cursor === "" 判断）
       loading: false,
-      loopMode: false,  // 是否进入循环模式（后端数据已耗尽）
+      loopMode: false,
+      loadLock: false,     // 防止 Observer 短时间多次触发
+      _lockTimer: null,
     };
   },
   mounted() {
@@ -46,70 +49,86 @@ export default {
     if (this.observer) {
       this.observer.disconnect();
     }
+    if (this._lockTimer) {
+      clearTimeout(this._lockTimer);
+    }
   },
   methods: {
     async loadVideos() {
-      if (this.loading) return;
+      // 锁机制：防止 Observer 短时间多次触发
+      if (this.loadLock) return;
+      this.loadLock = true;
 
-      // 循环模式：直接前端追加，不调 API
+      // 循环模式：直接追加，不做 API 请求
       if (this.loopMode) {
         this.appendLoopVideos();
+        // 800ms 后解锁（循环模式用较长锁，避免列表膨胀太快）
+        this._lockTimer = setTimeout(() => { this.loadLock = false; }, 800);
         return;
       }
 
       this.loading = true;
       try {
         const params = { limit: 15 };
-        if (this.cursor) {
+        if (!this.isFirstLoad && this.cursor) {
           params.cursor = this.cursor;
         } else {
-          params.sort = "hot";  // 首次加载：算法推荐优先
+          params.sort = "hot";
         }
 
         const res = await http.get("/api/v1/videos", { params });
         const data = res.data || res || {};
         const items = (data.items || []).map(this.mapVideoItem);
 
-        if (this.cursor === "") {
-          // 首次加载：保存原始列表，循环复制填满 15 条
+        if (this.isFirstLoad) {
+          // 首次加载：初始化 baseVideos 和 videos
           this.baseVideos = items;
-          this.videos = [...items];
-          while (this.videos.length < 15 && this.baseVideos.length > 0) {
-            const copy = this.shuffle([...this.baseVideos]);
-            this.videos = this.videos.concat(copy);
+          if (items.length > 0) {
+            this.videos = [...items];
+            // 如果不足 15 条，循环复制填满
+            while (this.videos.length < 15 && this.baseVideos.length > 0) {
+              const copy = this.shuffle([...this.baseVideos]);
+              this.videos = this.videos.concat(copy);
+            }
+            this.videos = this.videos.slice(0, 15);
           }
-          this.videos = this.videos.slice(0, 15);
+          this.isFirstLoad = false;
+          // 首次返回不足 15 条 → 后端数据少，直接进入循环模式
+          if (items.length < 15) {
+            this.loopMode = true;
+          }
         } else {
-          // 后续加载：去重追加
+          // 非首次加载：追加新视频（去重）
           const existingIds = new Set(this.videos.map(v => v.aid));
           const newItems = items.filter(v => !existingIds.has(v.aid));
           if (newItems.length > 0) {
             this.videos = this.videos.concat(newItems);
           }
+          // 返回空或不足 15 条 → 后端没更多数据了
+          if (items.length === 0 || items.length < 15) {
+            this.loopMode = true;
+          }
         }
 
         this.cursor = (data.next_cursor || "").toString();
-        // 后端数据已耗尽 → 进入循环模式
-        if (!this.cursor && this.baseVideos.length > 0) {
-          this.loopMode = true;
-        }
       } catch (e) {
         console.error("加载推荐视频失败", e);
       }
       this.loading = false;
+      // 非循环模式：500ms 后解锁
+      this._lockTimer = setTimeout(() => { this.loadLock = false; }, 500);
     },
 
     appendLoopVideos() {
-      // 循环模式：从 baseVideos 随机取 15 条追加
+      if (this.baseVideos.length === 0) return;
       const shuffled = this.shuffle([...this.baseVideos]);
-      const append = shuffled.slice(0, 15);
+      // 每次追加 5 条（不要一次加 15 条，避免列表跳跃）
+      const append = shuffled.slice(0, 5);
       this.videos = this.videos.concat(append);
-
-      // 防止列表无限增长：超过 200 条时保留最后 100 条
-      if (this.videos.length > 200) {
-        this.videos = this.videos.slice(-100);
+      // 防止列表无限增长，保留最近 100 条
+      if (this.videos.length > 100) {
+        this.videos = this.videos.slice(-60);
       }
-      this.loading = false;
     },
 
     shuffle(arr) {
@@ -138,13 +157,16 @@ export default {
 
     setupObserver() {
       if (!this.$refs.feedTrigger) return;
+      if (this.observer) {
+        this.observer.disconnect();
+      }
       this.observer = new IntersectionObserver(
         (entries) => {
           if (entries[0].isIntersecting) {
             this.loadVideos();
           }
         },
-        { rootMargin: "400px" }
+        { rootMargin: "600px" }
       );
       this.observer.observe(this.$refs.feedTrigger);
     },
@@ -206,6 +228,7 @@ export default {
   }
   .feed-trigger {
     height: 1px;
+    margin-top: 12px;
   }
 }
 </style>
