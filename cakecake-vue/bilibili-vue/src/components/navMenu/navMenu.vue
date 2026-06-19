@@ -521,7 +521,24 @@
             @mouseover="collectFadeIn"
             @mouseout="collectFadeOut"
           >
-            <a href="#" class="t" @click.prevent="collectShow = !collectShow" title="收藏">
+            <router-link
+              v-if="minibiliCollectTo"
+              class="t"
+              :to="minibiliCollectTo"
+              title="收藏"
+            >
+              <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="nav-label">收藏</span>
+            </router-link>
+            <a
+              v-else
+              href="//www.bilibili.com"
+              target="_blank"
+              class="t"
+              title="收藏"
+            >
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               </span>
@@ -538,8 +555,8 @@
                     :key="'cf-'+idx"
                     @click="selectCollectFolder(f)"
                   >
-                    <span class="cf-name">{{ f.name }}</span>
-                    <span class="cf-count">{{ f.count || 0 }}</span>
+                    <span class="cf-name">{{ f.title || f.name }}</span>
+                    <span class="cf-count">{{ f.video_count || f.count || 0 }}</span>
                   </div>
                   <div class="collect-empty" v-if="collectFolders.length === 0">暂无收藏夹</div>
                 </div>
@@ -547,17 +564,18 @@
                 <div class="collect-main">
                   <div class="collect-video-list" v-if="collectVideos.length > 0">
                     <div class="collect-video-item" v-for="(v, idx) in collectVideos" :key="'cv-'+idx" @click="goCollectVideo(v)">
-                      <img class="cv-cover" :src="v.cover || ''" alt="" />
+                      <img class="cv-cover" :src="v.cover_url || v.cover || ''" alt="" />
                       <div class="cv-info">
                         <div class="cv-title">{{ v.title }}</div>
-                        <div class="cv-meta">{{ formatDuration(v.duration_sec || v.duration || 0) }} {{ v.uploader || v.author || '' }}</div>
+                        <div class="cv-meta">{{ formatDuration(v.duration || v.duration_sec || 0) }} {{ v.uploader || v.author || '' }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="collect-empty-right" v-else>暂无视频</div>
                   <!-- 底部操作栏 -->
                   <div class="collect-footer">
-                    <a href="#" class="cf-btn cf-view-all" @click.prevent>查看全部</a>
+                    <router-link v-if="minibiliCollectTo" class="cf-btn cf-view-all" :to="minibiliCollectTo">查看全部</router-link>
+                    <a v-else href="#" class="cf-btn cf-view-all" @click.prevent>查看全部</a>
                     <a href="#" class="cf-btn cf-play-all" @click.prevent>▶ 播放全部</a>
                   </div>
                 </div>
@@ -1037,16 +1055,20 @@ export default {
     // 加载收藏夹数据
     async loadCollectData() {
       if (this._collectLoaded) return;
+      const p = this.navProfileRecord;
+      const userId = p && p.mid ? p.mid : 0;
+      if (!userId) { this._collectLoaded = true; return; }
       try {
-        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
-        const res = await http.get("/api/v1/favorites").catch(() => null);
-        if (res) {
-          const data = res.data || res || {};
-          if (data.folders && data.folders.length > 0) {
-            this.collectFolders = data.folders;
-            // 默认选中第一个
+        const http = require("../../../utils/http").default;
+        // 获取收藏夹列表
+        const res = await http.get("/api/v1/space/" + userId + "/favorite-folders").catch(() => null);
+        if (res && res.code === 0 && res.data) {
+          const folders = res.data.items || [];
+          if (folders.length > 0) {
+            this.collectFolders = folders;
+            // 默认选中第一个（默认收藏夹）
             if (!this.collectActiveId) {
-              this.selectCollectFolder(data.folders[0]);
+              this.selectCollectFolder(folders[0]);
             }
           }
         }
@@ -1058,12 +1080,14 @@ export default {
       this.collectActiveId = f.id;
       this.collectVideos = [];
       if (!f.id) return;
+      const p = this.navProfileRecord;
+      const userId = p && p.mid ? p.mid : 0;
+      if (!userId) return;
       try {
-        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
-        const res = await http.get("/api/v1/favorites/" + f.id, { params: { limit: 6 } }).catch(() => null);
-        if (res) {
-          const data = res.data || res || {};
-          this.collectVideos = data.items || data.videos || [];
+        const http = require("../../../utils/http").default;
+        const res = await http.get("/api/v1/space/" + userId + "/favorites", { params: { folder_id: f.id, limit: 6 } }).catch(() => null);
+        if (res && res.code === 0 && res.data) {
+          this.collectVideos = res.data.items || [];
         }
       } catch (e) { /* 留空 */ }
     },
