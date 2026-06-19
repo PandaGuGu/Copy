@@ -125,8 +125,8 @@
           <li
             class="nav-item profile-info"
             :class="{ on: signIn == 1 }"
-            @mouseover="profileFadeIn"
-            @mouseout="profileFadeOut"
+            @mouseenter="profileFadeIn"
+            @mouseleave="profileFadeOut"
           >
             <router-link
               v-if="signIn == 1 && isMinibiliMode && minibiliSpaceTo"
@@ -381,8 +381,8 @@
           </li>
           <li
             class="nav-item nav-item--icon"
-            @mouseover="messageFadeIn"
-            @mouseout="messageFadeOut"
+            @mouseenter="messageFadeIn"
+            @mouseleave="messageFadeOut"
           >
             <router-link
               v-if="isMinibiliMode"
@@ -445,8 +445,8 @@
           </li>
           <li
             class="nav-item nav-item--icon"
-            @mouseover="dynamicFadeIn"
-            @mouseout="dynamicFadeOut"
+            @mouseenter="dynamicFadeIn"
+            @mouseleave="dynamicFadeOut"
           >
             <router-link
               v-if="isMinibiliMode && minibiliDynamicsTo"
@@ -518,8 +518,8 @@
           </li>
           <li
             class="nav-item nav-item--icon"
-            @mouseover="collectFadeIn"
-            @mouseout="collectFadeOut"
+            @mouseenter="collectFadeIn"
+            @mouseleave="collectFadeOut"
           >
             <router-link
               v-if="minibiliCollectTo"
@@ -584,8 +584,8 @@
           </li>
           <li
             class="nav-item nav-item--icon"
-            @mouseover="historyFadeIn"
-            @mouseout="historyFadeOut"
+            @mouseenter="historyFadeIn"
+            @mouseleave="historyFadeOut"
           >
             <a href="#" class="t" @click.prevent="historyShow = !historyShow" title="历史">
               <span class="nav-icon">
@@ -677,7 +677,7 @@
 import { createNamespacedHelpers } from "vuex";
 import { setMinibiliPostLoginRedirect } from "@/utils/authTokens";
 import akariFace from "../../assets/akari.jpg";
-import http from "../../../utils/http";
+import http from "../../utils/http";
 import {
   minibiliUploadOpensLoginModal,
   resolveMinibiliUploadNavTo
@@ -970,6 +970,31 @@ export default {
     uploadNavTo() {
       void this.$route.fullPath;
       return resolveMinibiliUploadNavTo();
+    },
+    // 按时间分组的历史记录（计算属性，模板可直接引用）
+    historyGrouped() {
+      if (!this.historyRawItems.length) return [];
+      const groups = {};
+      const now = new Date();
+      const todayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
+      const yesterday = new Date(now - 86400000);
+      const yesterdayStr = yesterday.getFullYear() + "-" + String(yesterday.getMonth()+1).padStart(2,"0") + "-" + String(yesterday.getDate()).padStart(2,"0");
+
+      this.historyRawItems.forEach(item => {
+        const ts = item.viewed_at || item.ctime || item.created_at || "";
+        let label = "";
+        if (ts) {
+          const d = typeof ts === "number" ? (ts > 9999999999 ? new Date(ts) : new Date(ts * 1000)) : new Date(ts);
+          const ds = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+          if (ds === todayStr) label = "今天";
+          else if (ds === yesterdayStr) label = "昨天";
+          else label = d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日";
+        }
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(item);
+      });
+
+      return Object.keys(groups).map(label => ({ label, items: groups[label] }));
     }
   },
   methods: {
@@ -1029,6 +1054,7 @@ export default {
         }
       } catch (e) {
         // 后端无数据则留空
+        return;  // 失败时不标记已加载，下次hover重试
       }
       this._dynamicLoaded = true;
     },
@@ -1070,7 +1096,7 @@ export default {
             }
           }
         }
-      } catch (e) { console.error("[收藏夹] 加载失败:", e); }
+      } catch (e) { console.error("[收藏夹] 加载失败:", e); return; }
       this._collectLoaded = true;
     },
     // 选择收藏夹并加载视频
@@ -1123,37 +1149,12 @@ export default {
           const data = res.data || res || {};
           this.historyRawItems = data.items || [];
         }
-      } catch (e) { /* 留空 */ }
+      } catch (e) { /* 留空 */ return; }
       this._historyLoaded = true;
     },
     // 切换Tab
     switchHistoryTab(tab) {
       this.historyActiveTab = tab;
-    },
-    // 按时间分组的历史记录
-    historyGrouped() {
-      if (!this.historyRawItems.length) return [];
-      const groups = {};
-      const now = new Date();
-      const todayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
-      const yesterday = new Date(now - 86400000);
-      const yesterdayStr = yesterday.getFullYear() + "-" + String(yesterday.getMonth()+1).padStart(2,"0") + "-" + String(yesterday.getDate()).padStart(2,"0");
-
-      this.historyRawItems.forEach(item => {
-        const ts = item.viewed_at || item.ctime || item.created_at || "";
-        let label = "";
-        if (ts) {
-          const d = typeof ts === "number" ? (ts > 9999999999 ? new Date(ts) : new Date(ts * 1000)) : new Date(ts);
-          const ds = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-          if (ds === todayStr) label = "今天";
-          else if (ds === yesterdayStr) label = "昨天";
-          else label = d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日";
-        }
-        if (!groups[label]) groups[label] = [];
-        groups[label].push(item);
-      });
-
-      return Object.keys(groups).map(label => ({ label, items: groups[label] }));
     },
     // 格式化历史时间（如"今天 16:35"）
     formatHistTime(ts) {
