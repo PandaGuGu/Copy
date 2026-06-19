@@ -443,23 +443,78 @@
               </div>
             </transition>
           </li>
-          <li class="nav-item nav-item--icon">
+          <li
+            class="nav-item nav-item--icon"
+            @mouseover="dynamicFadeIn"
+            @mouseout="dynamicFadeOut"
+          >
             <router-link
               v-if="isMinibiliMode && minibiliDynamicsTo"
               class="t"
               :to="minibiliDynamicsTo"
+              @click.prevent="dynamicShow = !dynamicShow"
+              title="动态"
             >
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="4" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="12" cy="20" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="4" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/><ellipse cx="20" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/></svg>
               </span>
               <span class="nav-label">动态</span>
             </router-link>
-            <a v-else href="https://t.bilibili.com" target="_blank" class="t">
+            <a
+              v-else
+              href="#"
+              class="t"
+              @click.prevent="dynamicShow = !dynamicShow"
+              title="动态"
+            >
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="4" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="12" cy="20" rx="2.5" ry="4" fill="currentColor" opacity="0.7"/><ellipse cx="4" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/><ellipse cx="20" cy="12" rx="4" ry="2.5" fill="currentColor" opacity="0.7"/></svg>
               </span>
               <span class="nav-label">动态</span>
             </a>
+            <transition name="nav-trans">
+              <div class="dynamic-list-box" v-show="dynamicShow">
+                <!-- 正在直播（有数据时显示） -->
+                <div class="dyn-live-section" v-if="dynamicLiveList.length > 0">
+                  <div class="dyn-live-header">
+                    <span class="dyn-live-title">正在直播</span>
+                    <a href="#" class="dyn-live-more" @click.prevent>查看更多 &gt;</a>
+                  </div>
+                  <div class="dyn-live-users">
+                    <div class="dyn-live-user" v-for="(lu, idx) in dynamicLiveList.slice(0, 6)" :key="'live-'+idx">
+                      <div class="dyn-live-avatar">
+                        <img :src="lu.face || lu.avatar" :alt="lu.uname || lu.name" />
+                      </div>
+                      <span class="dyn-live-name">{{ lu.uname || lu.name }}</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- 历史动态 -->
+                <div class="dyn-feed-section">
+                  <div class="dyn-feed-divider" v-if="dynamicLiveList.length > 0"></div>
+                  <div class="dyn-feed-title">历史动态</div>
+                  <div class="dyn-feed-list">
+                    <div class="dyn-feed-item" v-for="(feed, idx) in dynamicFeedList" :key="'feed-'+idx">
+                      <div class="dyn-feed-left">
+                        <img class="dyn-feed-avatar" :src="feed.user?.face || feed.face || ''" :alt="feed.user?.uname || feed.uname || '用户'" />
+                      </div>
+                      <div class="dyn-feed-body">
+                        <div class="dyn-feed-username">{{ feed.user?.uname || feed.uname || '用户' }}</div>
+                        <div class="dyn-feed-content">{{ feed.desc || feed.content || feed.title || '' }}</div>
+                        <div class="dyn-feed-time">{{ formatFeedTime(feed.ctime || feed.timestamp || feed.time || '') }}</div>
+                      </div>
+                      <div class="dyn-feed-right" v-if="feed.cover || feed.pic">
+                        <img class="dyn-feed-cover" :src="feed.cover || feed.pic" alt="" />
+                      </div>
+                    </div>
+                    <!-- 空状态 -->
+                    <div class="dyn-feed-empty" v-if="dynamicFeedList.length === 0">
+                      <span>暂无动态</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </transition>
           </li>
           <li class="nav-item nav-item--icon">
             <router-link
@@ -595,6 +650,10 @@ export default {
     return {
       profileShow: false, //个人信息默认隐藏
       messageShow: false, //消息通知默认隐藏
+      dynamicShow: false, //动态下拉默认隐藏
+      // 动态下拉数据
+      dynamicLiveList: [],   // 正在直播列表
+      dynamicFeedList: [],   // 历史动态列表
       userLevelHelpUrl: USER_LEVEL_HELP_URL,
       msgUnread: {},
       _msgUnreadUnsub: null,
@@ -861,6 +920,49 @@ export default {
     },
     messageFadeOut() {
       this.messageShow = false;
+    },
+    //动态下拉显示隐藏
+    dynamicFadeIn() {
+      this.dynamicShow = true;
+      this.loadDynamicData();
+    },
+    dynamicFadeOut() {
+      this.dynamicShow = false;
+    },
+    // 加载动态下拉数据
+    async loadDynamicData() {
+      if (this._dynamicLoaded) return;
+      try {
+        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
+        // 尝试获取动态数据
+        const res = await http.get("/api/v1/dynamics", { params: { limit: 8 } }).catch(() => null);
+        if (res) {
+          const data = res.data || res || {};
+          if (data.items) this.dynamicFeedList = data.items.slice(0, 6);
+          if (data.live_users) this.dynamicLiveList = data.live_users;
+        }
+      } catch (e) {
+        // 使用默认模拟数据
+        this.dynamicFeedList = [
+          { user: { uname: "三角洲经济学教父", face: "" }, desc: "三角洲新赛季标签爆率机制辟谣！我觉得并非针对鼠鼠玩家。", ctime: Date.now() - 240000, cover: "" },
+          { user: { uname: "修2", face: "" }, desc: "一贴一贴近你的心", ctime: Date.now() - 360000, pic: "" },
+          { user: { uname: "白大厨", face: "" }, desc: "秘密实验室长对局实况，做全局流程，从头做局到结束！，秘密实验室小饭堂服务器长对局实...", ctime: Date.now() - 3600000, pic: "" },
+          { user: { uname: "三角洲经济学教父", face: "" }, desc: "三角洲新赛季标签爆率机制辟谣！我觉得并非针对鼠鼠玩家。", ctime: Date.now() - 7200000, cover: "" },
+        ];
+      }
+      this._dynamicLoaded = true;
+    },
+    // 格式化动态时间
+    formatFeedTime(ts) {
+      if (!ts) return "";
+      const now = Date.now();
+      const t = typeof ts === "number" ? (ts > 9999999999 ? ts : ts * 1000) : new Date(ts).getTime();
+      const diff = Math.floor((now - t) / 1000);
+      if (diff < 60) return "刚刚";
+      if (diff < 3600) return Math.floor(diff / 60) + "分钟前";
+      if (diff < 86400) return Math.floor(diff / 3600) + "小时前";
+      if (diff < 2592000) return Math.floor(diff / 86400) + "天前";
+      return new Date(t).toLocaleDateString("zh-CN");
     },
     // 搜索相关方法
     clearHideSearchPanelTimer() {
@@ -1435,6 +1537,153 @@ export default {
           border-radius: 0 0 4px 4px;
           overflow: hidden;
           transition: all 300ms;
+        }
+        // 动态下拉面板
+        .dynamic-list-box {
+          width: 340px;
+          position: absolute;
+          top: 100%;
+          left: calc(50% - 170px);
+          background: $white;
+          box-shadow: rgba(0, 0, 0, 0.16) 0px 2px 8px;
+          border-radius: 8px;
+          overflow: hidden;
+          z-index: 500;
+          padding-bottom: 8px;
+
+          // 正在直播区域
+          .dyn-live-section {
+            padding: 14px 16px 10px;
+            .dyn-live-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+              .dyn-live-title {
+                font-size: 15px;
+                font-weight: bold;
+                color: #222;
+              }
+              .dyn-live-more {
+                font-size: 12px;
+                color: #99a2aa;
+                text-decoration: none;
+                &:hover { color: $blue; }
+              }
+            }
+            .dyn-live-users {
+              display: flex;
+              justify-content: space-between;
+              gap: 4px;
+            }
+            .dyn-live-user {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              width: 48px;
+              cursor: pointer;
+              .dyn-live-avatar {
+                width: 42px;
+                height: 42px;
+                border-radius: 50%;
+                border: 2px solid #ff6699;
+                overflow: hidden;
+                background: #e5e9ef;
+                img { width: 100%; height: 100%; object-fit: cover; display: block; }
+              }
+              .dyn-live-name {
+                font-size: 11px;
+                color: #222;
+                margin-top: 4px;
+                max-width: 52px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                text-align: center;
+              }
+            }
+          }
+
+          // 历史动态区域
+          .dyn-feed-section {
+            .dyn-feed-divider {
+              height: 1px;
+              background: #eee;
+              margin: 0 16px;
+            }
+            .dyn-feed-title {
+              text-align: center;
+              font-size: 13px;
+              color: #99a2aa;
+              padding: 10px 0 6px;
+            }
+            .dyn-feed-list {
+              padding: 0 14px;
+            }
+            .dyn-feed-item {
+              display: flex;
+              align-items: flex-start;
+              padding: 8px 4px;
+              border-bottom: 1px solid #f5f5f5;
+              cursor: pointer;
+              transition: background 0.15s;
+              &:hover { background: #fafafa; }
+              &:last-child { border-bottom: none; }
+              .dyn-feed-left {
+                flex-shrink: 0;
+                margin-right: 10px;
+                .dyn-feed-avatar {
+                  width: 36px;
+                  height: 36px;
+                  border-radius: 50%;
+                  background: #e5e9ef;
+                  object-fit: cover;
+                }
+              }
+              .dyn-feed-body {
+                flex: 1;
+                min-width: 0;
+                .dyn-feed-username {
+                  font-size: 13px;
+                  font-weight: bold;
+                  color: #222;
+                  line-height: 1.3;
+                }
+                .dyn-feed-content {
+                  font-size: 13px;
+                  color: #99a2aa;
+                  line-height: 1.5;
+                  margin-top: 2px;
+                  display: -webkit-box;
+                  -webkit-line-clamp: 2;
+                  -webkit-box-orient: vertical;
+                  overflow: hidden;
+                }
+                .dyn-feed-time {
+                  font-size: 11px;
+                  color: #99a2aa;
+                  margin-top: 3px;
+                }
+              }
+              .dyn-feed-right {
+                flex-shrink: 0;
+                margin-left: 8px;
+                .dyn-feed-cover {
+                  width: 80px;
+                  height: 54px;
+                  border-radius: 4px;
+                  object-fit: cover;
+                  background: #eee;
+                }
+              }
+            }
+            .dyn-feed-empty {
+              text-align: center;
+              padding: 20px 0;
+              font-size: 13px;
+              color: #99a2aa;
+            }
+          }
         }
         .reg {
           a {
