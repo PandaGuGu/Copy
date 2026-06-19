@@ -37,48 +37,82 @@ export default {
       loading: false,
       loopMode: false,
       loadLock: false,
+      scrollContainer: null,   // 真正的滚动容器
     };
   },
   mounted() {
+    this.findScrollContainer();
+    this.bindScroll();
     this.loadVideos();
-    window.addEventListener("scroll", this.handleScroll);
-    // 初始检查一次（内容不足一屏时）
+    // 初始检查
     this.$nextTick(() => this.checkAndLoad());
   },
   beforeDestroy() {
-    window.removeEventListener("scroll", this.handleScroll);
+    this.unbindScroll();
   },
   methods: {
-    // scroll 事件处理：距底部 600px 内即触发
+    // 找到真正的滚动容器（可能是 .app-body 而不一定是 window）
+    findScrollContainer() {
+      let el = this.$el.parentElement;
+      while (el && el !== document.body && el !== document.documentElement) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          this.scrollContainer = el;
+          console.log("[VideoFeed] 找到滚动容器:", el.className || el.id || el.tagName);
+          return;
+        }
+        el = el.parentElement;
+      }
+      // 没找到就用 window
+      this.scrollContainer = window;
+      console.log("[VideoFeed] 使用 window 作为滚动容器");
+    },
+
+    bindScroll() {
+      if (!this.scrollContainer) return;
+      this.scrollContainer.addEventListener("scroll", this.handleScroll);
+      // 窗口 resize 时也要检查
+      window.addEventListener("resize", this.handleScroll);
+      console.log("[VideoFeed] 已绑定 scroll 事件");
+    },
+
+    unbindScroll() {
+      if (this.scrollContainer) {
+        this.scrollContainer.removeEventListener("scroll", this.handleScroll);
+      }
+      window.removeEventListener("resize", this.handleScroll);
+    },
+
     handleScroll() {
       this.checkAndLoad();
     },
 
-    // 检查是否需要加载更多
     checkAndLoad() {
-      const scrollY = window.scrollY || document.documentElement.scrollTop;
-      const windowH = window.innerHeight;
-      const docH = document.documentElement.offsetHeight;
-      const shouldLoad = scrollY + windowH >= docH - 600;
-      if (shouldLoad) {
-        console.log("[VideoFeed] 距底部不足600px，触发加载");
-      }
-      if (shouldLoad) {
-        this.loadVideos();
+      if (!this.scrollContainer) return;
+      let scrollBottom;
+      if (this.scrollContainer === window) {
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const windowH = window.innerHeight;
+        const docH = document.documentElement.scrollHeight;
+        scrollBottom = scrollY + windowH;
+        if (scrollBottom >= docH - 600) {
+          this.loadVideos();
+        }
+      } else {
+        const { scrollTop, clientHeight, scrollHeight } = this.scrollContainer;
+        if (scrollTop + clientHeight >= scrollHeight - 600) {
+          this.loadVideos();
+        }
       }
     },
 
     async loadVideos() {
-      if (this.loadLock) {
-        console.log("[VideoFeed] 被锁住，跳过");
-        return;
-      }
+      if (this.loadLock) return;
       this.loadLock = true;
-      console.log("[VideoFeed] loadVideos 触发, loopMode=", this.loopMode, "videos.length=", this.videos.length);
 
-      // 循环模式：直接追加
       if (this.loopMode) {
-        console.log("[VideoFeed] 循环模式：追加15条视频");
+        console.log("[VideoFeed] 循环模式：追加15条");
         this.appendLoopVideos();
         setTimeout(() => { this.loadLock = false; }, 800);
         this.$nextTick(() => this.checkAndLoad());
@@ -97,7 +131,7 @@ export default {
         const res = await http.get("/api/v1/videos", { params });
         const data = res.data || res || {};
         const items = (data.items || []).map(this.mapVideoItem);
-        console.log("[VideoFeed] API返回", items.length, "条, next_cursor=", data.next_cursor);
+        console.log("[VideoFeed] API返回", items.length, "条");
 
         if (this.isFirstLoad) {
           this.baseVideos = items;
@@ -128,14 +162,11 @@ export default {
       }
       this.loading = false;
       setTimeout(() => { this.loadLock = false; }, 500);
-      // 加载完后再次检查（内容可能还不足一屏）
       this.$nextTick(() => this.checkAndLoad());
     },
 
     appendLoopVideos() {
       if (this.baseVideos.length === 0) return;
-      console.log("[VideoFeed] appendLoopVideos: baseVideos=", this.baseVideos.length, "当前videos=", this.videos.length);
-      // 一次追加 15 条（三行五列一整屏）
       let append = [];
       while (append.length < 15) {
         const shuffled = this.shuffle([...this.baseVideos]);
@@ -143,8 +174,6 @@ export default {
       }
       append = append.slice(0, 15);
       this.videos = this.videos.concat(append);
-      console.log("[VideoFeed] 追加后 videos=", this.videos.length);
-      // 防止列表无限增长，保留最近 150 条
       if (this.videos.length > 150) {
         this.videos = this.videos.slice(-90);
       }
