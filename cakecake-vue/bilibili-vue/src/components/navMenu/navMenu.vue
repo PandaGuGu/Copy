@@ -516,23 +516,53 @@
               </div>
             </transition>
           </li>
-          <li class="nav-item nav-item--icon">
-            <router-link
-              v-if="isMinibiliMode && minibiliCollectTo"
-              class="t"
-              :to="minibiliCollectTo"
-            >
-              <span class="nav-icon">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-              </span>
-              <span class="nav-label">收藏</span>
-            </router-link>
-            <a v-else href="https://space.bilibili.com/fav" target="_blank" class="t">
+          <li
+            class="nav-item nav-item--icon"
+            @mouseover="collectFadeIn"
+            @mouseout="collectFadeOut"
+          >
+            <a href="#" class="t" @click.prevent="collectShow = !collectShow" title="收藏">
               <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L15 9L22 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2 9.5L9 9L12 2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M10 16Q12 18 14 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               </span>
               <span class="nav-label">收藏</span>
             </a>
+            <transition name="nav-trans">
+              <div class="collect-list-box" v-show="collectShow">
+                <!-- 左侧：收藏夹列表 -->
+                <div class="collect-sidebar">
+                  <div
+                    class="collect-folder"
+                    :class="{ active: collectActiveId === f.id }"
+                    v-for="(f, idx) in collectFolders"
+                    :key="'cf-'+idx"
+                    @click="selectCollectFolder(f)"
+                  >
+                    <span class="cf-name">{{ f.name }}</span>
+                    <span class="cf-count">{{ f.count || 0 }}</span>
+                  </div>
+                  <div class="collect-empty" v-if="collectFolders.length === 0">暂无收藏夹</div>
+                </div>
+                <!-- 右侧：选中收藏夹的视频列表 -->
+                <div class="collect-main">
+                  <div class="collect-video-list" v-if="collectVideos.length > 0">
+                    <div class="collect-video-item" v-for="(v, idx) in collectVideos" :key="'cv-'+idx" @click="goCollectVideo(v)">
+                      <img class="cv-cover" :src="v.cover || ''" alt="" />
+                      <div class="cv-info">
+                        <div class="cv-title">{{ v.title }}</div>
+                        <div class="cv-meta">{{ formatDuration(v.duration_sec || v.duration || 0) }} {{ v.uploader || v.author || '' }}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="collect-empty-right" v-else>暂无视频</div>
+                  <!-- 底部操作栏 -->
+                  <div class="collect-footer">
+                    <a href="#" class="cf-btn cf-view-all" @click.prevent>查看全部</a>
+                    <a href="#" class="cf-btn cf-play-all" @click.prevent>▶ 播放全部</a>
+                  </div>
+                </div>
+              </div>
+            </transition>
           </li>
           <li class="nav-item nav-item--icon">
             <router-link
@@ -654,6 +684,11 @@ export default {
       // 动态下拉数据
       dynamicLiveList: [],   // 正在直播列表
       dynamicFeedList: [],   // 历史动态列表
+      // 收藏夹下拉数据
+      collectShow: false,    // 收藏夹下拉默认隐藏
+      collectActiveId: 0,    // 当前选中的收藏夹ID
+      collectFolders: [],    // 收藏夹列表
+      collectVideos: [],     // 当前收藏夹的视频列表
       userLevelHelpUrl: USER_LEVEL_HELP_URL,
       msgUnread: {},
       _msgUnreadUnsub: null,
@@ -956,6 +991,65 @@ export default {
       if (diff < 86400) return Math.floor(diff / 3600) + "小时前";
       if (diff < 2592000) return Math.floor(diff / 86400) + "天前";
       return new Date(t).toLocaleDateString("zh-CN");
+    },
+    //收藏夹下拉显示隐藏
+    collectFadeIn() {
+      this.collectShow = true;
+      this.loadCollectData();
+    },
+    collectFadeOut() {
+      this.collectShow = false;
+    },
+    // 加载收藏夹数据
+    async loadCollectData() {
+      if (this._collectLoaded) return;
+      try {
+        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
+        const res = await http.get("/api/v1/favorites").catch(() => null);
+        if (res) {
+          const data = res.data || res || {};
+          if (data.folders && data.folders.length > 0) {
+            this.collectFolders = data.folders;
+            // 默认选中第一个
+            if (!this.collectActiveId) {
+              this.selectCollectFolder(data.folders[0]);
+            }
+          }
+        }
+      } catch (e) { /* 后端无数据则留空 */ }
+      this._collectLoaded = true;
+    },
+    // 选择收藏夹并加载视频
+    async selectCollectFolder(f) {
+      this.collectActiveId = f.id;
+      this.collectVideos = [];
+      if (!f.id) return;
+      try {
+        const http = require("../../../utils/http").default || window.http || { get: () => Promise.resolve({}) };
+        const res = await http.get("/api/v1/favorites/" + f.id, { params: { limit: 6 } }).catch(() => null);
+        if (res) {
+          const data = res.data || res || {};
+          this.collectVideos = data.items || data.videos || [];
+        }
+      } catch (e) { /* 留空 */ }
+    },
+    // 格式化视频时长
+    formatDuration(sec) {
+      sec = Number(sec) || 0;
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+      return m + ":" + String(s).padStart(2, "0");
+    },
+    // 跳转视频
+    goCollectVideo(v) {
+      const id = v.id || v.aid || v.video_id;
+      if (id) {
+        const router = this.$router;
+        router.push("/video/BV" + id);
+      }
+      this.collectShow = false;
     },
     // 搜索相关方法
     clearHideSearchPanelTimer() {
@@ -1687,6 +1781,136 @@ export default {
               padding: 20px 0;
               font-size: 13px;
               color: #99a2aa;
+            }
+          }
+        }
+        // 收藏夹下拉面板
+        .collect-list-box {
+          width: 520px;
+          position: absolute;
+          top: 100%;
+          left: calc(50% - 260px);
+          background: $white;
+          box-shadow: rgba(0, 0, 0, 0.16) 0px 2px 8px;
+          border-radius: 8px;
+          overflow: hidden;
+          z-index: 500;
+          display: flex;
+
+          // 左侧收藏夹列表
+          .collect-sidebar {
+            width: 140px;
+            flex-shrink: 0;
+            background: #f7f8fa;
+            border-right: 1px solid #eee;
+            max-height: 380px;
+            overflow-y: auto;
+            padding: 6px 0;
+            .collect-folder {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 10px 14px;
+              cursor: pointer;
+              transition: background 0.15s;
+              &:hover { background: #ebedf0; }
+              &.active {
+                background: $blue;
+                .cf-name, .cf-count { color: $white; }
+                .cf-name { font-weight: bold; }
+              }
+              .cf-name {
+                font-size: 13px;
+                color: #222;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 90px;
+              }
+              .cf-count {
+                font-size: 12px;
+                color: #99a2aa;
+                flex-shrink: 0;
+              }
+            }
+            .collect-empty {
+              text-align: center;
+              padding: 20px 8px;
+              font-size: 12px;
+              color: #99a2aa;
+            }
+          }
+
+          // 右侧视频列表
+          .collect-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            .collect-video-list {
+              flex: 1;
+              overflow-y: auto;
+              padding: 8px 10px;
+              .collect-video-item {
+                display: flex;
+                align-items: flex-start;
+                padding: 6px 4px;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: background 0.15s;
+                &:hover { background: #fafafa; }
+                .cv-cover {
+                  width: 96px;
+                  height: 54px;
+                  border-radius: 4px;
+                  object-fit: cover;
+                  flex-shrink: 0;
+                  background: #e5e9ef;
+                }
+                .cv-info {
+                  margin-left: 10px;
+                  min-width: 0;
+                  flex: 1;
+                  .cv-title {
+                    font-size: 13px;
+                    color: #222;
+                    line-height: 1.4;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                  }
+                  .cv-meta {
+                    font-size: 11px;
+                    color: #999;
+                    margin-top: 3px;
+                  }
+                }
+              }
+            }
+            .collect-empty-right {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              flex: 1;
+              font-size: 13px;
+              color: #99a2aa;
+            }
+
+            // 底部操作栏
+            .collect-footer {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 10px 14px;
+              border-top: 1px solid #f0f0f0;
+              .cf-btn {
+                font-size: 13px;
+                text-decoration: none;
+                &.cf-view-all { color: #222; }
+                &.cf-play-all { color: $blue; }
+                &:hover { opacity: 0.75; }
+              }
             }
           }
         }
