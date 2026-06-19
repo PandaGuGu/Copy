@@ -240,9 +240,9 @@ body.creator-center-layout {
   }
 }
 
-/* 首页：保留与B站一致的边距 */
+/* 首页：最大宽度限制，超过时两侧居中留白 */
 html.chrome-home-top #app .bili-wrapper {
-  max-width: none !important;
+  max-width: 1400px !important;
   width: 100% !important;
   padding-left: 56px !important;
   padding-right: 56px !important;
