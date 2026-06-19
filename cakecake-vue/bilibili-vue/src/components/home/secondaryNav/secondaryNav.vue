@@ -104,7 +104,7 @@ export default {
   align-items: flex-start;
   width: 100%;
   margin: 0 auto;
-  padding: 21px 0;
+  padding: 23px 0;
 }
 
 /* 左侧快捷入口 */
@@ -174,7 +174,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(11, 1fr);
   grid-template-rows: repeat(2, auto);
-  gap: 2px 0;
+  gap: 4px 6px;
   align-items: center;
   margin-right: 12px;
 }
@@ -183,7 +183,7 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 4px;
+  padding: 5px 8px;
   font-size: 12px;
   color: #555;
   text-decoration: none;
@@ -222,14 +222,14 @@ export default {
   display: grid;
   grid-template-columns: repeat(3, auto);
   grid-template-rows: repeat(2, auto);
-  gap: 2px 6px;
+  gap: 4px 8px;
 }
 
 .sn-right-link {
   font-size: 12px;
   color: #555;
   text-decoration: none;
-  padding: 3px 7px;
+  padding: 5px 10px;
   border-radius: 3px;
   background: #f5f5f5;
   transition: all 0.2s;
