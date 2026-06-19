@@ -2020,10 +2020,10 @@ export default {
         }
         // 历史记录下拉面板
         .history-list-box {
-          width: 360px;
+          width: 300px;
           position: absolute;
           top: 100%;
-          left: calc(50% - 180px);
+          left: calc(50% - 150px);
           background: $white;
           box-shadow: rgba(0, 0, 0, 0.16) 0px 2px 8px;
           border-radius: 8px;
@@ -2033,12 +2033,12 @@ export default {
           // 顶部Tab栏
           .hist-tabs {
             display: flex;
+            justify-content: center;
             border-bottom: 1px solid #f0f0f0;
-            padding: 0 16px;
             .hist-tab {
-              font-size: 14px;
+              font-size: 13px;
               color: #222;
-              padding: 12px 18px;
+              padding: 10px 14px;
               cursor: pointer;
               position: relative;
               transition: color 0.15s;
@@ -2062,38 +2062,38 @@ export default {
 
           // 历史列表区域
           .hist-body {
-            max-height: 380px;
+            max-height: 280px;
             overflow-y: auto;
             padding: 4px 0;
 
             .hist-group {
               .hist-date-label {
-                font-size: 13px;
+                font-size: 12px;
                 color: #222;
                 font-weight: bold;
-                padding: 10px 16px 6px;
+                padding: 8px 12px 4px;
               }
               .hist-item {
                 display: flex;
                 align-items: flex-start;
-                padding: 7px 12px;
+                padding: 6px 10px;
                 cursor: pointer;
                 transition: background 0.15s;
                 &:hover { background: #fafafa; }
                 .hist-cover {
-                  width: 96px;
-                  height: 54px;
-                  border-radius: 4px;
+                  width: 72px;
+                  height: 40px;
+                  border-radius: 3px;
                   object-fit: cover;
                   flex-shrink: 0;
                   background: #e5e9ef;
                 }
                 .hist-info {
-                  margin-left: 10px;
+                  margin-left: 8px;
                   min-width: 0;
                   flex: 1;
                   .hist-title {
-                    font-size: 13px;
+                    font-size: 12px;
                     color: #222;
                     line-height: 1.35;
                     display: -webkit-box;
@@ -2104,10 +2104,10 @@ export default {
                   .hist-meta {
                     display: flex;
                     align-items: center;
-                    gap: 8px;
-                    font-size: 11px;
+                    gap: 6px;
+                    font-size: 10px;
                     color: #999;
-                    margin-top: 3px;
+                    margin-top: 2px;
                     flex-wrap: wrap;
                     .hist-duration { color: #222; }
                     .hist-time { color: #999; }
