@@ -7,15 +7,13 @@
       <div class="tips-img"></div>
     </div>
     <div class="nav-list">
-      <div
-        v-for="(item, index) in module"
-        :key="`nav_list_${index}`"
-        :sortindex="index"
-        class="item sortable"
-        @click="goPosition(index)"
-        :class="{ on: index == activeTab }"
-      >
-        {{ item.title }}
+      <div class="item online-stats" v-if="online">
+        <span class="stat-label">在线</span>
+        <span class="stat-num">{{ online.web_online }}</span>
+      </div>
+      <div class="item online-stats" v-if="online">
+        <span class="stat-label">投稿</span>
+        <span class="stat-num">{{ online.all_count }}</span>
       </div>
       <div class="item customize"><i class="icon"></i>排序</div>
     </div>
@@ -49,7 +47,7 @@ export default {
   components: {},
   props: {},
   computed: {
-    ...mapGetters(["module"]),
+    ...mapGetters(["module", "online"]),
     activeTab() {
       //遍历返回符合条件的值
       let one = this.module.map((v, index) => {
@@ -133,6 +131,33 @@ export default {
       &:hover {
         background-color: #00a1d6;
         color: #fff;
+      }
+    }
+    .online-stats {
+      cursor: default;
+      height: 28px;
+      line-height: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid #e5e9ef;
+      width: 48px;
+      &.on,
+      &:hover {
+        background-color: transparent;
+        color: inherit;
+      }
+      .stat-label {
+        font-size: 10px;
+        color: #99a2aa;
+        line-height: 1;
+      }
+      .stat-num {
+        font-size: 12px;
+        color: #222;
+        line-height: 1;
+        margin-top: 2px;
       }
     }
     .customize {

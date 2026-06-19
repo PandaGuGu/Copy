@@ -113,7 +113,7 @@ export default {
 }
 .slide {
   position: relative;
-  @include wh(calc(32% - 8px), 240px);
+  @include wh(500px, 368px);
   float: left;
   margin-right: 16px;
   .slide-img {

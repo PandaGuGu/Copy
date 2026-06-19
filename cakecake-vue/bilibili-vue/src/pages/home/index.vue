@@ -14,8 +14,8 @@
         <recommend :recommend="recommend"></recommend>
       </keep-alive>
     </div>
-    <!-- 推广展示已隐藏，保留当前在线与最近投稿 -->
-    <popularize :popularize="popularize" :online="online"></popularize>
+    <!-- 在线/投稿已移至右侧悬浮小电视 -->
+    <!-- <popularize :popularize="popularize" :online="online"></popularize> -->
     <!--  动画（暂时隐藏）
     <donghua
       :ref="donghua.ref"

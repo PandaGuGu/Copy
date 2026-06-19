@@ -20,10 +20,9 @@
                 height="100"
                 class="pic"
               />
-              <div class="card-mark">
-                <p class="title">{{ item.title }}</p>
-                <p class="author">up主：{{ item.author }}</p>
-                <p class="play">播放：{{ item.play }}</p>
+              <div class="cover-info-bar">
+                <span class="cover-title">{{ item.title }}</span>
+                <span class="cover-meta">{{ item.play }} · {{ item.author }}</span>
               </div>
             </router-link>
             <WatchLaterBtn
@@ -160,8 +159,8 @@ export default {
 
 .recommend-module {
   float: left;
-  width: calc(100% - 32% - 16px);
-  height: 240px;
+  width: calc(100% - 516px);
+  height: 368px;
   position: relative;
   box-sizing: border-box;
 }
@@ -169,7 +168,7 @@ export default {
 .recommend-panel {
   position: relative;
   width: 100%;
-  height: 240px;
+  height: 368px;
   box-sizing: border-box;
   overflow: hidden;
 
@@ -184,12 +183,12 @@ export default {
 .recommend-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, 110px);
-  gap: 8px;
+  grid-template-rows: repeat(2, 1fr);
+  gap: 10px;
   padding-left: 0;
   padding-right: 0;
   width: 100%;
-  height: 240px;
+  height: 368px;
   box-sizing: border-box;
   overflow: visible;
 }
@@ -197,7 +196,7 @@ export default {
 .groom-module {
   margin: 0;
   width: 100%;
-  height: 110px;
+  height: 100%;
   @include borderRadius(4px);
   position: relative;
   overflow: hidden;
@@ -206,7 +205,7 @@ export default {
   .groom-cover {
     position: relative;
     width: 100%;
-    height: 110px;
+    height: 100%;
     overflow: hidden;
     @include borderRadius(4px);
   }
@@ -215,66 +214,40 @@ export default {
     display: block;
     position: relative;
     width: 100%;
-    height: 100px;
+    height: 100%;
   }
 
   .pic {
     width: 100%;
-    height: 100px;
+    height: 100%;
     display: block;
     object-fit: cover;
   }
-  .card-mark {
+  .cover-info-bar {
     position: absolute;
+    bottom: 0;
     left: 0;
-    top: 68px;
-    @include wh(150px, 20px);
-    font-size: 12px;
-    line-height: 20px;
-    padding: 10px 5px;
-    overflow: hidden;
-    background: linear-gradient(
-      transparent,
-      rgba(0, 0, 0, 0.1) 20%,
-      rgba(0, 0, 0, 0.2) 35%,
-      rgba(0, 0, 0, 0.6) 65%,
-      rgba(0, 0, 0, 0.9)
-    );
-    .title {
-      height: 40px;
-      @include sc(12px, $white);
+    right: 0;
+    height: 22px;
+    padding: 0 6px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .cover-title {
+      @include sc(11px, #fff);
+      max-width: 60%;
       overflow: hidden;
-      margin-bottom: 5px;
-      white-space: nowrap;
       text-overflow: ellipsis;
-      line-height: 20px;
+      white-space: nowrap;
+      line-height: 22px;
+    }
+    .cover-meta {
+      @include sc(10px, rgba(255,255,255,0.8));
+      white-space: nowrap;
+      line-height: 22px;
     }
   }
-  .groom-cover:hover .card-mark,
-  &:hover .card-mark {
-    top: 0;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    .title {
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      display: -webkit-box;
-      white-space: inherit;
-    }
-  }
-}
-.groom-module .card-mark .author,
-.groom-module .card-mark .play {
-  opacity: 0;
-  @include sc(12px, $grau);
-  height: 20px;
-  line-height: 20px;
-  overflow: hidden;
-  @include transition(0.6s);
-}
-.groom-module:hover .card-mark .author,
-.groom-module:hover .card-mark .play {
-  opacity: 1;
 }
 
 .rec-btn {
