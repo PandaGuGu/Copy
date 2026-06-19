@@ -474,11 +474,11 @@
             </a>
             <transition name="nav-trans">
               <div class="dynamic-list-box" v-show="dynamicShow">
+                <a href="#" class="dyn-panel-more" @click.prevent>查看更多 &gt;</a>
                 <!-- 正在直播（有数据时显示） -->
                 <div class="dyn-live-section" v-if="dynamicLiveList.length > 0">
                   <div class="dyn-live-header">
                     <span class="dyn-live-title">正在直播</span>
-                    <a href="#" class="dyn-live-more" @click.prevent>查看更多 &gt;</a>
                   </div>
                   <div class="dyn-live-users">
                     <div class="dyn-live-user" v-for="(lu, idx) in dynamicLiveList.slice(0, 6)" :key="'live-'+idx">
@@ -1543,6 +1543,18 @@ export default {
           overflow: hidden;
           z-index: 500;
           padding-bottom: 8px;
+
+          // 面板右上角「查看更多」（始终显示）
+          .dyn-panel-more {
+            position: absolute;
+            right: 14px;
+            top: 12px;
+            font-size: 12px;
+            color: #99a2aa;
+            text-decoration: none;
+            z-index: 10;
+            &:hover { color: $blue; }
+          }
 
           // 正在直播区域
           .dyn-live-section {
