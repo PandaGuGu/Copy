@@ -89,6 +89,7 @@ export default {
     showAppFooter() {
       if (this.hideGlobalChrome) return false;
       const n = this.$route.name;
+      if (n === "home") return false;
       if (n === "notFound") return false;
       if (n === "minibiliUserSpace" && this.$route.query?.nav === "dynamic") {
         return false;

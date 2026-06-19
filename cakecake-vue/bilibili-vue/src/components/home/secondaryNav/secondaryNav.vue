@@ -102,7 +102,7 @@ export default {
 .sn-inner {
   display: flex;
   align-items: flex-start;
-  width: 1160px;
+  width: 100%;
   margin: 0 auto;
   padding: 10px 0;
 }

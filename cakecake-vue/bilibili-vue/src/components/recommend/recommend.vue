@@ -160,8 +160,8 @@ export default {
 
 .recommend-module {
   float: left;
-  width: calc(100% - 640px);
-  height: 220px;
+  width: calc(100% - 32% - 16px);
+  height: 240px;
   position: relative;
   box-sizing: border-box;
 }
@@ -169,8 +169,9 @@ export default {
 .recommend-panel {
   position: relative;
   width: 100%;
-  height: 220px;
+  height: 240px;
   box-sizing: border-box;
+  overflow: hidden;
 
   &:hover .rec-btn {
     opacity: 1;
@@ -183,12 +184,12 @@ export default {
 .recommend-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, 100px);
-  gap: 12px;
-  padding-left: 12px;
+  grid-template-rows: repeat(2, 110px);
+  gap: 8px;
+  padding-left: 0;
   padding-right: 0;
   width: 100%;
-  height: 220px;
+  height: 240px;
   box-sizing: border-box;
   overflow: visible;
 }
@@ -196,7 +197,7 @@ export default {
 .groom-module {
   margin: 0;
   width: 100%;
-  height: 100px;
+  height: 110px;
   @include borderRadius(4px);
   position: relative;
   overflow: hidden;
@@ -205,7 +206,7 @@ export default {
   .groom-cover {
     position: relative;
     width: 100%;
-    height: 100px;
+    height: 110px;
     overflow: hidden;
     @include borderRadius(4px);
   }
@@ -334,7 +335,7 @@ export default {
 }
 
 .rec-left {
-  left: 20px;
+  left: 0;
   border-radius: 0 4px 4px 0;
   padding: 12px 6px 12px 8px;
 }

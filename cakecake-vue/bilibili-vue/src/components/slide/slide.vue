@@ -105,16 +105,17 @@ export default {
   @include transition(0.5s);
 }
 .slide-trans-enter {
-  transform: translateX(640px);
+  transform: translateX(100%);
 }
 .slide-trans-old-leave-active {
   @include transition(0.5s);
-  transform: translateX(-640px);
+  transform: translateX(-100%);
 }
 .slide {
   position: relative;
-  @include wh(640px, 220px);
+  @include wh(calc(32% - 8px), 240px);
   float: left;
+  margin-right: 16px;
   .slide-img {
     position: absolute;
     @include wh(100%, 100%);

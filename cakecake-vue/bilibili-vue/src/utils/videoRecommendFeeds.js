@@ -97,7 +97,7 @@ export function mapToAlsoLikedRow(item, fallbackCover) {
   };
 }
 
-const HOME_RECOMMEND_PAGE_SIZE = 8;
+const HOME_RECOMMEND_PAGE_SIZE = 6;
 
 function recommendItemId(item) {
   return Number(item && (item.aid != null ? item.aid : item.id));

@@ -16,7 +16,7 @@
     </div>
     <!-- 推广展示已隐藏，保留当前在线与最近投稿 -->
     <popularize :popularize="popularize" :online="online"></popularize>
-    <!--  动画 -->
+    <!--  动画（暂时隐藏）
     <donghua
       :ref="donghua.ref"
       :id="donghua.ref"
@@ -25,6 +25,7 @@
       @setNewlist="setNewlist"
       @setRankingRegion="setRankingRegion"
     />
+    -->
     <!-- 番剧（暂时隐藏）
     <bangumi
       :scrollTop="scrollTop"
@@ -49,6 +50,7 @@
       @setRankingRegion="setRankingRegion"
     />
     -->
+    <!-- 额外分区模块暂时隐藏
     <donghua
       :scrollTop="scrollTop"
       v-for="item in module.filter((ele, index) => index > 2)"
@@ -60,6 +62,7 @@
       @setNewlist="setNewlist"
       @setRankingRegion="setRankingRegion"
     />
+    -->
     <!-- <div class="video-info-module" :style="{ left: videodata.leftnum+'px' , top: videodata.topnum+'px' }" v-if="videoinforShow">
             <div class="v-title">
                 {{ videoinforitem[videodata.mouseindex].title }}
@@ -79,7 +82,7 @@
                 <span class="play"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].play) }}</span><span class="danmu"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].video_review) }}</span><span class="star"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].favorites) }}</span><span class="coin"><i class="icon"></i>{{ count2(videoinforitem[videodata.mouseindex].coins) }}</span>
             </div>
         </div> -->
-    <!-- 分类导航（移至首页底部） -->
+    <!-- 分类导航（暂时隐藏）
     <div class="bili-wrapper primary-menu-wrapper">
       <div class="primary-menu">
         <ul class="nav-menu">
@@ -163,6 +166,7 @@
         </div>
       </div>
     </div>
+    -->
   </div>
 </template>
 
@@ -308,6 +312,29 @@ export default {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="scss">
 @import "../../style/mixin";
+
+/* 首页B站比例容器 */
+html.chrome-home-top #app .bili-wrapper {
+  max-width: 1420px;
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 首页隐藏页脚 */
+html.chrome-home-top #app .app-footer {
+  display: none;
+}
+
+/* 分区内容区左右两栏自适应 */
+html.chrome-home-top #app .bili-wrapper .l-con {
+  width: calc(100% - 280px);
+}
+
+/* 首页底部分类导航也撑满 */
+html.chrome-home-top .primary-menu-wrapper .primary-menu {
+  width: 100%;
+}
 
 /* 底部分类导航容器 */
 .primary-menu-wrapper {
