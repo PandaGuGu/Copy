@@ -1786,10 +1786,10 @@ export default {
         }
         // 收藏夹下拉面板
         .collect-list-box {
-          width: 520px;
+          width: 360px;
           position: absolute;
           top: 100%;
-          left: calc(50% - 260px);
+          left: calc(50% - 180px);
           background: $white;
           box-shadow: rgba(0, 0, 0, 0.16) 0px 2px 8px;
           border-radius: 8px;
@@ -1799,18 +1799,18 @@ export default {
 
           // 左侧收藏夹列表
           .collect-sidebar {
-            width: 140px;
+            width: 110px;
             flex-shrink: 0;
             background: #f7f8fa;
             border-right: 1px solid #eee;
-            max-height: 380px;
+            max-height: 320px;
             overflow-y: auto;
-            padding: 6px 0;
+            padding: 4px 0;
             .collect-folder {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              padding: 10px 14px;
+              padding: 7px 10px;
               cursor: pointer;
               transition: background 0.15s;
               &:hover { background: #ebedf0; }
@@ -1820,15 +1820,15 @@ export default {
                 .cf-name { font-weight: bold; }
               }
               .cf-name {
-                font-size: 13px;
+                font-size: 12px;
                 color: #222;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                max-width: 90px;
+                max-width: 70px;
               }
               .cf-count {
-                font-size: 12px;
+                font-size: 11px;
                 color: #99a2aa;
                 flex-shrink: 0;
               }
@@ -1850,40 +1850,40 @@ export default {
             .collect-video-list {
               flex: 1;
               overflow-y: auto;
-              padding: 8px 10px;
+              padding: 6px 8px;
               .collect-video-item {
                 display: flex;
                 align-items: flex-start;
-                padding: 6px 4px;
+                padding: 4px 4px;
                 cursor: pointer;
                 border-radius: 4px;
                 transition: background 0.15s;
                 &:hover { background: #fafafa; }
                 .cv-cover {
-                  width: 96px;
-                  height: 54px;
+                  width: 72px;
+                  height: 40px;
                   border-radius: 4px;
                   object-fit: cover;
                   flex-shrink: 0;
                   background: #e5e9ef;
                 }
                 .cv-info {
-                  margin-left: 10px;
+                  margin-left: 8px;
                   min-width: 0;
                   flex: 1;
                   .cv-title {
-                    font-size: 13px;
+                    font-size: 12px;
                     color: #222;
-                    line-height: 1.4;
+                    line-height: 1.3;
                     display: -webkit-box;
                     -webkit-line-clamp: 2;
                     -webkit-box-orient: vertical;
                     overflow: hidden;
                   }
                   .cv-meta {
-                    font-size: 11px;
+                    font-size: 10px;
                     color: #999;
-                    margin-top: 3px;
+                    margin-top: 2px;
                   }
                 }
               }
@@ -1902,10 +1902,10 @@ export default {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              padding: 10px 14px;
+              padding: 7px 10px;
               border-top: 1px solid #f0f0f0;
               .cf-btn {
-                font-size: 13px;
+                font-size: 12px;
                 text-decoration: none;
                 &.cf-view-all { color: #222; }
                 &.cf-play-all { color: $blue; }
