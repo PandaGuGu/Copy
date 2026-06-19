@@ -14,6 +14,8 @@
         <recommend :recommend="recommend"></recommend>
       </keep-alive>
     </div>
+    <!-- 无限滚动视频流：三行五列 -->
+    <video-feed></video-feed>
     <!-- 在线/投稿已移至右侧悬浮小电视 -->
     <!-- <popularize :popularize="popularize" :online="online"></popularize> -->
     <!--  动画（暂时隐藏）
@@ -176,6 +178,7 @@ import Recommend from "../../components/recommend/recommend";
 import Popularize from "../../components/popularize/popularize";
 import Donghua from "../../components/home/donghua/donghua";
 import SecondaryNav from "../../components/home/secondaryNav/secondaryNav";
+import VideoFeed from "../../components/home/videoFeed/VideoFeed";
 // import Bangumi from "../../components/home/bangumi/bangumi";
 // import Guochuang from "../../components/home/guochuang/guochuang";
 
@@ -200,7 +203,8 @@ export default {
     Recommend,
     Popularize,
     Donghua,
-    SecondaryNav
+    SecondaryNav,
+    VideoFeed
     // Bangumi,
     // Guochuang,
   },
