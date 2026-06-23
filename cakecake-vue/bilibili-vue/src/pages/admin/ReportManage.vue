@@ -108,7 +108,10 @@
               </template>
             </el-popconfirm>
           </template>
-          <span v-else class="rp-muted">{{ row.handler_note || '已完成' }}</span>
+          <span v-else class="rp-muted">
+            {{ row.handler_note || '已完成' }}
+            <el-button size="small" text type="warning" @click="doHandle(row, 'revert', 'none')" style="margin-left:4px">撤回</el-button>
+          </span>
         </template>
       </el-table-column>
     </el-table>

@@ -266,7 +266,7 @@ func (a *API) AdminHandleReport(c *gin.Context) {
 	}
 
 	req.Action = strings.TrimSpace(req.Action)
-	if req.Action != "resolve" && req.Action != "dismiss" {
+	if req.Action != "resolve" && req.Action != "dismiss" && req.Action != "revert" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -279,8 +279,24 @@ func (a *API) AdminHandleReport(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if r.Status != "pending" {
+	if r.Status != "pending" && req.Action != "revert" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	if req.Action == "revert" && r.Status == "pending" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	// Revert: set back to pending
+	if req.Action == "revert" {
+		a.DB.Model(&r).Updates(map[string]interface{}{
+			"status":       "pending",
+			"handler_note": "",
+			"handled_by":   0,
+			"handled_at":   nil,
+		})
+		resp.OK(c, gin.H{"status": "pending"})
 		return
 	}
 

@@ -288,7 +288,7 @@
                 <button
                   type="button"
                   class="toolbar-op report-op"
-                  @click="showReportDialog = true"
+                  @click="openReportDialog"
                 >
                   <span class="op-icon-wrap is-report">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -2495,6 +2495,13 @@ export default {
     },
     onAlsoWatchLater(item) {
       void this.toggleMbWatchLater(item && item.id);
+    },
+    openReportDialog() {
+      if (!this.mbLoggedIn) {
+        this.openMbLoginModal();
+        return;
+      }
+      this.showReportDialog = true;
     },
     async onWaitClick() {
       if (!this.isMb || this.mbNumericId == null) return;
