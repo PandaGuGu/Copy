@@ -200,6 +200,36 @@ export function adminPutLLMConfig(payload) {
   return adminHttp.put("/api/v1/admin/llm-config", payload);
 }
 
+// ---------- 评论管理 ----------
+
+export function adminListComments(params) {
+  return adminHttp.get("/api/v1/admin/comments", { params });
+}
+
+export function adminGetComment(id, type) {
+  return adminHttp.get(`/api/v1/admin/comments/${id}`, { params: { type } });
+}
+
+export function adminDeleteComment(id, type) {
+  return adminHttp.post(`/api/v1/admin/comments/${id}/delete`, null, { params: { type } });
+}
+
+// ---------- 系统设置 ----------
+
+export function adminGetSettings() {
+  return adminHttp.get("/api/v1/admin/settings");
+}
+
+export function adminPutSettings(payload) {
+  return adminHttp.put("/api/v1/admin/settings", payload);
+}
+
+// ---------- 数据仪表盘 ----------
+
+export function adminGetDashboard() {
+  return adminHttp.get("/api/v1/admin/dashboard");
+}
+
 // ---------- 用户管理 ----------
 
 export function adminListUsers(params) {
@@ -220,4 +250,14 @@ export function adminUnbanUser(id) {
 
 export function adminDeleteUser(id) {
   return adminHttp.post(`/api/v1/admin/users/${id}/delete`);
+}
+
+// ---------- 举报处理 ----------
+
+export function adminListReports(params) {
+  return adminHttp.get("/api/v1/admin/reports", { params });
+}
+
+export function adminHandleReport(id, payload) {
+  return adminHttp.post(`/api/v1/admin/reports/${id}/handle`, payload);
 }

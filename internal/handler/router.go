@@ -91,6 +91,9 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.GET("/dynamics/:id", a.AdminGetDynamic)
 		admin.POST("/dynamics/:id/delete", a.AdminDeleteDynamic)
 		admin.DELETE("/dynamics/:id", a.AdminDeleteDynamic)
+		admin.GET("/comments", a.AdminListComments)
+		admin.GET("/comments/:id", a.AdminGetComment)
+		admin.POST("/comments/:id/delete", a.AdminDeleteComment)
 		admin.GET("/agent-settings", a.AdminGetAgentSettings)
 		admin.PUT("/agent-settings", a.AdminPutAgentSettings)
 		admin.POST("/agent-settings/avatar", a.AdminUploadAgentAvatar)
@@ -101,6 +104,11 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.POST("/agent-profiles/:id/avatar", a.AdminUploadAgentProfileAvatar)
 		admin.GET("/llm-config", a.AdminGetLLMConfig)
 		admin.PUT("/llm-config", a.AdminPutLLMConfig)
+		admin.GET("/settings", a.AdminGetSettings)
+		admin.PUT("/settings", a.AdminPutSettings)
+		admin.GET("/dashboard", a.AdminDashboard)
+		admin.GET("/reports", a.AdminListReports)
+		admin.POST("/reports/:id/handle", a.AdminHandleReport)
 	}
 
 	authd := r.Group("/api/v1")
@@ -229,6 +237,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.PATCH("/dm/conversations/:id/settings", a.PatchDmConversationSettings)
 		authd.GET("/dm/conversations/:id/messages", a.ListDmMessages)
 		authd.POST("/dm/conversations/:id/messages", a.PostDmMessage)
+		authd.POST("/reports", a.PostReport)
 	}
 
 	r.GET("/api/v1/ws/danmaku", a.ServeDanmaku)

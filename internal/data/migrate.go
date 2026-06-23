@@ -59,6 +59,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.HotSearchOp{},
 		&model.HotSearchDisplayLayout{},
 		&model.LLMConfig{},
+		&model.Report{},
 	); err != nil {
 		return err
 	}

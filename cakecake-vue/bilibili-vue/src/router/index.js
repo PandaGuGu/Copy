@@ -305,6 +305,24 @@ const routes = [
         meta: { title: "动态管理 - 运营后台" }
       },
       {
+        path: "comments",
+        name: "adminComments",
+        component: () => import("@/pages/admin/CommentManage.vue"),
+        meta: { title: "评论管理 - 运营后台" }
+      },
+      {
+        path: "settings",
+        name: "adminSettings",
+        component: () => import("@/pages/admin/Settings.vue"),
+        meta: { title: "系统设置 - 运营后台" }
+      },
+      {
+        path: "reports",
+        name: "adminReports",
+        component: () => import("@/pages/admin/ReportManage.vue"),
+        meta: { title: "举报处理 - 运营后台" }
+      },
+      {
         path: "agent",
         name: "adminAgent",
         component: () => import("@/pages/admin/AgentManage.vue"),

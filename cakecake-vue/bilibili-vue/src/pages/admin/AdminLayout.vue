@@ -15,6 +15,13 @@
     <div class="adm-body">
       <aside class="adm-side">
         <router-link
+          :to="{ name: 'adminDashboard' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          数据概览
+        </router-link>
+        <router-link
           :to="{ name: 'adminBanners' }"
           class="adm-side__item"
           active-class="adm-side__item--on"
@@ -55,6 +62,27 @@
           active-class="adm-side__item--on"
         >
           动态管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminComments' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          评论管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminSettings' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          系统设置
+        </router-link>
+        <router-link
+          :to="{ name: 'adminReports' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          举报处理
         </router-link>
         <router-link
           :to="{ name: 'adminAgent' }"
