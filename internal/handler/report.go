@@ -353,7 +353,7 @@ func (a *API) executeContentAction(targetType string, targetID uint64, action, n
 
 func (a *API) moderateVideo(id uint64, action string) string {
 	var v model.Video
-	if a.DB.Select("id, status, user_id").First(&v, id).Error != nil {
+	if a.DB.Select("id, status, user_id, title").First(&v, id).Error != nil {
 		return ""
 	}
 	switch action {
@@ -365,6 +365,7 @@ func (a *API) moderateVideo(id uint64, action string) string {
 			"status":      "deleted",
 			"fail_reason": "管理员下架：因举报违规",
 		})
+		sendModerationNotify(a.DB, v.UserID, "takedown", "您的视频《"+truncateTitle(v.Title)+"》因违规被下架")
 		return "视频已下架"
 	case "warn":
 		return a.warnAuthor(v.UserID, "您的视频因违规被举报，请自查内容")
@@ -374,9 +375,17 @@ func (a *API) moderateVideo(id uint64, action string) string {
 	return ""
 }
 
+func truncateTitle(t string) string {
+	r := []rune(t)
+	if len(r) > 30 {
+		return string(r[:30]) + "..."
+	}
+	return t
+}
+
 func (a *API) moderateArticle(id uint64, action string) string {
 	var ar model.Article
-	if a.DB.Select("id, status, user_id").First(&ar, id).Error != nil {
+	if a.DB.Select("id, status, user_id, title").First(&ar, id).Error != nil {
 		return ""
 	}
 	switch action {
@@ -388,6 +397,7 @@ func (a *API) moderateArticle(id uint64, action string) string {
 			"status":      "deleted",
 			"fail_reason": "管理员下架：因举报违规",
 		})
+		sendModerationNotify(a.DB, ar.UserID, "takedown", "您的文章《"+truncateTitle(ar.Title)+"》因违规被下架")
 		return "文章已下架"
 	case "warn":
 		return a.warnAuthor(ar.UserID, "您的文章因违规被举报，请自查内容")
@@ -405,6 +415,7 @@ func (a *API) moderateDynamic(id uint64, action string) string {
 	switch action {
 	case "takedown":
 		a.DB.Delete(&dyn)
+		sendModerationNotify(a.DB, dyn.UserID, "takedown", "您的动态因违规被删除")
 		return "动态已删除"
 	case "warn":
 		return a.warnAuthor(dyn.UserID, "您的动态因违规被举报，请自查内容")
@@ -437,6 +448,7 @@ func (a *API) modCommentAction(table string, id uint64, action string) (uint64, 
 	switch action {
 	case "takedown":
 		a.DB.Table(table).Where("id = ?", id).Delete(nil)
+		sendModerationNotify(a.DB, userID, "takedown", "您的评论因违规被删除")
 	case "warn":
 		a.warnAuthor(userID, "您的评论因违规被举报")
 	case "ban":
@@ -473,12 +485,10 @@ func (a *API) warnAuthor(userID uint64, msg string) string {
 	if userID == 0 {
 		return ""
 	}
-	// Set a "warned" flag or create a notification. For now, we ensure status reflects.
 	var u model.User
 	if a.DB.Select("id, status, banned_reason").First(&u, userID).Error != nil {
 		return ""
 	}
-	// Don't overwrite existing ban
 	if u.Status == "banned" {
 		return "作者已被封禁"
 	}
@@ -487,6 +497,7 @@ func (a *API) warnAuthor(userID uint64, msg string) string {
 			"banned_reason": "[警告] " + msg,
 		})
 	}
+	sendModerationNotify(a.DB, userID, "warn", msg)
 	return "已警告作者"
 }
 
@@ -507,7 +518,25 @@ func (a *API) banAuthor(userID uint64, reason string) string {
 		"banned_reason": "[举报] " + reason,
 		"banned_at":     now,
 	})
+	sendModerationNotify(a.DB, userID, "ban", reason)
 	return "已封禁作者"
+}
+
+// sendModerationNotify creates a notification for the content author.
+func sendModerationNotify(db *gorm.DB, userID uint64, modType, msg string) {
+	if userID == 0 || msg == "" {
+		return
+	}
+	n := model.Notification{
+		RecipientID:     userID,
+		Type:            "content_moderation",
+		RelatedID:       0,
+		SenderNamesJSON: `["系统"]`,
+		CommentPreview:  msg,
+		PayloadJSON:     `{"type":"` + modType + `","message":"` + msg + `"}`,
+		IsRead:          false,
+	}
+	_ = db.Create(&n).Error
 }
 
 // AdminBatchHandleReports POST /api/v1/admin/reports/batch
