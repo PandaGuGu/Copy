@@ -127,8 +127,13 @@
     </div>
 
     <!-- 处理弹窗 -->
-    <el-dialog v-model="handleVisible" title="处理举报" width="480px" destroy-on-close>
-      <template v-if="handleTarget">
+    <el-dialog
+      :model-value="handleVisible"
+      title="处理举报"
+      width="480px"
+      @update:model-value="handleVisible = $event"
+    >
+      <div v-if="handleTarget">
         <div class="rph-info">
           <p><b>目标：</b>{{ typeLabel(handleTarget.target_type) }} #{{ handleTarget.target_id }}</p>
           <p><b>分类：</b>{{ handleTarget.reason_label || handleTarget.reason_type }}</p>
@@ -139,24 +144,38 @@
 
         <div class="rph-actions">
           <label class="rph-label">对目标内容的处理：</label>
-          <el-radio-group v-model="handleContentAction" class="rph-radio-group">
-            <el-radio value="none" border size="default">仅标记已处理</el-radio>
-            <el-radio value="takedown" border size="default">下架/删除内容</el-radio>
-            <el-radio value="warn" border size="default">警告发布者</el-radio>
-            <el-radio value="ban" border size="default">封禁发布者</el-radio>
-          </el-radio-group>
+          <div class="rph-radio-list">
+            <div
+              v-for="act in contentActions"
+              :key="act.value"
+              class="rph-radio-item"
+              :class="{ 'is-active': handleContentAction === act.value }"
+              @click="handleContentAction = act.value"
+            >
+              <span class="rph-radio-dot" :class="{ 'is-on': handleContentAction === act.value }" />
+              <div>
+                <div class="rph-radio-title">{{ act.label }}</div>
+                <div class="rph-radio-desc">{{ act.desc }}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="rph-note" style="margin-top:14px">
           <label class="rph-label">处理备注（选填）：</label>
           <el-input v-model="handleNote" placeholder="可填写处理说明..." size="default" />
         </div>
-      </template>
+      </div>
 
       <template #footer>
         <el-button @click="handleVisible = false">取消</el-button>
-        <el-button type="primary" :loading="handling" @click="confirmHandle">
-          {{ handleContentAction === 'ban' ? '确认处理并封禁' : handleContentAction === 'takedown' ? '确认下架' : handleContentAction === 'warn' ? '确认警告' : '确认处理' }}
+        <el-button
+          type="primary"
+          :loading="handling"
+          :disabled="!handleContentAction"
+          @click="confirmHandle"
+        >
+          {{ handleContentAction === 'ban' ? '确认封禁' : handleContentAction === 'takedown' ? '确认下架' : handleContentAction === 'warn' ? '确认警告' : '确认处理' }}
         </el-button>
       </template>
     </el-dialog>
@@ -196,6 +215,12 @@ export default {
       handleContentAction: "none",
       handleNote: "",
       handling: false,
+      contentActions: [
+        { value: "none", label: "仅标记已处理", desc: "不操作内容，仅标记举报为已处理" },
+        { value: "takedown", label: "下架/删除内容", desc: "下架视频/文章，删除动态/评论" },
+        { value: "warn", label: "警告发布者", desc: "标记作者账号为警告状态" },
+        { value: "ban", label: "封禁发布者", desc: "封禁作者账号，拒绝登录" },
+      ],
     };
   },
   created() {
@@ -351,6 +376,23 @@ export default {
 .rph-info { font-size: 13px; color: #61666d; line-height: 1.8; }
 .rph-info b { color: #18191c; }
 .rph-label { font-size: 13px; font-weight: 600; color: #18191c; display: block; margin-bottom: 8px; }
-.rph-radio-group { display: flex; flex-direction: column; gap: 6px; }
-.rph-radio-group .el-radio { margin-right: 0; height: auto; padding: 10px 14px; }
+
+.rph-radio-list { display: flex; flex-direction: column; gap: 6px; }
+.rph-radio-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid #e3e5e7; border-radius: 8px;
+  cursor: pointer; transition: all .15s;
+}
+.rph-radio-item:hover { border-color: #00a1d6; background: #f0fafe; }
+.rph-radio-item.is-active { border-color: #00a1d6; background: #e6f7ff; }
+.rph-radio-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #c0c4cc; flex-shrink: 0; margin-top: 2px;
+  transition: all .15s;
+}
+.rph-radio-dot.is-on { border-color: #00a1d6; background: #00a1d6; box-shadow: inset 0 0 0 3px #fff; }
+.rph-radio-title { font-size: 14px; font-weight: 600; color: #18191c; }
+.rph-radio-desc { font-size: 12px; color: #9499a0; margin-top: 2px; }
+.rph-radio-item.is-active .rph-radio-title { color: #00a1d6; }
 </style>
