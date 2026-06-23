@@ -35,7 +35,7 @@ type Report struct {
 	TargetType   string    `gorm:"size:16;index;not null"`
 	TargetID     uint64    `gorm:"index;not null"`
 	ReasonType   string    `gorm:"size:32;index;not null;default:other"`
-	ReasonDetail string    `gorm:"size:1000"`
+	ReasonDetail string    `gorm:"column:reason;size:1000"`
 	Status       string    `gorm:"size:16;index;not null;default:pending"`
 	HandlerNote  string    `gorm:"size:500"`
 	HandledBy    uint64    `gorm:"default:0"`
