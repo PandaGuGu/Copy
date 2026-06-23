@@ -529,9 +529,9 @@ func sendModerationNotify(db *gorm.DB, userID uint64, modType, msg string) {
 	}
 	n := model.Notification{
 		RecipientID:     userID,
-		Type:            "content_moderation",
+		Type:            "system_notice",
 		RelatedID:       0,
-		SenderNamesJSON: `["系统"]`,
+		SenderNamesJSON: `["系统通知"]`,
 		CommentPreview:  msg,
 		PayloadJSON:     `{"type":"` + modType + `","message":"` + msg + `"}`,
 		IsRead:          false,

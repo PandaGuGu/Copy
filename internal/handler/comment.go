@@ -1618,6 +1618,14 @@ func (a *API) formatNotification(n model.Notification) gin.H {
 		} else if len(names) > 0 {
 			out["sender_username"] = names[0]
 		}
+	case "system_notice":
+		out["sender_names"] = names
+		if len(names) > 0 {
+			out["sender_username"] = names[0]
+		}
+		if n.CommentPreview != "" {
+			out["message"] = n.CommentPreview
+		}
 	}
 	return out
 }
