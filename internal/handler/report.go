@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,6 +38,9 @@ func (a *API) PostReport(c *gin.Context) {
 	req.TargetType = strings.TrimSpace(req.TargetType)
 	req.ReasonType = strings.TrimSpace(req.ReasonType)
 	req.ReasonDetail = strings.TrimSpace(req.ReasonDetail)
+	if len([]rune(req.ReasonDetail)) > 500 {
+		req.ReasonDetail = string([]rune(req.ReasonDetail)[:500])
+	}
 
 	if req.TargetType == "" || req.TargetID == 0 || req.ReasonType == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -271,6 +275,10 @@ func (a *API) AdminHandleReport(c *gin.Context) {
 		return
 	}
 	req.ContentAction = strings.TrimSpace(req.ContentAction)
+	if req.ContentAction != "" && req.ContentAction != "none" && req.ContentAction != "takedown" &&
+		req.ContentAction != "warn" && req.ContentAction != "ban" {
+		req.ContentAction = "none"
+	}
 
 	adminID, _ := middleware.AdminID(c)
 
@@ -527,13 +535,17 @@ func sendModerationNotify(db *gorm.DB, userID uint64, modType, msg string) {
 	if userID == 0 || msg == "" {
 		return
 	}
+	payload, _ := json.Marshal(map[string]string{
+		"type":    modType,
+		"message": msg,
+	})
 	n := model.Notification{
 		RecipientID:     userID,
 		Type:            "system_notice",
 		RelatedID:       0,
 		SenderNamesJSON: `["系统通知"]`,
 		CommentPreview:  msg,
-		PayloadJSON:     `{"type":"` + modType + `","message":"` + msg + `"}`,
+		PayloadJSON:     string(payload),
 		IsRead:          false,
 	}
 	_ = db.Create(&n).Error

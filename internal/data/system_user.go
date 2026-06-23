@@ -2,6 +2,7 @@ package data
 
 import (
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"minibili/internal/model"
@@ -22,10 +23,11 @@ func EnsureSystemUser(db *gorm.DB, lg *zap.Logger) (uint64, error) {
 	}
 
 	// Create system user
+	hash, _ := bcrypt.GenerateFromPassword([]byte(""), bcrypt.DefaultCost)
 	sys := model.User{
 		Username:    SystemUsername,
 		Nickname:    "系统通知",
-		PasswordHash: "*", // no login
+		PasswordHash: string(hash), // bcrypt of empty string, no valid password
 		Status:      "active",
 		Sign:        "cakecake 官方系统通知账号",
 	}

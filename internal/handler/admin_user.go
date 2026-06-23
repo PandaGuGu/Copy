@@ -267,6 +267,9 @@ func (a *API) AdminBanUser(c *gin.Context) {
 	if reason == "" {
 		reason = "违规行为"
 	}
+	if len([]rune(reason)) > 200 {
+		reason = string([]rune(reason)[:200])
+	}
 
 	var u model.User
 	if err := a.DB.Select("id", "status", "banned_reason", "banned_at").First(&u, id).Error; err != nil {
