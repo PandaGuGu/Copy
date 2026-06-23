@@ -187,3 +187,37 @@ export function getHomeBannersPublic() {
   }
   return http.get("/api/v1/home-banners", { skipGlobalErrorToast: true });
 }
+
+// ---------- 用户管理 ----------
+
+// ---------- LLM 模型配置 ----------
+
+export function adminGetLLMConfig() {
+  return adminHttp.get("/api/v1/admin/llm-config");
+}
+
+export function adminPutLLMConfig(payload) {
+  return adminHttp.put("/api/v1/admin/llm-config", payload);
+}
+
+// ---------- 用户管理 ----------
+
+export function adminListUsers(params) {
+  return adminHttp.get("/api/v1/admin/users", { params });
+}
+
+export function adminGetUser(id) {
+  return adminHttp.get(`/api/v1/admin/users/${id}`);
+}
+
+export function adminBanUser(id, reason) {
+  return adminHttp.post(`/api/v1/admin/users/${id}/ban`, { reason });
+}
+
+export function adminUnbanUser(id) {
+  return adminHttp.post(`/api/v1/admin/users/${id}/unban`);
+}
+
+export function adminDeleteUser(id) {
+  return adminHttp.post(`/api/v1/admin/users/${id}/delete`);
+}

@@ -53,6 +53,11 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	admin.Use(middleware.AdminJWTAuth(jwtm))
 	{
 		admin.GET("/me", a.AdminMe)
+		admin.GET("/users", a.AdminListUsers)
+		admin.GET("/users/:id", a.AdminGetUser)
+		admin.POST("/users/:id/ban", a.AdminBanUser)
+		admin.POST("/users/:id/unban", a.AdminUnbanUser)
+		admin.POST("/users/:id/delete", a.AdminDeleteUser)
 		admin.GET("/home-banners", a.AdminListBanners)
 		admin.POST("/home-banners", a.AdminCreateBanner)
 		admin.POST("/home-banners/upload-image", a.AdminUploadBannerImage)
@@ -94,6 +99,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.PUT("/agent-profiles/:id", a.AdminUpdateAgentProfile)
 		admin.DELETE("/agent-profiles/:id", a.AdminDeleteAgentProfile)
 		admin.POST("/agent-profiles/:id/avatar", a.AdminUploadAgentProfileAvatar)
+		admin.GET("/llm-config", a.AdminGetLLMConfig)
+		admin.PUT("/llm-config", a.AdminPutLLMConfig)
 	}
 
 	authd := r.Group("/api/v1")

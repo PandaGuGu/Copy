@@ -17,12 +17,14 @@ type ChatMessage struct {
 	Content string `json:"content"`
 }
 
-// Client calls DeepSeek chat/completions (OpenAI-compatible).
+// Client calls an OpenAI-compatible chat/completions endpoint.
 type Client struct {
 	APIKey     string
 	BaseURL    string
 	Model      string
 	HTTPClient *http.Client
+	// DBConfig provides runtime DB overrides (takes precedence over static fields).
+	DBConfig func() (apiKey, baseURL, model string)
 }
 
 type chatCompletionReq struct {
@@ -41,16 +43,31 @@ type chatCompletionResp struct {
 	} `json:"error,omitempty"`
 }
 
+// resolveConfig returns effective apiKey, baseURL, model preferring DB overrides.
+func (c *Client) resolveConfig() (apiKey, baseURL, model string) {
+	apiKey = c.APIKey
+	baseURL = c.BaseURL
+	model = c.Model
+	if c.DBConfig != nil {
+		if dbKey, dbBase, dbModel := c.DBConfig(); dbKey != "" {
+			apiKey = dbKey
+			baseURL = dbBase
+			model = dbModel
+		}
+	}
+	return
+}
+
 // Complete returns the assistant text for the given messages.
 func (c *Client) Complete(ctx context.Context, messages []ChatMessage) (string, error) {
-	if c == nil || strings.TrimSpace(c.APIKey) == "" {
-		return "", fmt.Errorf("deepseek: api key not configured")
+	apiKey, base, model := c.resolveConfig()
+	if c == nil || strings.TrimSpace(apiKey) == "" {
+		return "", fmt.Errorf("llm: api key not configured")
 	}
-	base := strings.TrimRight(c.BaseURL, "/")
+	base = strings.TrimRight(base, "/")
 	if base == "" {
 		base = "https://api.deepseek.com"
 	}
-	model := c.Model
 	if model == "" {
 		model = "deepseek-chat"
 	}
@@ -68,7 +85,7 @@ func (c *Client) Complete(ctx context.Context, messages []ChatMessage) (string, 
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	hc := c.HTTPClient
 	if hc == nil {
@@ -84,17 +101,17 @@ func (c *Client) Complete(ctx context.Context, messages []ChatMessage) (string, 
 		return "", err
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf("deepseek: http %d: %s", res.StatusCode, truncate(string(raw), 400))
+		return "", fmt.Errorf("llm: http %d: %s", res.StatusCode, truncate(string(raw), 400))
 	}
 	var out chatCompletionResp
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return "", err
 	}
 	if out.Error != nil && out.Error.Message != "" {
-		return "", fmt.Errorf("deepseek: %s", out.Error.Message)
+		return "", fmt.Errorf("llm: %s", out.Error.Message)
 	}
 	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", fmt.Errorf("deepseek: empty completion")
+		return "", fmt.Errorf("llm: empty completion")
 	}
 	return strings.TrimSpace(out.Choices[0].Message.Content), nil
 }

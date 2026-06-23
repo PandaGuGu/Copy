@@ -20,23 +20,100 @@
           </div>
           <div
             class="ai-hub__stat"
-            :class="{ 'ai-hub__stat--warn': !deepseekConfigured }"
+            :class="{ 'ai-hub__stat--warn': !llmConfig.configured }"
           >
-            <strong>{{ deepseekConfigured ? "OK" : "—" }}</strong>
-            <span>DeepSeek</span>
+            <strong>{{ llmConfig.configured ? "OK" : "—" }}</strong>
+            <span>LLM 配置</span>
           </div>
         </div>
       </div>
     </header>
 
-    <el-alert
-      v-if="!deepseekConfigured"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="ai-hub__alert"
-      title="未配置 DEEPSEEK_API_KEY，用户发消息后将收到未配置提示。"
-    />
+    <!-- LLM 模型配置 -->
+    <section class="ai-llm-section">
+      <div class="ai-llm-section__head">
+        <h3 class="ai-llm-section__title">LLM 模型配置</h3>
+        <div class="ai-llm-section__head-actions">
+          <el-tag v-if="llmConfig.configured" size="small" type="success" effect="plain">已配置</el-tag>
+          <el-tag v-else size="small" type="warning" effect="plain">未配置</el-tag>
+          <el-tag v-if="llmConfig.from_env" size="small" type="info" effect="plain">来源: .env</el-tag>
+          <el-tag v-else-if="llmConfig.db_api_key_set" size="small" type="info" effect="plain">来源: 数据库</el-tag>
+          <el-button v-if="!llmEditing" size="small" type="primary" plain @click="startEditLLM">
+            编辑
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 查看模式 -->
+      <div v-if="!llmEditing" class="ai-llm-readonly">
+        <div class="ai-llm-row">
+          <span class="ai-llm-label">接口地址</span>
+          <code class="ai-llm-value">{{ llmConfig.base_url || "（未设置）" }}</code>
+        </div>
+        <div class="ai-llm-row">
+          <span class="ai-llm-label">模型名称</span>
+          <code class="ai-llm-value">{{ llmConfig.model || "（未设置）" }}</code>
+        </div>
+        <div class="ai-llm-row">
+          <span class="ai-llm-label">API Key</span>
+          <code v-if="llmConfig.api_key" class="ai-llm-value ai-llm-value--masked">
+            {{ llmConfig.api_key }}
+          </code>
+          <span v-else class="ai-llm-value ai-llm-value--none">（未设置）</span>
+        </div>
+        <el-alert
+          v-if="!llmConfig.configured"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="ai-llm__alert"
+          title="未配置 API Key，用户发消息后将收到未配置提示。"
+        />
+      </div>
+
+      <!-- 编辑模式 -->
+      <div v-else class="ai-llm-edit">
+        <el-form label-position="top" @submit.prevent>
+          <el-form-item label="接口地址 (Base URL)">
+            <el-input
+              v-model="llmForm.base_url"
+              placeholder="https://api.openai.com/v1"
+              clearable
+            />
+            <p class="ai-llm-edit__hint">
+              兼容 OpenAI 格式的 API 端点地址，留空则使用 .env 中的默认值
+            </p>
+          </el-form-item>
+          <el-form-item label="模型名称 (Model)">
+            <el-input
+              v-model="llmForm.model"
+              placeholder="gpt-4o / deepseek-chat / step-3.7-flash"
+              clearable
+            />
+            <p class="ai-llm-edit__hint">
+              模型标识符，留空则使用 .env 中的默认值
+            </p>
+          </el-form-item>
+          <el-form-item label="API Key">
+            <el-input
+              v-model="llmForm.api_key"
+              type="password"
+              show-password
+              placeholder="输入新的 API Key（留空则不修改）"
+            />
+            <p class="ai-llm-edit__hint">
+              ⚠️ 已保存的 Key 仅显示前后各 4 位，留空则不修改已有配置
+            </p>
+          </el-form-item>
+          <div class="ai-llm-edit__actions">
+            <el-button @click="cancelEditLLM">取消</el-button>
+            <el-button type="primary" :loading="llmSaving" @click="saveLLMConfig">
+              保存配置
+            </el-button>
+          </div>
+        </el-form>
+      </div>
+    </section>
 
     <div class="ai-hub__toolbar">
       <span class="ai-hub__toolbar-hint">最多 {{ maxProfiles }} 个角色</span>
@@ -168,7 +245,7 @@
               :rows="8"
               maxlength="12000"
               show-word-limit
-              placeholder="DeepSeek system 提示词"
+              placeholder="AI system 提示词"
             />
           </el-form-item>
         </section>
@@ -237,7 +314,9 @@
 import {
   adminCreateAgentProfile,
   adminDeleteAgentProfile,
+  adminGetLLMConfig,
   adminListAgentProfiles,
+  adminPutLLMConfig,
   adminUpdateAgentProfile,
   adminUploadAgentProfileAvatar
 } from "@/api/admin";
@@ -258,6 +337,27 @@ export default {
       profiles: [],
       maxProfiles: 12,
       deepseekConfigured: true,
+      // LLM 模型配置
+      llmConfig: {
+        base_url: "",
+        model: "",
+        api_key: "",
+        configured: false,
+        from_env: false,
+        env_base_url: "",
+        env_model: "",
+        env_api_key: "",
+        db_base_url: "",
+        db_model: "",
+        db_api_key_set: false
+      },
+      llmEditing: false,
+      llmSaving: false,
+      llmForm: {
+        base_url: "",
+        model: "",
+        api_key: ""
+      },
       drawerVisible: false,
       editingId: null,
       savedAvatarUrl: "",
@@ -294,6 +394,7 @@ export default {
   },
   created() {
     this.load();
+    this.loadLLMConfig();
   },
   methods: {
     closeEdit() {
@@ -325,6 +426,69 @@ export default {
         ElMessage.error((e && e.message) || "加载失败");
       } finally {
         this.loading = false;
+      }
+    },
+    async loadLLMConfig() {
+      try {
+        const body = await adminGetLLMConfig();
+        const d = (body && body.data) || {};
+        this.llmConfig = {
+          base_url: d.base_url || "",
+          model: d.model || "",
+          api_key: d.api_key || "",
+          configured: d.configured !== false,
+          from_env: d.from_env === true,
+          env_base_url: d.env_base_url || "",
+          env_model: d.env_model || "",
+          env_api_key: d.env_api_key || "",
+          db_base_url: d.db_base_url || "",
+          db_model: d.db_model || "",
+          db_api_key_set: d.db_api_key_set === true
+        };
+        this.llmForm = {
+          base_url: d.base_url || "",
+          model: d.model || "",
+          api_key: ""
+        };
+      } catch (e) {
+        // silently ignore
+      }
+    },
+    startEditLLM() {
+      this.llmForm = {
+        base_url: this.llmConfig.base_url,
+        model: this.llmConfig.model,
+        api_key: ""
+      };
+      this.llmEditing = true;
+    },
+    cancelEditLLM() {
+      this.llmEditing = false;
+      this.llmForm.api_key = "";
+    },
+    async saveLLMConfig() {
+      this.llmSaving = true;
+      try {
+        const payload = {};
+        if (this.llmForm.base_url) payload.base_url = this.llmForm.base_url;
+        if (this.llmForm.model) payload.model = this.llmForm.model;
+        if (this.llmForm.api_key && !this.llmForm.api_key.includes("****")) {
+          payload.api_key = this.llmForm.api_key;
+        }
+        if (!payload.base_url && !payload.model && !payload.api_key) {
+          ElMessage.warning("请至少修改一项配置");
+          this.llmSaving = false;
+          return;
+        }
+        await adminPutLLMConfig(payload);
+        ElMessage.success("LLM 配置已保存");
+        this.llmEditing = false;
+        this.llmForm.api_key = "";
+        await this.loadLLMConfig();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "保存失败");
+      } finally {
+        this.llmSaving = false;
       }
     },
     openCreate() {
@@ -598,6 +762,87 @@ export default {
 }
 .ai-hub__alert {
   margin-bottom: 16px;
+}
+/* LLM config section */
+.ai-llm-section {
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e3e5e7;
+}
+.ai-llm-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ai-llm-section__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #18191c;
+}
+.ai-llm-section__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ai-llm-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ai-llm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.ai-llm-label {
+  min-width: 72px;
+  font-size: 13px;
+  color: #61666d;
+  flex-shrink: 0;
+}
+.ai-llm-value {
+  font-size: 13px;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  background: #f6f7f8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #18191c;
+  word-break: break-all;
+}
+.ai-llm-value--masked {
+  color: #e6a23c;
+  letter-spacing: 0.04em;
+}
+.ai-llm-value--none {
+  color: #9499a0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+}
+.ai-llm__alert {
+  margin-top: 4px;
+}
+.ai-llm-edit {
+  padding-top: 4px;
+}
+.ai-llm-edit__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9499a0;
+}
+.ai-llm-edit__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 8px;
 }
 .ai-hub__toolbar {
   display: flex;

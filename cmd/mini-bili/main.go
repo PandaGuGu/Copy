@@ -164,24 +164,28 @@ func main() {
 	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
 
 	var agentGW *aigateway.Gateway
-	if cfg.DeepSeekAPIKey != "" {
-		agentGW = &aigateway.Gateway{
-			LLM: &aigateway.Client{
-				APIKey:  cfg.DeepSeekAPIKey,
-				BaseURL: cfg.DeepSeekBaseURL,
-				Model:   cfg.DeepSeekModel,
-				HTTPClient: &http.Client{Timeout: cfg.AgentRequestTimeout},
+	{
+		llmClient := &aigateway.Client{
+			APIKey:  cfg.DeepSeekAPIKey,
+			BaseURL: cfg.DeepSeekBaseURL,
+			Model:   cfg.DeepSeekModel,
+			HTTPClient: &http.Client{Timeout: cfg.AgentRequestTimeout},
+			// Allow runtime DB overrides from admin panel
+			DBConfig: func() (string, string, string) {
+				dbc := data.LoadLLMConfig(db)
+				return dbc.APIKey, dbc.BaseURL, dbc.Model
 			},
-			Redis:       rdb,
-			MaxHistory:  cfg.AgentMaxHistory,
-			HistoryTTL:  cfg.AgentHistoryTTL,
+		}
+		agentGW = &aigateway.Gateway{
+			LLM:          llmClient,
+			Redis:        rdb,
+			MaxHistory:   cfg.AgentMaxHistory,
+			HistoryTTL:   cfg.AgentHistoryTTL,
 		}
 		log.Info("ai gateway enabled",
 			zap.String("model", cfg.DeepSeekModel),
 			zap.String("base_url", cfg.DeepSeekBaseURL),
 		)
-	} else {
-		log.Info("ai gateway disabled (DEEPSEEK_API_KEY empty)")
 	}
 	agentSvc := &service.AgentService{
 		Cfg: cfg, DB: db, Redis: rdb, Gateway: agentGW, Sens: sens,

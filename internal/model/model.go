@@ -39,6 +39,13 @@ type User struct {
 	CoinBalanceTenths int64 `gorm:"not null;default:230"`
 	// ViewHistoryPaused stops recording new watch-history entries when true.
 	ViewHistoryPaused bool `gorm:"not null;default:0"`
+
+	// Status is managed by admin to ban/disable accounts.
+	// "active" — normal; "banned" — admin banned, login rejected;
+	// "disabled" — admin disabled, shows notice on login.
+	Status       string     `gorm:"size:16;not null;default:active;index"`
+	BannedReason string     `gorm:"size:200"`
+	BannedAt     *time.Time `gorm:"index"`
 }
 
 // Video stores metadata and OSS URLs after transcoding.

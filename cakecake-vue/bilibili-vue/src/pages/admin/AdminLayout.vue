@@ -29,6 +29,13 @@
           热搜运营
         </router-link>
         <router-link
+          :to="{ name: 'adminUsers' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          用户管理
+        </router-link>
+        <router-link
           :to="{ name: 'adminVideoReview' }"
           class="adm-side__item"
           active-class="adm-side__item--on"

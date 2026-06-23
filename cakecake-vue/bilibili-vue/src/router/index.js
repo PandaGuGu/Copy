@@ -281,6 +281,12 @@ const routes = [
         meta: { title: "热搜运营 - 运营后台" }
       },
       {
+        path: "users",
+        name: "adminUsers",
+        component: () => import("@/pages/admin/UserManage.vue"),
+        meta: { title: "用户管理 - 运营后台" }
+      },
+      {
         path: "video-review",
         name: "adminVideoReview",
         component: () => import("@/pages/admin/VideoReview.vue"),

@@ -112,6 +112,11 @@ func (a *API) Login(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
+	// Admin-banned accounts cannot log in
+	if u.Status == "banned" {
+		resp.Err(c, http.StatusForbidden, errcode.CodeAccountBanned)
+		return
+	}
 	access, refresh, _, err := a.JWT.IssuePair(u.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -138,6 +143,11 @@ func (a *API) Refresh(c *gin.Context) {
 	var u model.User
 	if err := a.DB.First(&u, uid).Error; err == nil && model.IsUserAnonymized(&u) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeAccountClosed)
+		return
+	}
+	// Admin-banned accounts cannot refresh token
+	if u.Status == "banned" {
+		resp.Err(c, http.StatusForbidden, errcode.CodeAccountBanned)
 		return
 	}
 	ctx := context.Background()

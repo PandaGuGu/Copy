@@ -474,7 +474,8 @@
             </a>
             <transition name="nav-trans">
               <div class="dynamic-list-box" v-show="dynamicShow">
-                <a href="#" class="dyn-panel-more" @click.prevent>查看更多 &gt;</a>
+                <router-link v-if="minibiliDynamicsTo" class="dyn-panel-more" :to="minibiliDynamicsTo" @click.native="dynamicShow = false">查看更多 &gt;</router-link>
+                <a v-else href="#" class="dyn-panel-more" @click.prevent>查看更多 &gt;</a>
                 <!-- 正在直播（有数据时显示） -->
                 <div class="dyn-live-section" v-if="dynamicLiveList.length > 0">
                   <div class="dyn-live-header">
@@ -604,6 +605,7 @@
                     :key="'ht-'+idx"
                     @click="switchHistoryTab(t)"
                   >{{ t }}</span>
+                  <router-link v-if="minibiliHistoryTo" class="hist-more" :to="minibiliHistoryTo" @click.native="historyShow = false">查看全部 &gt;</router-link>
                 </div>
                 <!-- 历史记录列表 -->
                 <div class="hist-body">
@@ -1041,22 +1043,80 @@ export default {
     },
     dynamicFadeOut() {
       this.dynamicShow = false;
+      // 关闭时重置标记，下次 hover 重新拉取，实现准实时更新
+      this._dynamicLoaded = false;
     },
-    // 加载动态下拉数据（后端无数据则留空，不使用模拟数据）
+    // 加载动态下拉数据（合并个人动态 + 最近投稿视频，无数据则留空）
     async loadDynamicData() {
       if (this._dynamicLoaded) return;
+      // 需要登录才能获取个人数据
+      if (this.signIn != 1) return;
+      let ok = false;
       try {
-        const res = await http.get("/api/v1/dynamics", { params: { limit: 8 } }).catch(() => null);
-        if (res) {
-          const data = res.data || res || {};
-          if (data.items) this.dynamicFeedList = data.items.slice(0, 6);
-          if (data.live_users) this.dynamicLiveList = data.live_users;
+        const feedRows = [];
+
+        // 1. 拉取我的动态
+        const dynRes = await http.get("/api/v1/users/me/dynamics", { params: { page_size: 4 } }).catch(() => null);
+        if (dynRes) {
+          const dynData = dynRes.data || dynRes || {};
+          const dynItems = dynData.items || [];
+          for (const item of dynItems) {
+            feedRows.push({
+              id: item.id,
+              title: item.title || "",
+              desc: item.content || item.title || "",
+              content: item.content || "",
+              ctime: item.created_at || "",
+              cover: (item.images && item.images.length > 0) ? item.images[0] : "",
+              pic: (item.images && item.images.length > 0) ? item.images[0] : "",
+              user: {
+                uname: this.navDisplayName || "用户",
+                face: this.navFaceSrc || ""
+              },
+              uname: this.navDisplayName || "用户",
+              face: this.navFaceSrc || ""
+            });
+          }
         }
+
+        // 2. 拉取我的投稿视频（published），与动态合并展示
+        const vidRes = await http.get("/api/v1/users/me/videos", {
+          params: { page_size: 4, status: "passed" }
+        }).catch(() => null);
+        if (vidRes) {
+          const vidData = vidRes.data || vidRes || {};
+          const vidItems = vidData.items || [];
+          for (const item of vidItems) {
+            feedRows.push({
+              id: item.id,
+              title: item.title || "",
+              desc: "投稿了视频",
+              content: item.title || "",
+              ctime: item.created_at || "",
+              cover: item.cover_url || "",
+              pic: item.cover_url || "",
+              user: {
+                uname: this.navDisplayName || "用户",
+                face: this.navFaceSrc || ""
+              },
+              uname: this.navDisplayName || "用户",
+              face: this.navFaceSrc || ""
+            });
+          }
+        }
+
+        // 3. 按时间倒序，取最近6条
+        feedRows.sort((a, b) => {
+          const ta = a.ctime ? new Date(a.ctime).getTime() : 0;
+          const tb = b.ctime ? new Date(b.ctime).getTime() : 0;
+          return tb - ta;
+        });
+        this.dynamicFeedList = feedRows.slice(0, 6);
+        ok = true;
       } catch (e) {
         // 后端无数据则留空
-        return;  // 失败时不标记已加载，下次hover重试
       }
-      this._dynamicLoaded = true;
+      if (ok) this._dynamicLoaded = true;
     },
     // 格式化动态时间
     formatFeedTime(ts) {
@@ -1139,18 +1199,45 @@ export default {
     },
     historyFadeOut() {
       this.historyShow = false;
+      // 关闭时重置标记，下次 hover 重新拉取，实现准实时更新
+      this._historyLoaded = false;
     },
     // 加载历史数据
     async loadHistoryData() {
       if (this._historyLoaded) return;
+      // 需要登录才能获取浏览历史
+      if (this.signIn != 1) return;
+      let ok = false;
       try {
-        const res = await http.get("/api/v1/history", { params: { limit: 20 } }).catch(() => null);
+        const res = await http.get("/api/v1/users/me/view-history", { params: { limit: 20 } }).catch(() => null);
         if (res) {
           const data = res.data || res || {};
-          this.historyRawItems = data.items || [];
+          const rawItems = data.items || [];
+          if (rawItems.length > 0) {
+            this.historyRawItems = rawItems.map(item => ({
+              id: item.video_id || item.article_id || 0,
+              video_id: item.video_id || 0,
+              title: item.title || "",
+              cover: item.cover_url || "",
+              duration_sec: item.duration_sec || 0,
+              duration: item.duration_sec || 0,
+              viewed_at: item.viewed_at || "",
+              ctime: item.viewed_at || "",
+              uploader: item.uploader_name || "",
+              author: item.uploader_name || "",
+              media_type: item.media_type || "video",
+              progress_sec: item.progress_sec || 0,
+              category: item.category || ""
+            }));
+            ok = true;
+          } else {
+            // API 成功但数据为空，也标记已加载
+            ok = true;
+            this.historyRawItems = [];
+          }
         }
-      } catch (e) { /* 留空 */ return; }
-      this._historyLoaded = true;
+      } catch (e) { /* 留空 */ }
+      if (ok) this._historyLoaded = true;
     },
     // 切换Tab
     switchHistoryTab(tab) {
@@ -2078,6 +2165,15 @@ export default {
                   border-radius: 1px;
                 }
               }
+            }
+            .hist-more {
+              margin-left: auto;
+              font-size: 12px;
+              color: #999;
+              padding: 10px 8px;
+              text-decoration: none;
+              white-space: nowrap;
+              &:hover { color: $blue; }
             }
           }
 

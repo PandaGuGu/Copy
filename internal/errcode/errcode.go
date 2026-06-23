@@ -33,6 +33,7 @@ const (
 	CodeDanmakuClosed           = 40304
 	CodeUserBlocked             = 40305
 	CodeAdminDisabled           = 40306
+	CodeAccountBanned           = 40307 // 账号已被管理员封禁
 	CodeNotFound                = 40400
 	CodeSearchUnavailable       = 50301
 	CodeInternalError           = 50000
@@ -69,6 +70,7 @@ var messages = map[int]string{
 	CodeDanmakuClosed:      "UP主已关闭弹幕",
 	CodeUserBlocked:        "无法与对方互动，对方可能已将你加入黑名单",
 	CodeAdminDisabled:    "管理员账号已禁用",
+	CodeAccountBanned:    "账号已被管理员封禁，如有疑问请联系客服",
 	CodePasswordMismatch:   "原密码错误",
 	CodeAccountClosed:      "账号已注销",
 	CodeNotFound:           "资源不存在",
