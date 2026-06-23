@@ -97,6 +97,9 @@ func main() {
 	if err := data.EnsureAgentProfiles(db, cfg, log); err != nil {
 		log.Warn("ensure agent profiles", zap.Error(err))
 	}
+	if _, err := data.EnsureSystemUser(db, log); err != nil {
+		log.Warn("ensure system user", zap.Error(err))
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
