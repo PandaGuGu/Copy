@@ -78,18 +78,16 @@
       />
     </div>
 
-    <!-- 用户详情 Drawer -->
-    <el-drawer
-      v-model="detailVisible"
-      title="用户详情"
-      size="480px"
-      destroy-on-close
-      direction="rtl"
-    >
+    <!-- 用户详情弹窗 -->
+    <el-dialog v-model="detailVisible" title="用户详情" width="620px" destroy-on-close top="5vh">
       <template v-if="detailUser">
         <!-- 头像 + 身份区 -->
         <div class="user-detail-hero">
-          <img v-if="detailUser.avatar_url" :src="detailUser.avatar_url" class="user-detail-avatar" />
+          <img
+            v-if="detailUser.avatar_url"
+            :src="detailUser.avatar_url"
+            class="user-detail-avatar"
+          />
           <div class="user-detail-identity">
             <div class="user-detail-name">
               {{ detailUser.nickname || detailUser.username }}
@@ -98,17 +96,17 @@
                 type="danger"
                 size="small"
                 effect="dark"
-              >已封禁</el-tag>
+                >已封禁</el-tag
+              >
               <el-tag
                 v-else-if="detailUser.status === 'disabled'"
                 type="info"
                 size="small"
                 effect="dark"
-              >已禁用</el-tag>
+                >已禁用</el-tag
+              >
             </div>
-            <div class="user-detail-sub">
-              @{{ detailUser.username }} · CakeID: {{ detailUser.cake_id }}
-            </div>
+            <div class="user-detail-sub">@{{ detailUser.username }} · CakeID: {{ detailUser.cake_id }}</div>
           </div>
         </div>
 
@@ -134,12 +132,45 @@
             <span class="user-detail-stat__label">专栏</span>
           </div>
           <div class="user-detail-stat">
-            <span class="user-detail-stat__val">{{ detailUser.dynamic_count || 0 }}</span>
-            <span class="user-detail-stat__label">动态</span>
-          </div>
-          <div class="user-detail-stat">
             <span class="user-detail-stat__val">{{ detailUser.follower_count || 0 }}</span>
             <span class="user-detail-stat__label">粉丝</span>
+          </div>
+          <div class="user-detail-stat">
+            <span class="user-detail-stat__val" :class="{ 'user-detail-stat__warn': (detailUser.report_count || 0) > 0 }">
+              {{ detailUser.report_count || 0 }}
+            </span>
+            <span class="user-detail-stat__label">被举报</span>
+          </div>
+        </div>
+
+        <!-- 违规记录 -->
+        <div class="user-detail-section">
+          <h4 class="user-detail-section__title">
+            违规记录
+            <el-tag v-if="vioLoading" size="small" type="info">加载中...</el-tag>
+          </h4>
+          <div v-if="!violations || violations.length === 0" class="user-detail-empty">暂无违规记录</div>
+          <div v-else class="user-detail-violation-list">
+            <div
+              v-for="v in violations"
+              :key="v.id"
+              class="user-detail-violation-item"
+            >
+              <div class="user-detail-violation__head">
+                <span class="user-detail-violation__from">
+                  被 {{ v.reporter ? (v.reporter.nickname || v.reporter.username) : '#' + v.reporter_id }} 举报
+                </span>
+                <el-tag
+                  :type="v.status === 'pending' ? 'warning' : v.status === 'resolved' ? 'success' : 'info'"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ v.status === 'pending' ? '待处理' : v.status === 'resolved' ? '已处理' : '已驳回' }}
+                </el-tag>
+              </div>
+              <p class="user-detail-violation__reason">{{ v.reason }}</p>
+              <span class="user-detail-violation__time">{{ fmtTime(v.created_at) }}</span>
+            </div>
           </div>
         </div>
 
@@ -156,12 +187,12 @@
               <span class="user-detail-cell__value">Lv{{ detailUser.level }}</span>
             </div>
             <div class="user-detail-cell">
-              <span class="user-detail-cell__label">经验值</span>
-              <span class="user-detail-cell__value">{{ detailUser.experience || 0 }}</span>
+              <span class="user-detail-cell__label">硬币</span>
+              <span class="user-detail-cell__value">{{ detailUser.coin_balance || 0 }}</span>
             </div>
             <div class="user-detail-cell">
-              <span class="user-detail-cell__label">硬币余额</span>
-              <span class="user-detail-cell__value">{{ detailUser.coin_balance || 0 }}</span>
+              <span class="user-detail-cell__label">经验</span>
+              <span class="user-detail-cell__value">{{ detailUser.experience || 0 }}</span>
             </div>
             <div class="user-detail-cell">
               <span class="user-detail-cell__label">性别</span>
@@ -171,6 +202,14 @@
               <span class="user-detail-cell__label">生日</span>
               <span class="user-detail-cell__value">{{ detailUser.birthday || "未设置" }}</span>
             </div>
+            <div class="user-detail-cell">
+              <span class="user-detail-cell__label">注册时间</span>
+              <span class="user-detail-cell__value">{{ formatTime(detailUser.created_at) }}</span>
+            </div>
+            <div class="user-detail-cell">
+              <span class="user-detail-cell__label">最后更新</span>
+              <span class="user-detail-cell__value">{{ formatTime(detailUser.updated_at) }}</span>
+            </div>
           </div>
         </div>
 
@@ -179,29 +218,8 @@
           <h4 class="user-detail-section__title">个性签名</h4>
           <p class="user-detail-sign">{{ detailUser.sign }}</p>
         </div>
-
-        <!-- 时间信息 -->
-        <div class="user-detail-section">
-          <h4 class="user-detail-section__title">时间记录</h4>
-          <div class="user-detail-timeline">
-            <div class="user-detail-time-item">
-              <span class="user-detail-time__dot"></span>
-              <div>
-                <span class="user-detail-time__label">注册时间</span>
-                <span class="user-detail-time__value">{{ formatTime(detailUser.created_at) }}</span>
-              </div>
-            </div>
-            <div class="user-detail-time-item">
-              <span class="user-detail-time__dot user-detail-time__dot--minor"></span>
-              <div>
-                <span class="user-detail-time__label">最后更新</span>
-                <span class="user-detail-time__value">{{ formatTime(detailUser.updated_at) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </template>
-    </el-drawer>
+    </el-dialog>
 
     <!-- 封禁确认 -->
     <el-dialog v-model="banVisible" title="封禁账号" width="420px" destroy-on-close>
@@ -240,6 +258,7 @@
 
 <script>
 import { adminListUsers, adminGetUser, adminBanUser, adminUnbanUser, adminDeleteUser } from "@/api/admin";
+import adminHttp from "@/utils/adminHttp";
 
 export default {
   name: "AdminUserManage",
@@ -255,6 +274,8 @@ export default {
       // detail
       detailVisible: false,
       detailUser: null,
+      violations: [],
+      vioLoading: false,
       // ban
       banVisible: false,
       banTarget: null,
@@ -295,9 +316,27 @@ export default {
         const res = await adminGetUser(row.id);
         this.detailUser = res.data || res || {};
         this.detailVisible = true;
+        this.violations = [];
+        this.loadViolations(row.id);
       } catch {
         this.$message.error("获取用户详情失败");
       }
+    },
+    async loadViolations(uid) {
+      this.vioLoading = true;
+      try {
+        const res = await adminHttp.get(`/api/v1/admin/users/${uid}/violations`);
+        const d = res.data || res || {};
+        this.violations = d.reports || [];
+      } catch {
+        this.violations = [];
+      } finally {
+        this.vioLoading = false;
+      }
+    },
+    fmtTime(ts) {
+      if (!ts) return "";
+      return new Date(ts).toLocaleString("zh-CN");
     },
     confirmBan(row) {
       this.banTarget = row;
@@ -375,154 +414,95 @@ export default {
   justify-content: flex-end;
 }
 
-/* ——— 用户详情 Drawer ——— */
+/* ——— 用户详情弹窗 ——— */
 
 .user-detail-hero {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #ebeef5;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .user-detail-avatar {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #e3e5e7;
   flex-shrink: 0;
 }
-.user-detail-identity {
-  min-width: 0;
-}
+.user-detail-identity { min-width: 0; }
 .user-detail-name {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   color: #18191c;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
-.user-detail-sub {
-  font-size: 13px;
-  color: #9499a0;
-  margin-top: 4px;
-  word-break: break-all;
-}
-.user-detail-alert {
-  margin-bottom: 16px;
-}
+.user-detail-sub { font-size: 13px; color: #9499a0; margin-top: 4px; }
+.user-detail-alert { margin-bottom: 14px; }
 
-/* 数据看板 */
 .user-detail-stats {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 .user-detail-stat {
   flex: 1;
   text-align: center;
   background: #f6f7f8;
   border-radius: 8px;
-  padding: 12px 8px;
+  padding: 10px 6px;
 }
-.user-detail-stat__val {
-  display: block;
-  font-size: 20px;
-  font-weight: 700;
-  color: #18191c;
-  line-height: 1.2;
-}
-.user-detail-stat__label {
-  display: block;
-  font-size: 12px;
-  color: #9499a0;
-  margin-top: 4px;
-}
+.user-detail-stat__val { font-size: 18px; font-weight: 700; color: #18191c; }
+.user-detail-stat__warn { color: #e6a23c !important; }
+.user-detail-stat__label { font-size: 12px; color: #9499a0; }
 
-/* 分组区块 */
-.user-detail-section {
-  margin-bottom: 20px;
-}
+.user-detail-section { margin-bottom: 14px; }
 .user-detail-section__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #9499a0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 12px;
-  padding-bottom: 8px;
+  font-size: 13px; font-weight: 600; color: #9499a0;
+  margin: 0 0 10px; padding-bottom: 6px;
   border-bottom: 1px solid #ebeef5;
+  display: flex; align-items: center; gap: 8px;
 }
+.user-detail-empty { font-size: 13px; color: #c0c4cc; padding: 12px 0; }
 
-/* 网格信息 */
-.user-detail-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 16px;
-}
+.user-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
 .user-detail-cell {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0;
 }
-.user-detail-cell__label {
-  font-size: 13px;
-  color: #9499a0;
-}
-.user-detail-cell__value {
-  font-size: 13px;
-  color: #18191c;
-  font-weight: 500;
-}
+.user-detail-cell__label { font-size: 13px; color: #9499a0; }
+.user-detail-cell__value { font-size: 13px; color: #18191c; font-weight: 500; }
 
-/* 签名 */
 .user-detail-sign {
-  font-size: 13px;
-  color: #61666d;
-  line-height: 1.6;
-  margin: 0;
-  padding: 8px 12px;
-  background: #f6f7f8;
-  border-radius: 6px;
-  white-space: pre-wrap;
-  word-break: break-word;
+  font-size: 13px; color: #61666d; line-height: 1.6;
+  padding: 8px 12px; background: #f6f7f8; border-radius: 6px;
+  white-space: pre-wrap; word-break: break-word;
 }
 
-/* 时间线 */
-.user-detail-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 违规记录列表 */
+.user-detail-violation-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
 }
-.user-detail-time-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+.user-detail-violation-item {
+  padding: 10px 12px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #eee;
 }
-.user-detail-time__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #00a1d6;
-  margin-top: 5px;
-  flex-shrink: 0;
+.user-detail-violation__head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
 }
-.user-detail-time__dot--minor {
-  background: #c0c4cc;
+.user-detail-violation__from { font-size: 13px; font-weight: 500; color: #18191c; }
+.user-detail-violation__reason {
+  font-size: 12px; color: #61666d; line-height: 1.5;
+  margin: 0; word-break: break-word;
 }
-.user-detail-time__label {
-  display: block;
-  font-size: 12px;
-  color: #9499a0;
-}
-.user-detail-time__value {
-  display: block;
-  font-size: 13px;
-  color: #18191c;
-  margin-top: 2px;
-}
+.user-detail-violation__time { font-size: 11px; color: #c0c4cc; }
 </style>

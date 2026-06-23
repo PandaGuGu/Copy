@@ -220,6 +220,11 @@ func (a *API) AdminGetUser(c *gin.Context) {
 		lv = 1
 	}
 
+	// Report stats
+	var reportCount, pendingReportCount int64
+	a.DB.Model(&model.Report{}).Where("target_type = 'user' AND target_id = ?", uid).Count(&reportCount)
+	a.DB.Model(&model.Report{}).Where("target_type = 'user' AND target_id = ? AND status = 'pending'", uid).Count(&pendingReportCount)
+
 	resp.OK(c, gin.H{
 		"id":             uid,
 		"username":       u.Username,
@@ -240,6 +245,8 @@ func (a *API) AdminGetUser(c *gin.Context) {
 		"level":          lv,
 		"created_at":     u.CreatedAt,
 		"updated_at":     u.UpdatedAt,
+		"report_count":         reportCount,
+		"pending_report_count": pendingReportCount,
 	})
 }
 
@@ -342,4 +349,61 @@ func (a *API) AdminDeleteUser(c *gin.Context) {
 	}
 
 	resp.OK(c, gin.H{"status": "disabled", "message": "账号已强制注销"})
+}
+
+// AdminGetUserViolations GET /api/v1/admin/users/:id/violations
+func (a *API) AdminGetUserViolations(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	var u model.User
+	if err := a.DB.Select("id").First(&u, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// Reports targeting this user
+	var reports []model.Report
+	a.DB.Where("target_type = 'user' AND target_id = ?", id).Order("created_at DESC").Limit(50).Find(&reports)
+
+	type repItem struct {
+		ID         uint64    `json:"id"`
+		ReporterID uint64    `json:"reporter_id"`
+		Reporter   gin.H     `json:"reporter"`
+		Reason     string    `json:"reason"`
+		Status     string    `json:"status"`
+		CreatedAt  time.Time `json:"created_at"`
+	}
+	repItems := make([]repItem, 0, len(reports))
+	for _, r := range reports {
+		it := repItem{
+			ID:         r.ID,
+			ReporterID: r.ReporterID,
+			Reason:     r.Reason,
+			Status:     r.Status,
+			CreatedAt:  r.CreatedAt,
+		}
+		var uu model.User
+		if a.DB.Select("id, username, nickname").First(&uu, r.ReporterID).Error == nil {
+			it.Reporter = gin.H{
+				"id":       uu.ID,
+				"username": uu.Username,
+				"nickname": uu.Nickname,
+			}
+		}
+		repItems = append(repItems, it)
+	}
+
+	// Ban history: check if user was ever banned
+	banned := u.BannedAt != nil && u.BannedReason != ""
+
+	resp.OK(c, gin.H{
+		"reports":     repItems,
+		"was_banned":  banned,
+		"banned_at":   u.BannedAt,
+		"banned_reason": u.BannedReason,
+	})
 }

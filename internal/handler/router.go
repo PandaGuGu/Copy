@@ -58,6 +58,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.POST("/users/:id/ban", a.AdminBanUser)
 		admin.POST("/users/:id/unban", a.AdminUnbanUser)
 		admin.POST("/users/:id/delete", a.AdminDeleteUser)
+		admin.GET("/users/:id/violations", a.AdminGetUserViolations)
 		admin.GET("/home-banners", a.AdminListBanners)
 		admin.POST("/home-banners", a.AdminCreateBanner)
 		admin.POST("/home-banners/upload-image", a.AdminUploadBannerImage)

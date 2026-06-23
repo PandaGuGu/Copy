@@ -284,9 +284,48 @@
                     <span class="op-sub">马克一下~</span>
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  class="toolbar-op report-op"
+                  @click="showReportDialog = true"
+                >
+                  <span class="op-icon-wrap is-report">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                      <line x1="4" y1="22" x2="4" y2="15"/>
+                    </svg>
+                  </span>
+                  <span class="op-lines">
+                    <span class="op-title">举报</span>
+                    <span class="op-sub">违规内容</span>
+                  </span>
+                </button>
               </div>
             </div>
           </div>
+
+    <!-- 举报弹窗 -->
+    <el-dialog v-model="showReportDialog" title="举报稿件" width="420px" destroy-on-close>
+      <el-form @submit.prevent>
+        <el-form-item label="举报原因">
+          <el-input
+            v-model="reportReason"
+            type="textarea"
+            :rows="3"
+            placeholder="请描述举报原因..."
+            maxlength="500"
+            show-word-count
+          />
+        </el-form-item>
+        <div class="report-actions">
+          <el-button @click="showReportDialog = false">取消</el-button>
+          <el-button type="danger" :disabled="!reportReason.trim()" :loading="reporting" @click="submitReport">
+            提交举报
+          </el-button>
+        </div>
+      </el-form>
+    </el-dialog>
 
           <div class="video-side-dock">
             <aside class="video-side video-side--tall side-panel-card">
@@ -1191,6 +1230,10 @@ export default {
       },
       coinDialogOpen: false,
       wait: { animating: false, hover: false, done: false, pending: false },
+      // Report
+      showReportDialog: false,
+      reportReason: "",
+      reporting: false,
       commentSort: "hot",
       openCommentMenuKey: "",
       videoDescText:
@@ -2493,6 +2536,28 @@ export default {
         ElMessage.error((e && e.message) || "稍后再看操作失败");
       } finally {
         this.wait.pending = false;
+      }
+    },
+    async submitReport() {
+      if (!this.reportReason.trim()) return;
+      if (!this.mbLoggedIn) {
+        this.openMbLoginModal();
+        return;
+      }
+      this.reporting = true;
+      try {
+        await http.post("/api/v1/reports", {
+          target_type: "video",
+          target_id: this.mbNumericId,
+          reason: this.reportReason.trim()
+        });
+        ElMessage.success("举报已提交，我们会尽快处理");
+        this.showReportDialog = false;
+        this.reportReason = "";
+      } catch (e) {
+        ElMessage.error((e && e.message) || "举报提交失败");
+      } finally {
+        this.reporting = false;
       }
     }
   }
@@ -4452,6 +4517,14 @@ $vd-cmt-line: #e5e9ef;
   text-align: center;
   line-height: 1.3;
 }
+
+/* 举报按钮 */
+.report-op .op-lines .op-title { color: #9499a0; }
+.report-op .op-lines .op-sub { color: #c0c4cc; }
+.report-op:hover .op-lines .op-title { color: #e6a23c; }
+.is-report { color: #9499a0; }
+.report-op:hover .is-report { color: #e6a23c; }
+.report-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 12px; }
 
 @import "../../styles/vd-comment-list.scss";
 </style>
