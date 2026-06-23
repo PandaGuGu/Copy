@@ -168,7 +168,12 @@
                   {{ v.status === 'pending' ? '待处理' : v.status === 'resolved' ? '已处理' : '已驳回' }}
                 </el-tag>
               </div>
-              <p class="user-detail-violation__reason">{{ v.reason }}</p>
+              <p class="user-detail-violation__reason">
+              <el-tag size="small" effect="dark" :color="viceColor(v.reason_type)" style="margin-right:5px">
+                {{ v.reason_label || v.reason_type }}
+              </el-tag>
+              {{ v.reason_detail }}
+            </p>
               <span class="user-detail-violation__time">{{ fmtTime(v.created_at) }}</span>
             </div>
           </div>
@@ -337,6 +342,10 @@ export default {
     fmtTime(ts) {
       if (!ts) return "";
       return new Date(ts).toLocaleString("zh-CN");
+    },
+    viceColor(t) {
+      const m = { nsfw: "#e6a23c", violence: "#f56c6c", spam: "#909399", harassment: "#e6a23c", illegal: "#f56c6c", copyright: "#409eff" };
+      return m[t] || "#909399";
     },
     confirmBan(row) {
       this.banTarget = row;

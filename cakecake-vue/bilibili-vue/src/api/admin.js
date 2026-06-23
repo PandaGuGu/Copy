@@ -261,3 +261,7 @@ export function adminListReports(params) {
 export function adminHandleReport(id, payload) {
   return adminHttp.post(`/api/v1/admin/reports/${id}/handle`, payload);
 }
+
+export function adminBatchHandleReports(payload) {
+  return adminHttp.post("/api/v1/admin/reports/batch", payload);
+}

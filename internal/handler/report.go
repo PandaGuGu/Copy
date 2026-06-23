@@ -23,9 +23,10 @@ func (a *API) PostReport(c *gin.Context) {
 	}
 
 	var req struct {
-		TargetType string `json:"target_type"`
-		TargetID   uint64 `json:"target_id"`
-		Reason     string `json:"reason"`
+		TargetType   string `json:"target_type"`
+		TargetID     uint64 `json:"target_id"`
+		ReasonType   string `json:"reason_type"`
+		ReasonDetail string `json:"reason_detail"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -33,9 +34,10 @@ func (a *API) PostReport(c *gin.Context) {
 	}
 
 	req.TargetType = strings.TrimSpace(req.TargetType)
-	req.Reason = strings.TrimSpace(req.Reason)
+	req.ReasonType = strings.TrimSpace(req.ReasonType)
+	req.ReasonDetail = strings.TrimSpace(req.ReasonDetail)
 
-	if req.TargetType == "" || req.TargetID == 0 || req.Reason == "" {
+	if req.TargetType == "" || req.TargetID == 0 || req.ReasonType == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -45,12 +47,17 @@ func (a *API) PostReport(c *gin.Context) {
 		return
 	}
 
+	if !isValidReasonType(req.ReasonType) {
+		req.ReasonType = "other"
+	}
+
 	r := model.Report{
-		ReporterID: userID,
-		TargetType: req.TargetType,
-		TargetID:   req.TargetID,
-		Reason:     req.Reason,
-		Status:     "pending",
+		ReporterID:   userID,
+		TargetType:   req.TargetType,
+		TargetID:     req.TargetID,
+		ReasonType:   req.ReasonType,
+		ReasonDetail: req.ReasonDetail,
+		Status:       "pending",
 	}
 	if err := a.DB.Create(&r).Error; err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -68,13 +75,24 @@ func isValidReportTarget(t string) bool {
 	return false
 }
 
+func isValidReasonType(t string) bool {
+	for _, r := range model.ReportReasonTypes {
+		if r.Type == t {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------- Admin ----------
 
 // AdminListReports GET /api/v1/admin/reports
 func (a *API) AdminListReports(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	st := strings.TrimSpace(c.Query("status")) // pending / resolved / dismissed / empty=all
+	st := strings.TrimSpace(c.Query("status"))      // pending / resolved / dismissed / empty=all
+	target := strings.TrimSpace(c.Query("target"))   // video/article/dynamic/comment/user
+	rtype := strings.TrimSpace(c.Query("reason_type")) // reason type filter
 
 	if page < 1 {
 		page = 1
@@ -87,6 +105,13 @@ func (a *API) AdminListReports(c *gin.Context) {
 	if st != "" {
 		tx = tx.Where("status = ?", st)
 	}
+	if target != "" {
+		tx = tx.Where("target_type = ?", target)
+	}
+	if rtype != "" {
+		tx = tx.Where("reason_type = ?", rtype)
+	}
+
 	var total int64
 	tx.Count(&total)
 
@@ -99,43 +124,94 @@ func (a *API) AdminListReports(c *gin.Context) {
 		Reporter     gin.H      `json:"reporter"`
 		TargetType   string     `json:"target_type"`
 		TargetID     uint64     `json:"target_id"`
-		Reason       string     `json:"reason"`
+		ReasonType   string     `json:"reason_type"`
+		ReasonLabel  string     `json:"reason_label"`
+		ReasonDetail string     `json:"reason_detail"`
 		Status       string     `json:"status"`
 		HandlerNote  string     `json:"handler_note"`
 		CreatedAt    time.Time  `json:"created_at"`
 		HandledAt    *time.Time `json:"handled_at"`
 	}
 	items := make([]item, 0, len(reports))
+	uidSet := make(map[uint64]bool)
 	for _, r := range reports {
-		it := item{
-			ID:         r.ID,
-			ReporterID: r.ReporterID,
-			TargetType: r.TargetType,
-			TargetID:   r.TargetID,
-			Reason:     r.Reason,
-			Status:     r.Status,
-			HandlerNote: r.HandlerNote,
-			CreatedAt:  r.CreatedAt,
-			HandledAt:  r.HandledAt,
+		uidSet[r.ReporterID] = true
+		items = append(items, item{
+			ID:           r.ID,
+			ReporterID:   r.ReporterID,
+			TargetType:   r.TargetType,
+			TargetID:     r.TargetID,
+			ReasonType:   r.ReasonType,
+			ReasonLabel:  model.ReportReasonLabel(r.ReasonType),
+			ReasonDetail: r.ReasonDetail,
+			Status:       r.Status,
+			HandlerNote:  r.HandlerNote,
+			CreatedAt:    r.CreatedAt,
+			HandledAt:    r.HandledAt,
+		})
+	}
+
+	// Batch load reporters
+	type uBrief struct {
+		ID         uint64
+		Username   string
+		Nickname   string
+		AvatarURL  string
+	}
+	uids := make([]uint64, 0, len(uidSet))
+	for uid := range uidSet {
+		uids = append(uids, uid)
+	}
+	if len(uids) > 0 {
+		var users []uBrief
+		a.DB.Model(&model.User{}).Select("id, username, nickname, avatar_url").Where("id IN ?", uids).Find(&users)
+		um := make(map[uint64]uBrief, len(users))
+		for _, u := range users {
+			um[u.ID] = u
 		}
-		// Load reporter brief
-		var u model.User
-		if a.DB.Select("id, username, nickname, avatar_url").First(&u, r.ReporterID).Error == nil {
-			it.Reporter = gin.H{
-				"id":         u.ID,
-				"username":   u.Username,
-				"nickname":   u.Nickname,
-				"avatar_url": u.AvatarURL,
+		for i := range items {
+			u, ok := um[items[i].ReporterID]
+			if ok {
+				items[i].Reporter = gin.H{
+					"id":         u.ID,
+					"username":   u.Username,
+					"nickname":   u.Nickname,
+					"avatar_url": u.AvatarURL,
+				}
 			}
 		}
-		items = append(items, it)
+	}
+
+	// Stats
+	var pendingCount, resolvedCount, dismissedCount int64
+	a.DB.Model(&model.Report{}).Where("status = 'pending'").Count(&pendingCount)
+	a.DB.Model(&model.Report{}).Where("status = 'resolved'").Count(&resolvedCount)
+	a.DB.Model(&model.Report{}).Where("status = 'dismissed'").Count(&dismissedCount)
+
+	// Reason distribution (pending only, for overview)
+	type reasonStat struct {
+		Type  string `json:"type"`
+		Label string `json:"label"`
+		Count int64  `json:"count"`
+	}
+	var reasonStats []reasonStat
+	for _, rt := range model.ReportReasonTypes {
+		var c int64
+		a.DB.Model(&model.Report{}).Where("reason_type = ? AND status = 'pending'", rt.Type).Count(&c)
+		if c > 0 {
+			reasonStats = append(reasonStats, reasonStat{Type: rt.Type, Label: rt.Label, Count: c})
+		}
 	}
 
 	resp.OK(c, gin.H{
-		"items":     items,
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
+		"items":           items,
+		"total":           total,
+		"page":            page,
+		"page_size":       pageSize,
+		"pending_count":   pendingCount,
+		"resolved_count":  resolvedCount,
+		"dismissed_count": dismissedCount,
+		"reason_stats":    reasonStats,
 	})
 }
 
@@ -192,4 +268,45 @@ func (a *API) AdminHandleReport(c *gin.Context) {
 	}
 
 	resp.OK(c, gin.H{"status": newStatus})
+}
+
+// AdminBatchHandleReports POST /api/v1/admin/reports/batch
+func (a *API) AdminBatchHandleReports(c *gin.Context) {
+	var req struct {
+		IDs         []uint64 `json:"ids"`
+		Action      string   `json:"action"`
+		HandlerNote string   `json:"handler_note"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	req.Action = strings.TrimSpace(req.Action)
+	if req.Action != "resolve" && req.Action != "dismiss" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	if len(req.IDs) == 0 || len(req.IDs) > 100 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	adminID, _ := middleware.AdminID(c)
+	now := time.Now()
+	newStatus := "resolved"
+	if req.Action == "dismiss" {
+		newStatus = "dismissed"
+	}
+
+	count := a.DB.Model(&model.Report{}).
+		Where("id IN ? AND status = 'pending'", req.IDs).
+		Updates(map[string]interface{}{
+			"status":       newStatus,
+			"handler_note": strings.TrimSpace(req.HandlerNote),
+			"handled_by":   adminID,
+			"handled_at":   now,
+		})
+
+	resp.OK(c, gin.H{"handled": count.RowsAffected})
 }

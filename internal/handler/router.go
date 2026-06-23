@@ -110,6 +110,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.GET("/dashboard", a.AdminDashboard)
 		admin.GET("/reports", a.AdminListReports)
 		admin.POST("/reports/:id/handle", a.AdminHandleReport)
+		admin.POST("/reports/batch", a.AdminBatchHandleReports)
 	}
 
 	authd := r.Group("/api/v1")

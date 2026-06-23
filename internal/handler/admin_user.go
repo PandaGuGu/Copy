@@ -370,21 +370,25 @@ func (a *API) AdminGetUserViolations(c *gin.Context) {
 	a.DB.Where("target_type = 'user' AND target_id = ?", id).Order("created_at DESC").Limit(50).Find(&reports)
 
 	type repItem struct {
-		ID         uint64    `json:"id"`
-		ReporterID uint64    `json:"reporter_id"`
-		Reporter   gin.H     `json:"reporter"`
-		Reason     string    `json:"reason"`
-		Status     string    `json:"status"`
-		CreatedAt  time.Time `json:"created_at"`
+		ID           uint64    `json:"id"`
+		ReporterID   uint64    `json:"reporter_id"`
+		Reporter     gin.H     `json:"reporter"`
+		ReasonType   string    `json:"reason_type"`
+		ReasonLabel  string    `json:"reason_label"`
+		ReasonDetail string    `json:"reason_detail"`
+		Status       string    `json:"status"`
+		CreatedAt    time.Time `json:"created_at"`
 	}
 	repItems := make([]repItem, 0, len(reports))
 	for _, r := range reports {
 		it := repItem{
-			ID:         r.ID,
-			ReporterID: r.ReporterID,
-			Reason:     r.Reason,
-			Status:     r.Status,
-			CreatedAt:  r.CreatedAt,
+			ID:           r.ID,
+			ReporterID:   r.ReporterID,
+			ReasonType:   r.ReasonType,
+			ReasonLabel:  model.ReportReasonLabel(r.ReasonType),
+			ReasonDetail: r.ReasonDetail,
+			Status:       r.Status,
+			CreatedAt:    r.CreatedAt,
 		}
 		var uu model.User
 		if a.DB.Select("id, username, nickname").First(&uu, r.ReporterID).Error == nil {
