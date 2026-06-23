@@ -267,7 +267,13 @@ const routes = [
     component: () => import("@/pages/admin/AdminLayout.vue"),
     meta: { hideGlobalChrome: true, requireAdminAuth: true },
     children: [
-      { path: "", redirect: { name: "adminBanners" } },
+      { path: "", redirect: { name: "adminDashboard" } },
+      {
+        path: "dashboard",
+        name: "adminDashboard",
+        component: () => import("@/pages/admin/Dashboard.vue"),
+        meta: { title: "数据仪表盘 - 运营后台" }
+      },
       {
         path: "banners",
         name: "adminBanners",
