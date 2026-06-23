@@ -101,18 +101,14 @@
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <template v-if="row.status === 'pending'">
-            <el-popconfirm title="确认处理？" @confirm="doHandle(row, 'resolve')">
-              <template #reference>
-                <el-button size="small" text type="primary">处理</el-button>
-              </template>
-            </el-popconfirm>
-            <el-popconfirm title="确认驳回？" @confirm="doHandle(row, 'dismiss')">
+            <el-button size="small" text type="primary" @click="openHandle(row)">处理</el-button>
+            <el-popconfirm title="确认驳回？" @confirm="doHandle(row, 'dismiss', 'none')">
               <template #reference>
                 <el-button size="small" text type="warning">驳回</el-button>
               </template>
             </el-popconfirm>
           </template>
-          <span v-else class="rp-muted">已完成</span>
+          <span v-else class="rp-muted">{{ row.handler_note || '已完成' }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -126,6 +122,41 @@
         @current-change="fetch"
       />
     </div>
+
+    <!-- 处理弹窗 -->
+    <el-dialog v-model="handleVisible" title="处理举报" width="480px" destroy-on-close>
+      <template v-if="handleTarget">
+        <div class="rph-info">
+          <p><b>目标：</b>{{ typeLabel(handleTarget.target_type) }} #{{ handleTarget.target_id }}</p>
+          <p><b>分类：</b>{{ handleTarget.reason_label || handleTarget.reason_type }}</p>
+          <p v-if="handleTarget.reason_detail"><b>详情：</b>{{ handleTarget.reason_detail }}</p>
+        </div>
+
+        <el-divider />
+
+        <div class="rph-actions">
+          <label class="rph-label">对目标内容的处理：</label>
+          <el-radio-group v-model="handleContentAction" class="rph-radio-group">
+            <el-radio value="none" border size="default">仅标记已处理</el-radio>
+            <el-radio value="takedown" border size="default">下架/删除内容</el-radio>
+            <el-radio value="warn" border size="default">警告发布者</el-radio>
+            <el-radio value="ban" border size="default">封禁发布者</el-radio>
+          </el-radio-group>
+        </div>
+
+        <div class="rph-note" style="margin-top:14px">
+          <label class="rph-label">处理备注（选填）：</label>
+          <el-input v-model="handleNote" placeholder="可填写处理说明..." size="default" />
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="handleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="handling" @click="confirmHandle">
+          {{ handleContentAction === 'ban' ? '确认处理并封禁' : handleContentAction === 'takedown' ? '确认下架' : handleContentAction === 'warn' ? '确认警告' : '确认处理' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -156,6 +187,12 @@ export default {
       stats: null,
       selectedIds: [],
       reasonTypes: [],
+      // Handle dialog
+      handleVisible: false,
+      handleTarget: null,
+      handleContentAction: "none",
+      handleNote: "",
+      handling: false,
     };
   },
   created() {
@@ -222,13 +259,42 @@ export default {
         ElMessage.error((e && e.message) || "操作失败");
       }
     },
-    async doHandle(row, action) {
+    async doHandle(row, action, contentAction = "none") {
       try {
-        await adminHandleReport(row.id, { action, handler_note: "" });
+        await adminHandleReport(row.id, {
+          action,
+          content_action: contentAction,
+          handler_note: "",
+        });
         ElMessage.success(action === "resolve" ? "已处理" : "已驳回");
         this.fetch();
       } catch (e) {
         ElMessage.error((e && e.message) || "操作失败");
+      }
+    },
+    openHandle(row) {
+      this.handleTarget = row;
+      this.handleContentAction = "none";
+      this.handleNote = "";
+      this.handleVisible = true;
+    },
+    async confirmHandle() {
+      if (!this.handleTarget) return;
+      this.handling = true;
+      try {
+        await adminHandleReport(this.handleTarget.id, {
+          action: "resolve",
+          content_action: this.handleContentAction,
+          handler_note: this.handleNote.trim(),
+        });
+        const actionLabel = { none: "已标记处理", takedown: "已处理并下架", warn: "已处理并警告", ban: "已处理并封禁" };
+        ElMessage.success(actionLabel[this.handleContentAction] || "已处理");
+        this.handleVisible = false;
+        this.fetch();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "操作失败");
+      } finally {
+        this.handling = false;
       }
     },
     typeLabel(t) {
@@ -277,4 +343,11 @@ export default {
 .rp-toolbar { margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .rp-pager { margin-top: 16px; display: flex; justify-content: flex-end; }
 .rp-muted { color: #9499a0; }
+
+/* Handle dialog */
+.rph-info { font-size: 13px; color: #61666d; line-height: 1.8; }
+.rph-info b { color: #18191c; }
+.rph-label { font-size: 13px; font-weight: 600; color: #18191c; display: block; margin-bottom: 8px; }
+.rph-radio-group { display: flex; flex-direction: column; gap: 6px; }
+.rph-radio-group .el-radio { margin-right: 0; height: auto; padding: 10px 14px; }
 </style>
