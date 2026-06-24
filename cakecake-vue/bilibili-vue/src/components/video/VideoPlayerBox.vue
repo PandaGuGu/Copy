@@ -70,6 +70,16 @@
         </div>
       </transition>
 
+      <!-- 可拖拽字幕浮层 -->
+      <div
+        v-if="currentSubText"
+        class="vp-sub-overlay"
+        :style="subOverlayStyle"
+        @mousedown.stop="onSubDragStart"
+      >
+        <span class="vp-sub-overlay-text">{{ currentSubText }}</span>
+      </div>
+
       <button
         v-show="!playing && !videoLoading"
         type="button"
@@ -181,7 +191,7 @@
             </button>
             <div v-show="qualityOpen" class="vp-quality-menu" @click.stop>
               <button
-                v-for="q in qualities"
+                v-for="q in dynamicQualities"
                 :key="q.key"
                 type="button"
                 class="vp-quality-item"
@@ -192,6 +202,95 @@
               </button>
             </div>
           </div>
+
+          <!-- 播放速度 -->
+          <div
+            class="vp-speed"
+            @mouseenter="onSpeedEnter"
+            @mouseleave="onSpeedLeave"
+          >
+            <button
+              type="button"
+              class="vp-speed-trigger"
+              @click.stop="speedOpen = !speedOpen"
+            >
+              {{ speedLabel }}
+            </button>
+            <div v-show="speedOpen" class="vp-speed-menu" @click.stop>
+              <button
+                v-for="s in speeds"
+                :key="s"
+                type="button"
+                class="vp-speed-item"
+                :class="{ on: playbackRate === s }"
+                @click.stop="pickSpeed(s)"
+              >
+                {{ s === 1 ? '正常' : s + 'x' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 画中画 -->
+          <span v-if="pipSupported" class="vp-cluster-inline">
+            <button
+              type="button"
+              class="vp-btn"
+              aria-label="画中画"
+              @click.stop="togglePiP"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" style="display:block">
+                <path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 1.98 2 1.98h18c1.1 0 2-.88 2-1.98V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/>
+              </svg>
+            </button>
+          </span>
+
+          <!-- 章节 -->
+          <span v-if="chapters.length > 0" class="vp-cluster-inline">
+            <button
+              type="button"
+              class="vp-btn"
+              :aria-label="chapterPanelOpen ? '关闭章节' : '打开章节'"
+              @click.stop="chapterPanelOpen = !chapterPanelOpen"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" style="display:block">
+                <path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/>
+              </svg>
+            </button>
+          </span>
+
+          <!-- 字幕选择 -->
+          <span v-if="subtitles.length > 0" class="vp-cluster-inline">
+            <button
+              type="button"
+              class="vp-btn"
+              :aria-label="subtitleMenuOpen ? '关闭字幕菜单' : '字幕'"
+              @click.stop="subtitleMenuOpen = !subtitleMenuOpen"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" style="display:block">
+                <rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M7 15h2M11 15h4M7 11h1M10 11h5M7 13h3" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              </svg>
+            </button>
+            <div v-show="subtitleMenuOpen" class="vp-sub-menu" @click.stop>
+              <div class="vp-sub-menu-head">字幕</div>
+              <button
+                v-for="sub in subtitles"
+                :key="sub.id"
+                type="button"
+                class="vp-sub-item"
+                :class="{ on: activeSubtitleId === sub.id }"
+                @click.stop="pickSubtitle(sub)"
+              >
+                {{ sub.title || sub.lang || '未命名' }}
+              </button>
+              <button v-if="subtitles.length > 0"
+                type="button"
+                class="vp-sub-item"
+                :class="{ on: activeSubtitleId === 0 }"
+                @click.stop="pickSubtitle(null)"
+              >关闭字幕</button>
+            </div>
+          </span>
 
           <div
             class="vp-danmu-cluster"
@@ -321,6 +420,32 @@
           </span>
         </div>
       </div>
+
+      <!-- 章节导航面板 -->
+      <transition name="vp-chapter-slide">
+        <div v-show="chapterPanelOpen && chapters.length > 0" class="vp-chapter-panel">
+          <div class="vp-chapter-header">
+            <span>章节 ({{ chapters.length }})</span>
+            <button type="button" class="vp-chapter-close" @click.stop="chapterPanelOpen = false">&times;</button>
+          </div>
+          <div class="vp-chapter-list">
+            <button
+              v-for="(ch, i) in chapters"
+              :key="ch.id"
+              type="button"
+              class="vp-chapter-item"
+              :class="{ active: isChapterActive(ch) }"
+              @click.stop="seekToChapter(ch)"
+            >
+              <span class="vp-chapter-idx">{{ i + 1 }}</span>
+              <div class="vp-chapter-body">
+                <span class="vp-chapter-title">{{ ch.title }}</span>
+                <span class="vp-chapter-time">{{ fmtTime(ch.time_sec) }}</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- 弹幕输入条：Mini-Bili 未登录为游客条；已登录为完整输入 -->
@@ -623,9 +748,24 @@ export default {
     minibiliDanmakuClosed: {
       type: Boolean,
       default: false
+    },
+    /** 视频章节列表（Module 2） */
+    chapters: {
+      type: Array,
+      default: () => []
+    },
+    /** 多码率变体（Module 2）— 有数据时动态覆盖 quality 列表 */
+    bitrates: {
+      type: Array,
+      default: () => []
+    },
+    /** 字幕轨道（Module 3）— 用于 <track> 元素 */
+    subtitles: {
+      type: Array,
+      default: () => []
     }
   },
-  emits: ["update:wideMode", "mb-danmaku-committed"],
+  emits: ["update:wideMode", "mb-danmaku-committed", "chapter-change", "asr-request"],
   data() {
     return {
       demoSrc: DEMO_MP4,
@@ -707,7 +847,24 @@ export default {
       _dmResizeObs: null,
       mbDailyWatchReported: false,
       shortcutHint: "",
-      _shortcutHintTimer: null
+      _shortcutHintTimer: null,
+      // ── P0: Playback speed & PiP ──
+      playbackRate: 1,
+      speeds: [0.5, 0.75, 1, 1.25, 1.5, 2],
+      speedOpen: false,
+      speedLeaveTimer: null,
+      pipSupported: false,
+      // ── P0: Chapter panel ──
+      chapterPanelOpen: false,
+      // ── Subtitle / ASR ──
+      subtitleMenuOpen: false,
+      activeSubtitleId: 0,
+      // Drag state
+      subDragX: 0,
+      subDragY: 0,
+      subDragging: false,
+      subDragStartX: 0,
+      subDragStartY: 0
     };
   },
   computed: {
@@ -771,11 +928,28 @@ export default {
       return `${this.fmtTime(this.currentTime)} / ${this.fmtTime(this.duration)}`;
     },
     qualityShort() {
-      const q = this.qualities.find((x) => x.key === this.selectedQuality);
-      return q ? (q.key === "auto" ? "自动" : q.key + "P") : "1080P";
+      const q = this.dynamicQualities.find((x) => x.key === this.selectedQuality);
+      return q ? (q.key === "auto" ? "自动" : q.label) : "1080P";
     },
     wideTip() {
       return this.wideMode ? "退出宽屏" : "宽屏模式";
+    },
+    /** 播放速度按钮文字 */
+    speedLabel() {
+      return this.playbackRate === 1 ? "倍速" : this.playbackRate + "x";
+    },
+    /** 动态码率列表：有 bitrates 数据时用 API 值，否则用内置预设 */
+    dynamicQualities() {
+      if (this.bitrates && this.bitrates.length > 0) {
+        return [
+          ...this.bitrates.map((b) => ({
+            key: String(b.id),
+            label: b.label
+          })),
+          { key: "auto", label: "自动" }
+        ];
+      }
+      return this.qualities;
     },
     sendModeOptions() {
       return [
@@ -807,6 +981,30 @@ export default {
       return Math.round(
         Math.min(100, Math.max(0, Number(this.volumePercent) || 0))
       );
+    },
+    /** 当前激活字幕的 VTT cues */
+    _activeSubtitleCues() {
+      const sub = this.subtitles.find(s => s.id === this.activeSubtitleId);
+      if (!sub || !sub.content) return [];
+      return this._parseVttToCues(sub.content);
+    },
+    /** 根据当前播放时间返回字幕文本 */
+    currentSubText() {
+      const t = this.currentTime;
+      if (!t) return "";
+      const cues = this._activeSubtitleCues;
+      const cue = cues.find(c => t >= c.start && t < c.end);
+      return cue ? cue.text : "";
+    },
+    /** 字幕浮层位置样式 */
+    subOverlayStyle() {
+      const x = this.subDragX || 0;
+      const y = this.subDragY || 0;
+      return {
+        left: x ? x + 'px' : '50%',
+        top: y ? y + 'px' : '75%',
+        transform: x ? 'none' : 'translateX(-50%)'
+      };
     }
   },
   watch: {
@@ -859,6 +1057,10 @@ export default {
       this.volumePercent = Math.round((v.volume || 1) * 100);
       if (v.readyState >= 3) this.videoLoading = false;
     }
+    this.pipSupported = !!(
+      document.pictureInPictureEnabled &&
+      typeof HTMLVideoElement.prototype.requestPictureInPicture === "function"
+    );
     document.addEventListener("fullscreenchange", this.onFsChange);
     document.addEventListener("click", this.onDocClickCloseColor);
     document.addEventListener("keydown", this.onDocKeydown);
@@ -871,6 +1073,7 @@ export default {
     if (this.sendSelectLeaveTimer) clearTimeout(this.sendSelectLeaveTimer);
     if (this.volumeLeaveTimer) clearTimeout(this.volumeLeaveTimer);
     if (this.qualityLeaveTimer) clearTimeout(this.qualityLeaveTimer);
+    if (this.speedLeaveTimer) clearTimeout(this.speedLeaveTimer);
     if (this._danmuCdTimer) {
       clearInterval(this._danmuCdTimer);
       this._danmuCdTimer = null;
@@ -951,6 +1154,99 @@ export default {
       if (!v) return;
       if (v.paused) v.play().catch(() => {});
       else v.pause();
+    },
+    // ── P0: Playback speed ──
+    pickSpeed(rate) {
+      const v = this.$refs.videoRef;
+      this.playbackRate = rate;
+      this.speedOpen = false;
+      if (v) v.playbackRate = rate;
+    },
+    onSpeedEnter() {
+      if (this.speedLeaveTimer) { clearTimeout(this.speedLeaveTimer); this.speedLeaveTimer = null; }
+      this.speedOpen = true;
+    },
+    onSpeedLeave() {
+      if (this.speedLeaveTimer) clearTimeout(this.speedLeaveTimer);
+      this.speedLeaveTimer = setTimeout(() => { this.speedOpen = false; this.speedLeaveTimer = null; }, 280);
+    },
+    // ── P0: Picture-in-Picture ──
+    togglePiP() {
+      const v = this.$refs.videoRef;
+      if (!v || !this.pipSupported) return;
+      try {
+        if (document.pictureInPictureElement) {
+          document.exitPictureInPicture();
+        } else if (document.pictureInPictureEnabled) {
+          v.requestPictureInPicture();
+        }
+      } catch { /* ignore */ }
+    },
+    // ── P0: Chapter navigation ──
+    isChapterActive(ch) {
+      return this.currentTime >= ch.time_sec && this.currentTime < (ch.time_sec + 0.5);
+    },
+    seekToChapter(ch) {
+      const v = this.$refs.videoRef;
+      if (v) {
+        v.currentTime = ch.time_sec;
+        if (v.paused) v.play().catch(() => {});
+      }
+      this.$emit("chapter-change", ch);
+    },
+    // ── Subtitle / ASR ──
+    subTrackSrc(sub) {
+      if (!sub || !sub.content) return "";
+      return "data:text/vtt;charset=utf-8," + encodeURIComponent(sub.content);
+    },
+    /** Parse VTT raw text to cue array */
+    _parseVttToCues(raw) {
+      const lines = String(raw || "").split(/\r?\n/);
+      const cues = [];
+      let i = 0;
+      if (lines[0] && /^WEBVTT/i.test(lines[0].trim())) i = 1;
+      while (i < lines.length) {
+        while (i < lines.length && !lines[i].trim()) i++;
+        if (i >= lines.length) break;
+        const m = lines[i].match(/^(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})/);
+        if (!m) { i++; continue; }
+        const start = this._vttTimeToSec(m[1]);
+        const end = this._vttTimeToSec(m[2]);
+        i++;
+        const textLines = [];
+        while (i < lines.length && lines[i].trim()) {
+          textLines.push(lines[i].trim());
+          i++;
+        }
+        cues.push({ start, end, text: textLines.join(" ") });
+      }
+      return cues;
+    },
+    _vttTimeToSec(ts) {
+      const parts = ts.split(":");
+      return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + parseFloat(parts[2].replace(",", "."));
+    },
+    /** Drag handlers for subtitle overlay */
+    onSubDragStart(e) {
+      this.subDragging = true;
+      this.subDragStartX = e.clientX - (this.subDragX || 0);
+      this.subDragStartY = e.clientY - (this.subDragY || 0);
+      const onMove = (ev) => {
+        if (!this.subDragging) return;
+        this.subDragX = ev.clientX - this.subDragStartX;
+        this.subDragY = ev.clientY - this.subDragStartY;
+      };
+      const onUp = () => {
+        this.subDragging = false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    pickSubtitle(sub) {
+      this.activeSubtitleId = sub ? sub.id : 0;
+      this.subtitleMenuOpen = false;
     },
     isShortcutTargetIgnored(e) {
       const el = e && e.target;
@@ -1141,6 +1437,20 @@ export default {
       if (this.qualityLeaveTimer) {
         clearTimeout(this.qualityLeaveTimer);
         this.qualityLeaveTimer = null;
+      }
+      // Dynamic bitrate: switch video source
+      if (this.bitrates && this.bitrates.length > 0 && key !== "auto") {
+        const br = this.bitrates.find((b) => String(b.id) === String(key));
+        if (br && br.url) {
+          const v = this.$refs.videoRef;
+          if (v) {
+            const ct = v.currentTime;
+            const wasPlaying = !v.paused;
+            v.src = br.url;
+            v.currentTime = ct;
+            if (wasPlaying) v.play().catch(() => {});
+          }
+        }
       }
     },
     toggleDanmu() {
@@ -2640,5 +2950,244 @@ $b-track: #c9cfd8;
 .vp-hint-fade-enter-from,
 .vp-hint-fade-leave-to {
   opacity: 0;
+}
+
+/* ── P0: Speed selector ── */
+.vp-speed {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 48;
+}
+
+.vp-speed-trigger {
+  min-width: 48px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e8e8e8;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vp-speed-trigger:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.vp-speed-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  min-width: 72px;
+  padding: 6px 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  z-index: 50;
+}
+
+.vp-speed-item {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: #18191c;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vp-speed-item:hover {
+  background: #f1f2f3;
+  color: #00a1d6;
+}
+.vp-speed-item.on {
+  color: #00a1d6;
+  font-weight: 600;
+}
+
+/* ── P0: Chapter panel ── */
+.vp-chapter-panel {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  bottom: 60px;
+  width: 280px;
+  max-width: 36%;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px 0 0 4px;
+  overflow: hidden;
+}
+
+.vp-chapter-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vp-chapter-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #999;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vp-chapter-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+.vp-chapter-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.vp-chapter-list::-webkit-scrollbar { width: 4px; }
+.vp-chapter-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
+
+.vp-chapter-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.vp-chapter-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.vp-chapter-item.active { color: #00a1d6; background: rgba(0, 161, 214, 0.12); }
+
+.vp-chapter-idx {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+.vp-chapter-item.active .vp-chapter-idx { background: rgba(0, 161, 214, 0.3); }
+
+.vp-chapter-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vp-chapter-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vp-chapter-time {
+  font-size: 11px;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chapter panel slide transition */
+.vp-chapter-slide-enter-active,
+.vp-chapter-slide-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.vp-chapter-slide-enter-from,
+.vp-chapter-slide-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+/* ── Draggable subtitle overlay ── */
+.vp-sub-overlay {
+  position: absolute;
+  z-index: 18;
+  bottom: auto;
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  max-width: 80%;
+}
+.vp-sub-overlay:active { cursor: grabbing; }
+
+.vp-sub-overlay-text {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.5;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  word-break: break-word;
+}
+
+/* ── Subtitle / ASR menu ── */
+.vp-sub-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 130px;
+  padding: 6px 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  z-index: 55;
+}
+
+.vp-sub-menu-head {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vp-sub-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: #18191c;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vp-sub-item:hover { background: #f1f2f3; color: #00a1d6; }
+.vp-sub-item.on { color: #00a1d6; font-weight: 600; }
+
+.vp-sub-item--asr {
+  color: #e6a23c;
+}
+.vp-sub-item--asr:hover { color: #e6a23c; background: #fdf6ec; }
+.vp-sub-item--asr:disabled { color: #ccc; cursor: not-allowed; }
+
+.vp-sub-menu-sep {
+  height: 1px;
+  background: #ebeef5;
+  margin: 4px 0;
 }
 </style>

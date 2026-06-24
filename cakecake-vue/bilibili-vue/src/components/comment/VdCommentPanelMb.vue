@@ -28,6 +28,15 @@
                 按时间排序
               </button>
             </template>
+            <span class="vd-sort-sep">|</span>
+            <button
+              type="button"
+              class="vd-sort-tab vd-filter-tab"
+              :class="{ on: commentFilter === 'with_image' }"
+              @click="$emit('update:commentFilter', commentFilter === 'with_image' ? 'all' : 'with_image')"
+            >
+              {{ commentFilter === 'with_image' ? '全部评论' : '图片评论' }}
+            </button>
           </div>
           <div class="vd-cmt-page-top vd-cmt-page-top--links">
             <span class="vd-page-info">共{{ commentTotalPages }}页</span>
@@ -218,13 +227,14 @@ export default {
     dynamicId: { type: Number, default: 0 },
     authorId: { type: Number, default: null },
     commentSort: { type: String, default: "hot" },
+    commentFilter: { type: String, default: "all" },
     commentsClosed: { type: Boolean, default: false },
     commentsCurated: { type: Boolean, default: false },
     hideHead: { type: Boolean, default: false },
     initialTotal: { type: Number, default: 0 },
     highlightCommentId: { type: [Number, String], default: null }
   },
-  emits: ["counts", "update:commentSort"],
+  emits: ["counts", "update:commentSort", "update:commentFilter"],
   data() {
     return {
       MB_COMMENT_CURATED_LABEL,

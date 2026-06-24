@@ -2299,3 +2299,142 @@ export async function mbPutMyUserDynamic(
   });
   return unwrap<UserDynamicItem>(r);
 }
+
+// ══════════════════════════════════════════════
+// Module 2: Playback – Chapters & Bitrates
+// ══════════════════════════════════════════════
+
+export interface VideoChapterItem {
+  id: number;
+  video_id: number;
+  title: string;
+  time_sec: number;
+  created_at: string;
+}
+
+export interface VideoBitrateItem {
+  id: number;
+  video_id: number;
+  label: string;
+  width: number;
+  height: number;
+  kbps: number;
+  url: string;
+  created_at: string;
+}
+
+/** GET /videos/:id/chapters */
+export async function mbGetVideoChapters(videoId: number): Promise<VideoChapterItem[]> {
+  const r = await http.get(`/api/v1/videos/${videoId}/chapters`);
+  return unwrap<VideoChapterItem[]>(r);
+}
+
+/** GET /videos/:id/bitrates */
+export async function mbGetVideoBitrates(videoId: number): Promise<VideoBitrateItem[]> {
+  const r = await http.get(`/api/v1/videos/${videoId}/bitrates`);
+  return unwrap<VideoBitrateItem[]>(r);
+}
+
+// ══════════════════════════════════════════════
+// Module 3: Subtitles
+// ══════════════════════════════════════════════
+
+export interface SubtitleItem {
+  id: number;
+  video_id: number;
+  lang: string;
+  title: string;
+  content: string;
+  format: string;
+  auto_gen: boolean;
+  created_at: string;
+}
+
+/** GET /videos/:id/subtitles */
+export async function mbGetVideoSubtitles(videoId: number): Promise<SubtitleItem[]> {
+  const r = await http.get(`/api/v1/videos/${videoId}/subtitles`);
+  return unwrap<SubtitleItem[]>(r);
+}
+
+/** GET /videos/:id/subtitles/:subtitleId */
+export async function mbGetSubtitleContent(videoId: number, subtitleId: number): Promise<SubtitleItem> {
+  const r = await http.get(`/api/v1/videos/${videoId}/subtitles/${subtitleId}`);
+  return unwrap<SubtitleItem>(r);
+}
+
+/** POST /videos/:id/subtitles (upload sub – auth required) */
+export async function mbUploadSubtitle(
+  videoId: number,
+  content: string,
+  lang: string,
+  title: string,
+  format: string
+): Promise<SubtitleItem> {
+  const fd = new FormData();
+  fd.append("lang", lang);
+  fd.append("title", title);
+  fd.append("format", format);
+  fd.append("content", content);
+  const r = await http.post(`/api/v1/videos/${videoId}/subtitles`, fd, {
+    ...authAxiosOpts,
+    timeout: 30000
+  });
+  return unwrap<SubtitleItem>(r);
+}
+
+/** DELETE /videos/:id/subtitles/:subtitleId (auth required) */
+export async function mbDeleteSubtitle(videoId: number, subtitleId: number): Promise<void> {
+  await http.delete(`/api/v1/videos/${videoId}/subtitles/${subtitleId}`, authAxiosOpts);
+}
+
+/** GET /admin/subtitles */
+export async function mbAdminListSubtitles(params?: { video_id?: string; lang?: string }): Promise<SubtitleItem[]> {
+  const r = await http.get("/api/v1/admin/subtitles", { params, ...authAxiosOpts });
+  return unwrap<SubtitleItem[]>(r);
+}
+
+/** DELETE /admin/subtitles/:id */
+export async function mbAdminDeleteSubtitle(id: number): Promise<void> {
+  await http.delete(`/api/v1/admin/subtitles/${id}`, authAxiosOpts);
+}
+
+// ══════════════════════════════════════════════
+// Module 5: Creator Stats
+// ══════════════════════════════════════════════
+
+export interface CreatorStatsTrendItem {
+  date: string;
+  play_count: number;
+}
+
+export interface CreatorStats {
+  total_videos: number;
+  total_plays: number;
+  total_coins: number;
+  total_fans: number;
+  trend_7d: CreatorStatsTrendItem[];
+}
+
+export interface CreatorVideoStatsItem {
+  video_id: number;
+  title: string;
+  cover_url: string;
+  play_count: number;
+  like_count: number;
+  coin_count: number;
+  comment_count: number;
+  danmaku_count: number;
+  fav_count: number;
+}
+
+/** GET /users/me/creator/stats */
+export async function mbGetCreatorStats(): Promise<CreatorStats> {
+  const r = await http.get("/api/v1/users/me/creator/stats", authAxiosOpts);
+  return unwrap<CreatorStats>(r);
+}
+
+/** GET /users/me/creator/video-stats */
+export async function mbGetCreatorVideoStats(): Promise<CreatorVideoStatsItem[]> {
+  const r = await http.get("/api/v1/users/me/creator/video-stats", authAxiosOpts);
+  return unwrap<CreatorVideoStatsItem[]>(r);
+}

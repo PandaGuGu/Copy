@@ -184,6 +184,11 @@
                 />
                 编辑
               </router-link>
+              <router-link
+                class="mm-btn-edit mm-btn-sub"
+                :to="`/upload/subtitles/${item.id}`"
+                title="字幕管理"
+              >字幕</router-link>
               <div
                 class="mm-more-wrap"
                 @mouseenter="onMoreEnter(item.id)"
@@ -2840,5 +2845,11 @@ $c-meta: #99a2aa;
   margin: 0;
   color: $c-meta;
   font-size: 14px;
+}
+
+.mm-btn-sub {
+  margin-left: 4px;
+  border-left: 1px solid #e3e5e7;
+  padding-left: 8px;
 }
 </style>

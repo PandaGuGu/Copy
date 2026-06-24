@@ -219,12 +219,17 @@
             </div>
           </div>
 
-          <a href="javascript:;" class="creator-nav-item">
+          <router-link
+            :to="{ name: 'creatorDashboard' }"
+            class="creator-nav-item"
+            active-class="is-active"
+            exact-active-class="is-active"
+          >
             <span class="creator-nav-leading">
               <img class="creator-nav-icon" src="@/assets/DC.png" alt="" />
               数据中心
             </span>
-          </a>
+          </router-link>
 
           <button
             type="button"

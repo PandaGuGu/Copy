@@ -1,0 +1,106 @@
+- generic
+  - generic
+    - generic
+      - list
+        - listitem [level=1]
+          - link "主站" [ref=e12]
+            - StaticText "主站"
+        - listitem [level=1]
+          - link "画友" [ref=e13]
+        - listitem [level=1]
+          - link "游戏中心" [ref=e14]
+        - listitem [level=1]
+          - link "直播" [ref=e15]
+        - listitem [level=1]
+          - link "会员购" [ref=e16]
+        - listitem [level=1]
+          - link "赛事" [ref=e17]
+        - listitem [level=1]
+          - link "BML" [ref=e18]
+        - listitem [level=1]
+          - link " 下载APP" [ref=e19]
+      - generic
+        - textbox "��������" [ref=e20]
+        - button [ref=e21]
+      - list
+        - listitem [level=1]
+          - link [ref=e22]
+            - image
+        - listitem [level=1]
+          - link "大会员" [ref=e23]
+            - SvgRoot
+              - StaticText "大"
+            - StaticText "大会员"
+        - listitem [level=1]
+          - link "消息" [ref=e24]
+            - image
+            - StaticText "消息"
+        - listitem [level=1]
+          - link "动态" [ref=e25]
+            - image
+            - StaticText "动态"
+        - listitem [level=1]
+          - link "收藏" [ref=e26]
+            - image
+            - StaticText "收藏"
+        - listitem [level=1]
+          - link "历史" [ref=e27]
+            - image
+            - StaticText "历史"
+        - listitem [level=1]
+          - link "创作中心" [ref=e28]
+            - image
+            - StaticText "创作中心"
+      - link "投 稿" [ref=e9]
+  - generic
+    - link [ref=e1]
+  - generic
+    - generic
+      - generic [ref=e3] clickable [cursor:pointer]
+        - StaticText "动画"
+      - generic [ref=e4] clickable [cursor:pointer]
+        - StaticText "番剧"
+      - generic [ref=e5] clickable [cursor:pointer]
+        - StaticText "国创"
+      - generic [ref=e6] clickable [cursor:pointer]
+        - StaticText "音乐"
+      - generic [ref=e7] clickable [cursor:pointer]
+        - StaticText "舞蹈"
+      - StaticText "排序"
+    - generic [ref=e2] clickable [cursor:pointer]
+    - link [ref=e8]
+  - list
+    - listitem [level=1]
+      - StaticText "cakecake"
+      - StaticText "关于我们"
+      - StaticText "联系我们"
+      - StaticText "加入我们"
+      - StaticText "友情链接"
+      - StaticText "官方认证"
+      - StaticText "Investor Relations"
+    - listitem [level=1]
+      - StaticText "传送门"
+      - StaticText "帮助中心"
+      - StaticText "高级弹幕"
+      - StaticText "活动专题页"
+      - StaticText "侵权申诉"
+      - StaticText "分院帽计划"
+      - StaticText "活动中心"
+      - StaticText "用户反馈论坛"
+      - StaticText "壁纸站"
+      - StaticText "名人堂"
+    - listitem [level=1]
+      - generic
+        - link "手机端下载" [ref=e10]
+          - generic
+            - emphasis
+              - StaticText "手机端下载"
+        - link "新浪微博" [ref=e11]
+          - generic
+            - emphasis
+              - StaticText "新浪微博"
+        - generic
+          - emphasis
+            - StaticText "官方微信"
+  - paragraph
+    - StaticText "Copyright © 2026 earthcake"

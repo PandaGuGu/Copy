@@ -348,6 +348,41 @@
         </div>
       </section>
 
+      <!-- 章节管理 -->
+      <section class="vp-card vp-chapter-card">
+        <div class="vp-card-title-row">
+          <h3 class="vp-card-hd">章节管理</h3>
+          <button type="button" class="vp-btn-text" @click="chapterAdding = true">+ 添加章节</button>
+        </div>
+        <div v-if="chapters.length === 0 && !chapterAdding" class="vp-empty-hint">
+          暂无章节，添加章节可帮助观众快速跳转至精彩片段
+        </div>
+        <div v-for="(ch, i) in chapters" :key="ch.id || i" class="vp-ch-item">
+          <span class="vp-ch-idx">{{ i + 1 }}</span>
+          <span class="vp-ch-time">{{ fmtTime(ch.time_sec) }}</span>
+          <span class="vp-ch-title">{{ ch.title }}</span>
+          <button type="button" class="vp-btn-text vp-btn-del" @click="removeChapter(ch, i)">删除</button>
+        </div>
+        <div v-if="chapterAdding" class="vp-ch-add-row">
+          <input
+            v-model="chapterForm.title"
+            placeholder="章节标题"
+            class="vp-ch-input"
+            maxlength="80"
+          />
+          <input
+            v-model.number="chapterForm.time_sec"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="时间(秒)"
+            class="vp-ch-input vp-ch-input--time"
+          />
+          <button type="button" class="vp-btn vp-btn-primary vp-btn-sm" @click="addChapter">确定</button>
+          <button type="button" class="vp-btn-text" @click="chapterAdding = false">取消</button>
+        </div>
+      </section>
+
       <div class="vp-foot">
         <template v-if="isPublishMode || isDraftEditMode">
           <button
@@ -493,7 +528,12 @@ export default {
       /** 用户主动改过封面（上传/截取），与 OSS 旧地址区分 */
       coverDirty: false,
       /** 仅保存稿件元数据，不上传视频文件 */
-      metadataOnlyMode: false
+      metadataOnlyMode: false,
+      /** 章节管理 */
+      chapters: [],
+      chapterAdding: false,
+      chapterForm: { title: "", time_sec: 0 },
+      chapterEditVideoId: 0
     };
   },
   computed: {
@@ -839,6 +879,59 @@ export default {
       .catch(() => next(false));
   },
   methods: {
+    fmtTime(sec) {
+      const s = Math.max(0, Math.floor(sec || 0));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+    },
+    // ── Chapter management ──
+    async loadChapters(videoId) {
+      if (!videoId) return;
+      try {
+        const { default: http } = await import("@/utils/http");
+        const r = await http.get(`/api/v1/videos/${videoId}/chapters`);
+        const list = r?.data;
+        this.chapters = Array.isArray(list) ? list : [];
+        this.chapterEditVideoId = videoId;
+      } catch { /* ignore */ }
+    },
+    async addChapter() {
+      const title = (this.chapterForm.title || "").trim();
+      const ts = Number(this.chapterForm.time_sec);
+      if (!title || !Number.isFinite(ts) || ts < 0) return;
+      const { default: http } = await import("@/utils/http");
+      const vid = this.chapterEditVideoId || this.editVideoNumericId;
+      if (vid) {
+        try {
+          const r = await http.post(`/api/v1/videos/${vid}/chapters`, { title, time_sec: ts });
+          const ch = r?.data;
+          if (ch) {
+            this.chapters.push(ch);
+            this.chapters.sort((a, b) => (a.time_sec || 0) - (b.time_sec || 0));
+          }
+        } catch { return; }
+      } else {
+        // Draft: add locally (will be created after publish)
+        this.chapters.push({ title, time_sec: ts, _local: true });
+        this.chapters.sort((a, b) => (a.time_sec || 0) - (b.time_sec || 0));
+      }
+      this.chapterForm = { title: "", time_sec: 0 };
+      this.chapterAdding = false;
+    },
+    async removeChapter(ch, idx) {
+      if (ch._local) {
+        this.chapters.splice(idx, 1);
+        return;
+      }
+      const vid = this.chapterEditVideoId;
+      if (!vid || !ch.id) return;
+      try {
+        const { default: http } = await import("@/utils/http");
+        await http.delete(`/api/v1/videos/${vid}/chapters/${ch.id}`);
+        this.chapters.splice(idx, 1);
+      } catch { /* ignore */ }
+    },
     bindLeaveWindowListeners() {
       if (this.leaveWindowListenersBound) return;
       this.leaveWindowListenersBound = true;
@@ -3491,4 +3584,135 @@ $c-line: #e3e5e7;
     background: #fff;
   }
 }
+
+/* ── Chapter management ── */
+.vp-chapter-card {
+  padding: 18px 22px;
+}
+
+.vp-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vp-card-hd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #18191c;
+}
+
+.vp-btn-text {
+  border: none;
+  background: none;
+  color: #00a1d6;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.vp-btn-text:hover { opacity: 0.8; }
+
+.vp-btn-del { color: #e74c3c; }
+
+.vp-empty-hint {
+  padding: 12px 0;
+  font-size: 13px;
+  color: #999;
+}
+
+.vp-ch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.vp-ch-idx {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e6f7ff;
+  color: #1890ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vp-ch-time {
+  flex-shrink: 0;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.vp-ch-title {
+  flex: 1;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vp-ch-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  flex-wrap: wrap;
+}
+
+.vp-ch-input {
+  padding: 6px 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  width: 180px;
+}
+
+.vp-ch-input:focus { border-color: #409eff; }
+
+.vp-ch-input--time {
+  width: 100px;
+}
+
+.vp-btn-sm {
+  padding: 4px 14px;
+  font-size: 12px;
+  height: 30px;
+}
+
+.vp-btn-primary {
+  background: #00a1d6;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 8px 20px;
+  font-size: 13px;
+}
+
+.vp-btn-primary:hover { background: #00b5e5; }
+
+.vp-btn-ghost {
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  color: #666;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 8px 20px;
+  font-size: 13px;
+}
+
+.vp-btn-ghost:hover { border-color: #00a1d6; color: #00a1d6; }
+
+.vp-btn-wide { width: 100%; }
 </style>

@@ -866,7 +866,8 @@ export default {
       ],
       bottomNav: [
         { id: "space", label: "个人空间" },
-        { id: "creator", label: "创作中心" }
+        { id: "creator", label: "创作中心" },
+        { id: "dashboard", label: "数据中心" }
       ],
       lvCurrent: 0,
       lvMax: 20,
@@ -1239,6 +1240,9 @@ export default {
       }
       if (id === "creator") {
         void this.$router.push({ name: "upload" });
+      }
+      if (id === "dashboard") {
+        void this.$router.push({ name: "creatorDashboard" });
       }
     },
     selectPrimaryNav(id) {

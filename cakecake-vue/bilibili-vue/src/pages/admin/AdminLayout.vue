@@ -91,6 +91,77 @@
         >
           AI 角色
         </router-link>
+        <!-- ─── 23-module expansion: new sidebar items ─── -->
+        <router-link
+          :to="{ name: 'adminTicketManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          工单管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminRiskManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          风控管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminCopyrightManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          版权管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminBIReport' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          数据报表
+        </router-link>
+        <router-link
+          :to="{ name: 'adminCSManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          客服后台
+        </router-link>
+        <router-link
+          :to="{ name: 'adminOpsMonitor' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          运维监控
+        </router-link>
+        <router-link
+          :to="{ name: 'adminConfigManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          配置发布
+        </router-link>
+        <router-link
+          :to="{ name: 'adminRBACManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          权限审计
+        </router-link>
+        <router-link
+          :to="{ name: 'adminSubtitleManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          字幕管理
+        </router-link>
+        <router-link
+          :to="{ name: 'adminSpecialManage' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          专题活动
+        </router-link>
       </aside>
       <main class="adm-main">
         <router-view />

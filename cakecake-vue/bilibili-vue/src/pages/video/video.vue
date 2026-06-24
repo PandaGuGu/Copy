@@ -191,6 +191,9 @@
               :minibili-video-id="mbNumericId != null ? mbNumericId : 0"
               :minibili-danmaku-closed="!!(apiDetail && apiDetail.danmaku_closed)"
               :danmaku-catalog="mbDanmakuCatalog"
+              :chapters="mbChapters"
+              :bitrates="mbBitrates"
+              :subtitles="mbSubtitles"
               @mb-danmaku-committed="onMbDanmakuCommitted"
             />
           </div>
@@ -1112,7 +1115,10 @@ import {
   mbToggleUserFollow,
   mbPostViewHistory,
   mbListVideos,
-  mbListUserPublishedVideos
+  mbListUserPublishedVideos,
+  mbGetVideoChapters,
+  mbGetVideoBitrates,
+  mbGetVideoSubtitles
 } from "@/api/minibili";
 import {
   filterRecommendPool,
@@ -1180,6 +1186,9 @@ export default {
       mbDanmakuWsHint: "",
       _mbDmWs: null,
       playerWide: false,
+      mbChapters: [],
+      mbBitrates: [],
+      mbSubtitles: [],
       /** 侧栏「正在看」：Mini-Bili 下为真实人数（详情 + WS）；非 MB 见 sideWatchingDisplay */
       watching: 0,
       followed: false,
@@ -1955,6 +1964,9 @@ export default {
         this.mbDetailLoadError = "视频不存在或链接无效";
         this.apiDetail = null;
         this.mbVideoUrl = "";
+        this.mbChapters = [];
+        this.mbBitrates = [];
+        this.mbSubtitles = [];
         return;
       }
       const id = String(idNum);
@@ -1997,12 +2009,17 @@ export default {
           }
           const cc = Number(d.comment_count);
           if (!Number.isNaN(cc)) {
+            this.stats.reply = String(cc);
             this.commentTotal = cc;
             this.commentTotalPages = Math.max(1, Math.ceil(cc / 20));
             if (this.commentCurrentPage > this.commentTotalPages) {
               this.commentCurrentPage = this.commentTotalPages;
             }
             this.commentPageJumpDraft = String(this.commentCurrentPage);
+          }
+          // P0: Load chapters, bitrates, subtitles for advanced player
+          if (idNum > 0) {
+            this.loadPlayerMeta(idNum).catch(() => {});
           }
           if (d.uploader) {
             this.upMeta.name = d.uploader;
@@ -2029,7 +2046,25 @@ export default {
           this.mbDetailLoadError = "视频不存在或暂不可播放";
           this.apiDetail = null;
           this.mbVideoUrl = "";
+          this.mbChapters = [];
+          this.mbBitrates = [];
+          this.mbSubtitles = [];
         });
+    },
+    /** P0: Load player extensions — chapters, bitrates, subtitles */
+    async loadPlayerMeta(videoId) {
+      try {
+        const [chapters, bitrates, subtitles] = await Promise.all([
+          mbGetVideoChapters(videoId).catch(() => []),
+          mbGetVideoBitrates(videoId).catch(() => []),
+          mbGetVideoSubtitles(videoId).catch(() => [])
+        ]);
+        this.mbChapters = Array.isArray(chapters) ? chapters : [];
+        this.mbBitrates = Array.isArray(bitrates) ? bitrates : [];
+        this.mbSubtitles = Array.isArray(subtitles) ? subtitles : [];
+      } catch {
+        // silently ignore — player falls back to defaults
+      }
     },
     /** 推荐视频（全站热榜）与同分区/同 UP 稿件交替合并，分别填入侧栏与下方还喜欢 */
     async loadMbRecommendFeeds(detail) {
