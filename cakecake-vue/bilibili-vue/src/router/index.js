@@ -185,6 +185,18 @@ const routes = [
     meta: { title: "弹幕管理 - 创作中心" }
   },
   {
+    name: "creatorDashboard",
+    path: "/upload/dashboard",
+    component: () => import("@/pages/upload/CreatorDashboard.vue"),
+    meta: { title: "数据中心 - 创作中心", requireMinibiliAuth: true }
+  },
+  {
+    path: "/upload/subtitles/:videoId",
+    component: () => import("@/pages/minibili/SubtitleEdit.vue"),
+    props: (route) => ({ videoId: Number(route.params.videoId) || 0 }),
+    meta: { title: "字幕管理 - 创作中心", requireMinibiliAuth: true }
+  },
+  {
     path: "/minibili/login",
     name: "minibiliLogin",
     component: () => import("@/pages/minibili/Login.vue"),
@@ -333,6 +345,67 @@ const routes = [
         name: "adminAgent",
         component: () => import("@/pages/admin/AgentManage.vue"),
         meta: { title: "AI 角色 - 运营后台" }
+      },
+      // ─── 23-module expansion: new admin routes ───
+      {
+        path: "tickets",
+        name: "adminTicketManage",
+        component: () => import("@/pages/admin/TicketManage.vue"),
+        meta: { title: "工单管理 - 运营后台" }
+      },
+      {
+        path: "risk",
+        name: "adminRiskManage",
+        component: () => import("@/pages/admin/RiskManage.vue"),
+        meta: { title: "风控管理 - 运营后台" }
+      },
+      {
+        path: "copyright",
+        name: "adminCopyrightManage",
+        component: () => import("@/pages/admin/CopyrightManage.vue"),
+        meta: { title: "版权管理 - 运营后台" }
+      },
+      {
+        path: "bi",
+        name: "adminBIReport",
+        component: () => import("@/pages/admin/BIReport.vue"),
+        meta: { title: "数据报表 - 运营后台" }
+      },
+      {
+        path: "cs",
+        name: "adminCSManage",
+        component: () => import("@/pages/admin/CSManage.vue"),
+        meta: { title: "客服后台 - 运营后台" }
+      },
+      {
+        path: "ops",
+        name: "adminOpsMonitor",
+        component: () => import("@/pages/admin/OpsMonitor.vue"),
+        meta: { title: "运维监控 - 运营后台" }
+      },
+      {
+        path: "config",
+        name: "adminConfigManage",
+        component: () => import("@/pages/admin/ConfigManage.vue"),
+        meta: { title: "配置发布 - 运营后台" }
+      },
+      {
+        path: "rbac",
+        name: "adminRBACManage",
+        component: () => import("@/pages/admin/RBACManage.vue"),
+        meta: { title: "权限审计 - 运营后台" }
+      },
+      {
+        path: "subtitles",
+        name: "adminSubtitleManage",
+        component: () => import("@/pages/admin/SubtitleManage.vue"),
+        meta: { title: "字幕管理 - 运营后台" }
+      },
+      {
+        path: "specials",
+        name: "adminSpecialManage",
+        component: () => import("@/pages/admin/SpecialManage.vue"),
+        meta: { title: "专题活动 - 运营后台" }
       }
     ]
   },

@@ -36,6 +36,7 @@ func (a *API) AdminLogin(c *gin.Context) {
 	}
 	var adm model.Admin
 	if err := a.DB.Where("username = ?", strings.TrimSpace(req.Username)).First(&adm).Error; err != nil {
+		a.recordAdminLoginLog(0, strings.TrimSpace(req.Username), c.ClientIP(), false, "用户不存在")
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
@@ -44,9 +45,11 @@ func (a *API) AdminLogin(c *gin.Context) {
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(adm.PasswordHash), []byte(req.Password)) != nil {
+		a.recordAdminLoginLog(adm.ID, adm.Username, c.ClientIP(), false, "密码错误")
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
+	a.recordAdminLoginLog(adm.ID, adm.Username, c.ClientIP(), true, "")
 	access, refresh, _, err := a.JWT.IssueAdminPair(adm.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -110,4 +113,34 @@ func (a *API) AdminMe(c *gin.Context) {
 
 func adminIDFromCtx(c *gin.Context) (uint64, bool) {
 	return middleware.AdminID(c)
+}
+
+func (a *API) recordAdminLoginLog(adminID uint64, username, ip string, success bool, reason string) {
+	lg := model.AdminLoginLog{
+		AdminID: adminID, Username: username, IP: ip,
+		Success: success, FailReason: reason,
+	}
+	if err := a.DB.Create(&lg).Error; err != nil {
+		a.Log.Error("record admin login log failed", zap.Error(err))
+	}
+}
+
+// AdminListLoginLogs GET /api/v1/admin/login-logs
+func (a *API) AdminListLoginLogs(c *gin.Context) {
+	var logs []model.AdminLoginLog
+	if err := a.DB.Order("created_at DESC").Limit(200).Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": logs})
+}
+
+// AdminListRiskHitLogs GET /api/v1/admin/risk/hits
+func (a *API) AdminListRiskHitLogs(c *gin.Context) {
+	var hits []model.RiskHitLog
+	if err := a.DB.Order("created_at DESC").Limit(200).Find(&hits).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": hits})
 }
