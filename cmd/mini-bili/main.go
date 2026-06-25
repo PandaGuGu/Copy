@@ -94,6 +94,7 @@ func main() {
 	if err := data.SeedDefaultAdmin(db, cfg, log); err != nil {
 		log.Warn("seed default admin", zap.Error(err))
 	}
+	data.SeedRBAC(db, log)
 	if err := data.EnsureAgentProfiles(db, cfg, log); err != nil {
 		log.Warn("ensure agent profiles", zap.Error(err))
 	}
