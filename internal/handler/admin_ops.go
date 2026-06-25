@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -78,13 +80,20 @@ func (a *API) AdminListTaskLogs(c *gin.Context) {
 
 	items := make([]gin.H, 0, len(rows))
 	for i := range rows {
+		var duration int64
+		if rows[i].StartedAt != nil && rows[i].FinishedAt != nil {
+			duration = rows[i].FinishedAt.Sub(*rows[i].StartedAt).Milliseconds()
+		}
 		items = append(items, gin.H{
 			"id":          rows[i].ID,
 			"task_type":   rows[i].TaskType,
+			"type":        rows[i].TaskType, // 前端用 type
 			"target_id":   rows[i].TargetID,
 			"status":      rows[i].Status,
 			"retry_count": rows[i].RetryCount,
 			"error_msg":   rows[i].ErrorMsg,
+			"error":       rows[i].ErrorMsg, // 前端用 error
+			"duration":    duration,
 			"started_at":  rows[i].StartedAt,
 			"finished_at": rows[i].FinishedAt,
 			"created_at":  rows[i].CreatedAt,
@@ -436,14 +445,57 @@ func (a *API) AdminListAlertRecords(c *gin.Context) {
 	}
 	items := make([]gin.H, 0, len(rows))
 	for i := range rows {
+		// 根据阈值偏离程度计算告警级别
+		var level string
+		var ruleName string
+		var rule *model.AlertRule
+		if err := a.DB.First(&rule, rows[i].RuleID).Error; err == nil {
+			ruleName = rule.Name
+			// Calculate deviation ratio
+			if rule.Threshold != 0 {
+				deviation := rows[i].Value / rule.Threshold
+				switch {
+				case rule.Operator == "gt" || rule.Operator == "gte":
+					// For "greater than" rules, higher value is worse
+					if deviation >= 2.0 {
+						level = "critical"
+					} else if deviation >= 1.3 {
+						level = "warning"
+					} else {
+						level = "info"
+					}
+				case rule.Operator == "lt" || rule.Operator == "lte":
+					// For "less than" rules, lower value is worse (invert)
+					if deviation <= 0.5 {
+						level = "critical"
+					} else if deviation <= 0.7 {
+						level = "warning"
+					} else {
+						level = "info"
+					}
+				default:
+					level = "info"
+				}
+			} else {
+				level = "info"
+			}
+		} else {
+			level = "info"
+		}
+		msg := fmt.Sprintf("%s: 当前值 %.2f", ruleName, rows[i].Value)
+
 		items = append(items, gin.H{
-			"id":         rows[i].ID,
-			"rule_id":    rows[i].RuleID,
-			"value":      rows[i].Value,
-			"status":     rows[i].Status,
-			"acked_by":   rows[i].AckedBy,
-			"acked_at":   rows[i].AckedAt,
-			"created_at": rows[i].CreatedAt,
+			"id":           rows[i].ID,
+			"rule_id":      rows[i].RuleID,
+			"rule_name":    ruleName,
+			"value":        rows[i].Value,
+			"status":       rows[i].Status,
+			"level":        level,
+			"message":      msg,
+			"acknowledged": rows[i].Status == "resolved",
+			"acked_by":     rows[i].AckedBy,
+			"acked_at":     rows[i].AckedAt,
+			"created_at":   rows[i].CreatedAt,
 		})
 	}
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
@@ -499,64 +551,92 @@ func (a *API) AdminGetSystemHealth(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	health := gin.H{}
+	items := []gin.H{}
 	allOK := true
 
-	// DB check
-	dbStatus := "ok"
-	dbDetail := ""
+	// DB check + latency
+	var dbLatency int64
 	if sqlDB, err := a.DB.DB(); err != nil {
-		dbStatus = "error"
-		dbDetail = err.Error()
+		items = append(items, gin.H{"name": "Database", "status": "error", "detail": err.Error(), "latency": 0})
 		allOK = false
-	} else if err := sqlDB.PingContext(ctx); err != nil {
-		dbStatus = "error"
-		dbDetail = err.Error()
-		allOK = false
-	}
-	health["db"] = gin.H{"status": dbStatus, "detail": dbDetail}
+	} else {
+		start := time.Now()
+		if perr := sqlDB.PingContext(ctx); perr != nil {
+			dbLatency = time.Since(start).Milliseconds()
+			items = append(items, gin.H{"name": "Database", "status": "error", "detail": perr.Error(), "latency": dbLatency})
+			allOK = false
+		} else {
+			dbLatency = time.Since(start).Milliseconds()
+			detail := fmt.Sprintf("Connected (%dms)", dbLatency)
 
-	// Redis check
-	redisStatus := "ok"
-	redisDetail := ""
-	if a.Redis == nil {
-		redisStatus = "unavailable"
-		redisDetail = "redis client not configured"
-		allOK = false
-	} else if err := a.Redis.Ping(ctx).Err(); err != nil {
-		redisStatus = "error"
-		redisDetail = err.Error()
-		allOK = false
+			// DB pool stats
+			poolStats := sqlDB.Stats()
+			detail += fmt.Sprintf(" | %d open, %d idle", poolStats.OpenConnections, poolStats.Idle)
+			items = append(items, gin.H{"name": "Database", "status": "ok", "detail": detail, "latency": dbLatency})
+		}
 	}
-	health["redis"] = gin.H{"status": redisStatus, "detail": redisDetail}
+
+	// Redis check + latency
+	var redisLatency int64
+	if a.Redis == nil {
+		items = append(items, gin.H{"name": "Redis", "status": "unavailable", "detail": "not configured", "latency": 0})
+		allOK = false
+	} else {
+		start := time.Now()
+		if err := a.Redis.Ping(ctx).Err(); err != nil {
+			redisLatency = time.Since(start).Milliseconds()
+			items = append(items, gin.H{"name": "Redis", "status": "error", "detail": err.Error(), "latency": redisLatency})
+			allOK = false
+		} else {
+			redisLatency = time.Since(start).Milliseconds()
+			detail := fmt.Sprintf("Connected (%dms)", redisLatency)
+
+			// Redis memory info
+			if info, e := a.Redis.Info(ctx, "memory").Result(); e == nil {
+				for _, line := range strings.Split(info, "\r\n") {
+					if strings.HasPrefix(line, "used_memory_human:") {
+						parts := strings.SplitN(line, ":", 2)
+						if len(parts) == 2 {
+							detail += " | " + strings.TrimSpace(parts[1])
+						}
+						break
+					}
+				}
+			}
+			items = append(items, gin.H{"name": "Redis", "status": "ok", "detail": detail, "latency": redisLatency})
+		}
+	}
 
 	// OSS check
 	ossStatus := "ok"
-	ossDetail := ""
+	ossDetail := "Available"
 	if a.OSS == nil {
 		ossStatus = "unavailable"
-		ossDetail = "oss not configured"
+		ossDetail = "not configured"
 		allOK = false
 	}
-	health["oss"] = gin.H{"status": ossStatus, "detail": ossDetail}
+	items = append(items, gin.H{"name": "Object Storage", "status": ossStatus, "detail": ossDetail, "latency": 0})
 
-	// RabbitMQ check (best-effort: the MQ interface only exposes PublishTranscode).
+	// RabbitMQ check
 	mqStatus := "ok"
-	mqDetail := ""
+	mqDetail := "Available"
 	if a.MQ == nil {
 		mqStatus = "unavailable"
-		mqDetail = "message queue not configured"
+		mqDetail = "not configured"
 		allOK = false
 	}
-	health["rabbitmq"] = gin.H{"status": mqStatus, "detail": mqDetail}
+	items = append(items, gin.H{"name": "Message Queue", "status": mqStatus, "detail": mqDetail, "latency": 0})
 
 	overall := "healthy"
 	if !allOK {
 		overall = "degraded"
 	}
-	health["overall"] = overall
-	health["checked_at"] = time.Now()
-	resp.OK(c, health)
+
+	resp.OK(c, gin.H{
+		"items":      items,
+		"overall":    overall,
+		"checked_at": time.Now(),
+	})
 }
 
 // ──────────────────────────────────────────────
@@ -619,7 +699,9 @@ func (a *API) AdminSearchTraces(c *gin.Context) {
 			"path":        rows[i].Path,
 			"method":      rows[i].Method,
 			"status":      rows[i].Status,
+			"status_code": rows[i].Status, // 前端用 status_code
 			"duration_ms": rows[i].DurationMs,
+			"duration":    rows[i].DurationMs, // 前端用 duration
 			"error_msg":   rows[i].ErrorMsg,
 			"created_at":  rows[i].CreatedAt,
 		})
@@ -668,11 +750,11 @@ func (a *API) AdminGetTrace(c *gin.Context) {
 // ──────────────────────────────────────────────
 
 type cdnRefreshReq struct {
-	Type   string `json:"type"`
-	Target string `json:"target"`
+	RefreshType string   `json:"refresh_type"`
+	Urls        []string `json:"urls"`
 }
 
-// AdminCreateCDNRefresh POST /admin/ops/cdn/refresh — create CDN refresh task (body: type, target)
+// AdminCreateCDNRefresh POST /admin/ops/cdn/refresh — create CDN refresh task
 func (a *API) AdminCreateCDNRefresh(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {
@@ -684,19 +766,30 @@ func (a *API) AdminCreateCDNRefresh(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	req.Type = strings.TrimSpace(req.Type)
-	req.Target = strings.TrimSpace(req.Target)
-	if req.Type == "" || req.Target == "" {
+	req.RefreshType = strings.TrimSpace(req.RefreshType)
+	if req.RefreshType == "" || len(req.Urls) == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if req.Type != "url" && req.Type != "directory" {
+	if req.RefreshType != "url" && req.RefreshType != "directory" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
+	// Filter empty URLs
+	cleanUrls := make([]string, 0, len(req.Urls))
+	for _, u := range req.Urls {
+		if u = strings.TrimSpace(u); u != "" {
+			cleanUrls = append(cleanUrls, u)
+		}
+	}
+	if len(cleanUrls) == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	urlsJSON, _ := json.Marshal(cleanUrls)
 	task := model.CDNRefreshTask{
-		Type:        req.Type,
-		Target:      req.Target,
+		RefreshType: req.RefreshType,
+		Urls:        string(urlsJSON),
 		Status:      "pending",
 		RequestedBy: adminID,
 	}
@@ -705,11 +798,14 @@ func (a *API) AdminCreateCDNRefresh(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.recordAudit(c, adminID, "create_cdn_refresh", "cdn_refresh_task", task.ID, `{"type":"`+task.Type+`","target":"`+task.Target+`"}`)
+	a.recordAudit(c, adminID, "create_cdn_refresh", "cdn_refresh_task", task.ID, `{"refresh_type":"`+task.RefreshType+`","urls":`+string(urlsJSON)+`}`)
+	// Parse URLs back for response
+	var respUrls []string
+	json.Unmarshal([]byte(task.Urls), &respUrls)
 	resp.OK(c, gin.H{
 		"id":           task.ID,
-		"type":         task.Type,
-		"target":       task.Target,
+		"refresh_type": task.RefreshType,
+		"urls":         respUrls,
 		"status":       task.Status,
 		"requested_by": task.RequestedBy,
 		"created_at":   task.CreatedAt,
@@ -744,10 +840,17 @@ func (a *API) AdminListCDNRefreshTasks(c *gin.Context) {
 	}
 	items := make([]gin.H, 0, len(rows))
 	for i := range rows {
+		var urls []string
+		if rows[i].Urls != "" {
+			json.Unmarshal([]byte(rows[i].Urls), &urls)
+		}
+		if urls == nil {
+			urls = []string{}
+		}
 		items = append(items, gin.H{
 			"id":           rows[i].ID,
-			"type":         rows[i].Type,
-			"target":       rows[i].Target,
+			"refresh_type": rows[i].RefreshType,
+			"urls":         urls,
 			"status":       rows[i].Status,
 			"requested_by": rows[i].RequestedBy,
 			"finished_at":  rows[i].FinishedAt,
@@ -767,7 +870,7 @@ func (a *API) AdminListCDNRefreshTasks(c *gin.Context) {
 	})
 }
 
-// AdminListOSSLifecycleRules GET /admin/ops/oss/lifecycle — list lifecycle rules
+// AdminListOSSLifecycleRules GET /admin/ops/storage/lifecycle-rules — list lifecycle rules
 func (a *API) AdminListOSSLifecycleRules(c *gin.Context) {
 	var rules []model.OSSLifecycleRule
 	if err := a.DB.Order("created_at DESC, id DESC").Find(&rules).Error; err != nil {
@@ -777,27 +880,33 @@ func (a *API) AdminListOSSLifecycleRules(c *gin.Context) {
 	items := make([]gin.H, 0, len(rules))
 	for i := range rules {
 		items = append(items, gin.H{
-			"id":         rules[i].ID,
-			"prefix":     rules[i].Prefix,
-			"action":     rules[i].Action,
-			"days":       rules[i].Days,
-			"enabled":    rules[i].Enabled,
-			"created_by": rules[i].CreatedBy,
-			"created_at": rules[i].CreatedAt,
-			"updated_at": rules[i].UpdatedAt,
+			"id":           rules[i].ID,
+			"name":         rules[i].Name,
+			"bucket":       rules[i].Bucket,
+			"prefix":       rules[i].Prefix,
+			"ia_days":      rules[i].IADays,
+			"archive_days": rules[i].ArchiveDays,
+			"delete_days":  rules[i].DeleteDays,
+			"enabled":      rules[i].Enabled,
+			"created_by":   rules[i].CreatedBy,
+			"created_at":   rules[i].CreatedAt,
+			"updated_at":   rules[i].UpdatedAt,
 		})
 	}
 	resp.OK(c, gin.H{"items": items})
 }
 
 type ossLifecycleReq struct {
-	Prefix  string `json:"prefix"`
-	Action  string `json:"action"`
-	Days    int    `json:"days"`
-	Enabled *bool  `json:"enabled"`
+	Name        string `json:"name"`
+	Bucket      string `json:"bucket"`
+	Prefix      string `json:"prefix"`
+	IADays      int    `json:"ia_days"`
+	ArchiveDays int    `json:"archive_days"`
+	DeleteDays  int    `json:"delete_days"`
+	Enabled     *bool  `json:"enabled"`
 }
 
-// AdminCreateOSSLifecycleRule POST /admin/ops/oss/lifecycle — create lifecycle rule
+// AdminCreateOSSLifecycleRule POST /admin/ops/storage/lifecycle-rules — create lifecycle rule
 func (a *API) AdminCreateOSSLifecycleRule(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {
@@ -809,22 +918,23 @@ func (a *API) AdminCreateOSSLifecycleRule(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if strings.TrimSpace(req.Prefix) == "" || strings.TrimSpace(req.Action) == "" || req.Days < 0 {
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Bucket) == "" || strings.TrimSpace(req.Prefix) == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	switch req.Action {
-	case "delete", "transition_to_ia", "transition_to_archive":
-	default:
+	if req.IADays < 0 || req.ArchiveDays < 0 || req.DeleteDays < 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
 	rule := model.OSSLifecycleRule{
-		Prefix:    strings.TrimSpace(req.Prefix),
-		Action:    req.Action,
-		Days:      req.Days,
-		Enabled:   true,
-		CreatedBy: adminID,
+		Name:        strings.TrimSpace(req.Name),
+		Bucket:      strings.TrimSpace(req.Bucket),
+		Prefix:      strings.TrimSpace(req.Prefix),
+		IADays:      req.IADays,
+		ArchiveDays: req.ArchiveDays,
+		DeleteDays:  req.DeleteDays,
+		Enabled:     true,
+		CreatedBy:   adminID,
 	}
 	if req.Enabled != nil {
 		rule.Enabled = *req.Enabled
@@ -834,17 +944,77 @@ func (a *API) AdminCreateOSSLifecycleRule(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.recordAudit(c, adminID, "create_oss_lifecycle_rule", "oss_lifecycle_rule", rule.ID, `{"prefix":"`+rule.Prefix+`","action":"`+rule.Action+`","days":`+strconv.Itoa(rule.Days)+`}`)
+	a.recordAudit(c, adminID, "create_oss_lifecycle_rule", "oss_lifecycle_rule", rule.ID, fmt.Sprintf(`{"name":"%s","bucket":"%s","prefix":"%s"}`, rule.Name, rule.Bucket, rule.Prefix))
 	resp.OK(c, gin.H{
-		"id":      rule.ID,
-		"prefix":  rule.Prefix,
-		"action":  rule.Action,
-		"days":    rule.Days,
-		"enabled": rule.Enabled,
+		"id":           rule.ID,
+		"name":         rule.Name,
+		"bucket":       rule.Bucket,
+		"prefix":       rule.Prefix,
+		"ia_days":      rule.IADays,
+		"archive_days": rule.ArchiveDays,
+		"delete_days":  rule.DeleteDays,
+		"enabled":      rule.Enabled,
 	})
 }
 
-// AdminDeleteOSSLifecycleRule DELETE /admin/ops/oss/lifecycle/:id — delete lifecycle rule
+// AdminUpdateOSSLifecycleRule PUT /admin/ops/storage/lifecycle-rules/:id — update lifecycle rule
+func (a *API) AdminUpdateOSSLifecycleRule(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var rule model.OSSLifecycleRule
+	if err := a.DB.First(&rule, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	var req ossLifecycleReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	upd := map[string]interface{}{}
+	if req.Name != "" {
+		upd["name"] = strings.TrimSpace(req.Name)
+	}
+	if req.Bucket != "" {
+		upd["bucket"] = strings.TrimSpace(req.Bucket)
+	}
+	if req.Prefix != "" {
+		upd["prefix"] = strings.TrimSpace(req.Prefix)
+	}
+	if req.IADays >= 0 {
+		upd["ia_days"] = req.IADays
+	}
+	if req.ArchiveDays >= 0 {
+		upd["archive_days"] = req.ArchiveDays
+	}
+	if req.DeleteDays >= 0 {
+		upd["delete_days"] = req.DeleteDays
+	}
+	if req.Enabled != nil {
+		upd["enabled"] = *req.Enabled
+	}
+	if len(upd) == 0 {
+		resp.OK(c, gin.H{"id": id, "updated": false})
+		return
+	}
+	if err := a.DB.Model(&rule).Updates(upd).Error; err != nil {
+		a.Log.Error("update oss lifecycle rule", zap.Error(err), zap.Uint64("id", id))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	a.recordAudit(c, adminID, "update_oss_lifecycle_rule", "oss_lifecycle_rule", id, "")
+	resp.OK(c, gin.H{"id": id, "updated": true})
+}
+
+// AdminDeleteOSSLifecycleRule DELETE /admin/ops/storage/lifecycle-rules/:id — delete lifecycle rule
 func (a *API) AdminDeleteOSSLifecycleRule(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {
@@ -863,4 +1033,303 @@ func (a *API) AdminDeleteOSSLifecycleRule(c *gin.Context) {
 	}
 	a.recordAudit(c, adminID, "delete_oss_lifecycle_rule", "oss_lifecycle_rule", id, "")
 	resp.OK(c, gin.H{"id": id, "deleted": true})
+}
+
+// ──────────────────────────────────────────────
+// Module 19b: Alert Evaluation Engine
+// ──────────────────────────────────────────────
+
+// AdminTriggerSync POST /admin/ops/sync/trigger — manually trigger data sync with TaskLog tracking
+func (a *API) AdminTriggerSync(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+
+	var body struct {
+		SyncType string `json:"sync_type"` // es_videos / es_articles / es_users / play_counts / all
+	}
+	_ = c.ShouldBindJSON(&body)
+	if body.SyncType == "" {
+		body.SyncType = "all"
+	}
+
+	now := time.Now()
+	task := model.TaskLog{
+		TaskType:  "sync",
+		TargetID:  adminID,
+		Status:    "running",
+		StartedAt: &now,
+		ErrorMsg:  fmt.Sprintf("sync_type=%s", body.SyncType),
+	}
+	if err := a.DB.Create(&task).Error; err != nil {
+		a.Log.Warn("create sync tasklog failed", zap.Error(err))
+	}
+
+	// Run sync in background
+	go func(taskID uint64, syncType string) {
+		var syncErr error
+		ctx := context.Background()
+
+		switch syncType {
+		case "es_videos":
+			syncErr = a.syncESIndexes(ctx, "videos")
+		case "es_articles":
+			syncErr = a.syncESIndexes(ctx, "articles")
+		case "es_users":
+			syncErr = a.syncESIndexes(ctx, "users")
+		case "play_counts":
+			syncErr = a.syncPlayCounts(ctx)
+		case "all":
+			if err := a.syncESIndexes(ctx, "videos"); err != nil {
+				a.Log.Warn("sync es_videos failed", zap.Error(err))
+			}
+			if err := a.syncESIndexes(ctx, "articles"); err != nil {
+				a.Log.Warn("sync es_articles failed", zap.Error(err))
+			}
+			if err := a.syncESIndexes(ctx, "users"); err != nil {
+				a.Log.Warn("sync es_users failed", zap.Error(err))
+			}
+			if err := a.syncPlayCounts(ctx); err != nil {
+				a.Log.Warn("sync play_counts failed", zap.Error(err))
+			}
+		}
+
+		stmt := map[string]interface{}{"finished_at": time.Now()}
+		if syncErr != nil {
+			stmt["status"] = "failed"
+			stmt["error_msg"] = syncErr.Error()
+		} else {
+			stmt["status"] = "success"
+		}
+		a.DB.Model(&model.TaskLog{}).Where("id = ?", taskID).Updates(stmt)
+
+		// Write audit log directly (no gin context available in goroutine)
+		audit := model.AuditLog{
+			AdminID:   adminID,
+			Action:    "sync_completed",
+			Resource:  "sync",
+			TargetID:  taskID,
+			Detail:    fmt.Sprintf(`{"sync_type":"%s","status":"%s"}`, syncType, stmt["status"]),
+			CreatedAt: time.Now(),
+		}
+		a.DB.Create(&audit)
+	}(task.ID, body.SyncType)
+
+	a.recordAudit(c, adminID, "sync_triggered", "sync", task.ID, fmt.Sprintf(`{"sync_type":"%s"}`, body.SyncType))
+	resp.OK(c, gin.H{
+		"task_id":   task.ID,
+		"sync_type": body.SyncType,
+		"status":    "running",
+	})
+}
+
+// syncESIndexes bulk-reindexes all entities of a given type into Elasticsearch.
+func (a *API) syncESIndexes(ctx context.Context, entityType string) error {
+	if a.ES == nil || !a.ES.Enabled() {
+		return fmt.Errorf("elasticsearch not configured")
+	}
+	switch entityType {
+	case "videos":
+		var ids []uint64
+		if err := a.DB.Model(&model.Video{}).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			_ = a.ES.IndexVideoFromDB(ctx, a.DB, id)
+		}
+		a.Log.Info("es sync done", zap.String("type", "videos"), zap.Int("count", len(ids)))
+	case "articles":
+		var ids []uint64
+		if err := a.DB.Model(&model.Article{}).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			_ = a.ES.IndexArticleFromDB(ctx, a.DB, id)
+		}
+		a.Log.Info("es sync done", zap.String("type", "articles"), zap.Int("count", len(ids)))
+	case "users":
+		var ids []uint64
+		if err := a.DB.Model(&model.User{}).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			_ = a.ES.IndexUserFromDB(ctx, a.DB, id)
+		}
+		a.Log.Info("es sync done", zap.String("type", "users"), zap.Int("count", len(ids)))
+	}
+	return nil
+}
+
+// syncPlayCounts flushes Redis play counter to MySQL VideoDailyStat.
+func (a *API) syncPlayCounts(ctx context.Context) error {
+	if a.Redis == nil {
+		return fmt.Errorf("redis not configured")
+	}
+	// Trigger play count flush by reading the current counter keys
+	keys, err := a.Redis.Keys(ctx, "play:*").Result()
+	if err != nil {
+		return fmt.Errorf("redis keys failed: %w", err)
+	}
+	count := 0
+	for _, key := range keys {
+		val, err := a.Redis.Get(ctx, key).Int64()
+		if err != nil {
+			continue
+		}
+		videoIDStr := strings.TrimPrefix(key, "play:")
+		videoID, err := strconv.ParseUint(videoIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		// Update play count directly
+		a.DB.Model(&model.Video{}).Where("id = ?", videoID).Update("play_count", val)
+		todayStr := time.Now().Format("2006-01-02")
+		a.DB.Model(&model.VideoDailyStat{}).Where("video_id = ? AND date = ?", videoID, todayStr).
+			Assign(model.VideoDailyStat{PlayCount: val}).
+			FirstOrCreate(&model.VideoDailyStat{VideoID: videoID, Date: todayStr, PlayCount: val})
+		count++
+	}
+	a.Log.Info("play count sync done", zap.Int("synced", count))
+	return nil
+}
+
+func (a *API) AdminEvaluateAlerts(c *gin.Context) {
+	adminID, _ := middleware.AdminID(c)
+
+	var rules []model.AlertRule
+	if err := a.DB.Where("enabled = ?", true).Find(&rules).Error; err != nil {
+		a.Log.Error("evaluate: load rules", zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	// 采集系统指标
+	metrics := a.collectMetrics(c.Request.Context())
+	fired := 0
+
+	for _, rule := range rules {
+		val, ok := metrics[rule.Metric]
+		if !ok {
+			continue // 指标不可用则跳过
+		}
+		if !evaluateCond(val, rule.Operator, rule.Threshold) {
+			continue
+		}
+
+		// 检查 DurationSec: 如果配置了持续时间，检查近期是否持续超标
+		if rule.DurationSec > 0 {
+			since := time.Now().Add(-time.Duration(rule.DurationSec) * time.Second)
+			var recentCount int64
+			a.DB.Model(&model.AlertRecord{}).Where("rule_id = ? AND created_at >= ? AND status = 'firing'", rule.ID, since).Count(&recentCount)
+			// 简单策略: 最近 duration 内至少已有 1 条记录才触发（避免瞬时抖动）
+			if recentCount == 0 {
+				// 没有持续记录，插入一条占位不触发
+				rec := model.AlertRecord{
+					RuleID: rule.ID,
+					Value:  val,
+					Status: "firing",
+				}
+				a.DB.Create(&rec)
+				continue
+			}
+		}
+
+		rec := model.AlertRecord{
+			RuleID: rule.ID,
+			Value:  val,
+			Status: "firing",
+		}
+		if err := a.DB.Create(&rec).Error; err != nil {
+			a.Log.Warn("evaluate: create alert record", zap.Error(err), zap.String("metric", rule.Metric))
+			continue
+		}
+		fired++
+
+		// 告警通知（当前仅 log，后续可扩展 dingtalk/wecom/email）
+		a.Log.Warn("ALERT FIRED",
+			zap.String("rule", rule.Name),
+			zap.String("metric", rule.Metric),
+			zap.Float64("threshold", rule.Threshold),
+			zap.Float64("actual", val),
+			zap.String("channel", rule.Channel),
+		)
+
+		if adminID != 0 {
+			a.recordAudit(c, adminID, "alert_evaluated", "alert_rule", rule.ID,
+				fmt.Sprintf(`{"metric":"%s","value":%.2f,"threshold":%.2f}`, rule.Metric, val, rule.Threshold))
+		}
+	}
+
+	resp.OK(c, gin.H{
+		"rules_checked": len(rules),
+		"fired":         fired,
+		"evaluated_at":  time.Now(),
+	})
+}
+
+func (a *API) collectMetrics(ctx context.Context) map[string]float64 {
+	m := map[string]float64{}
+
+	// DB 连接延迟
+	if sqlDB, err := a.DB.DB(); err == nil {
+		start := time.Now()
+		if err := sqlDB.PingContext(ctx); err == nil {
+			m["db_latency_ms"] = float64(time.Since(start).Milliseconds())
+		}
+	}
+
+	// Redis 已用内存 (bytes)
+	if a.Redis != nil {
+		if info, err := a.Redis.Info(ctx, "memory").Result(); err == nil {
+			// 简单解析 used_memory
+			for _, line := range strings.Split(info, "\r\n") {
+				if strings.HasPrefix(line, "used_memory:") {
+					parts := strings.Split(line, ":")
+					if len(parts) == 2 {
+						if v, e := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64); e == nil {
+							m["redis_memory_bytes"] = v
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// 任务失败率 (近1小时)
+	var totalTasks, failedTasks int64
+	since := time.Now().Add(-1 * time.Hour)
+	a.DB.Model(&model.TaskLog{}).Where("created_at >= ?", since).Count(&totalTasks)
+	a.DB.Model(&model.TaskLog{}).Where("created_at >= ? AND status = ?", since, "failed").Count(&failedTasks)
+	if totalTasks > 0 {
+		m["task_failure_rate"] = float64(failedTasks) / float64(totalTasks) * 100
+	} else {
+		m["task_failure_rate"] = 0
+	}
+
+	// 队列积压 (pending + retrying 的任务数)
+	var queueDepth int64
+	a.DB.Model(&model.TaskLog{}).Where("status IN ?", []string{"pending", "retrying"}).Count(&queueDepth)
+	m["queue_depth"] = float64(queueDepth)
+
+	return m
+}
+
+func evaluateCond(value float64, op string, threshold float64) bool {
+	switch op {
+	case ">", "gt":
+		return value > threshold
+	case "<", "lt":
+		return value < threshold
+	case ">=", "gte":
+		return value >= threshold
+	case "<=", "lte":
+		return value <= threshold
+	case "==", "eq":
+		return value == threshold
+	default:
+		return false
+	}
 }

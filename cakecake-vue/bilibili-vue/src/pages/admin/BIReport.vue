@@ -6,6 +6,17 @@
     </header>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
+      <!-- 总览仪表盘 -->
+      <el-tab-pane label="总览" name="summary">
+        <div class="bi-summary-cards" v-if="summaryCards.length">
+          <div v-for="c in summaryCards" :key="c.key" class="bi-summary-card">
+            <span class="bi-summary-card__value">{{ fmtNum(c.value) }}</span>
+            <span class="bi-summary-card__label">{{ c.label }}</span>
+          </div>
+        </div>
+        <div class="bi-summary-update" v-if="summaryUpdated">数据更新于 {{ summaryUpdated }}</div>
+      </el-tab-pane>
+
       <!-- 分区统计 -->
       <el-tab-pane label="分区统计" name="zone">
         <div class="bi-toolbar">
@@ -87,12 +98,13 @@
             style="width: 280px"
             @change="fetchTimeSeries"
           />
-          <el-select v-model="tsMetric" size="small" style="width: 140px" @change="fetchTimeSeries">
+          <el-select v-model="tsMetric" size="small" style="width: 140px">
             <el-option label="每日播放量" value="daily_plays" />
             <el-option label="每日新用户" value="daily_users" />
             <el-option label="每日新视频" value="daily_videos" />
           </el-select>
           <el-button type="primary" size="small" @click="exportCSV('timeseries')">导出 CSV</el-button>
+          <el-button size="small" @click="serverExport('plays')">服务端导出</el-button>
         </div>
         <div class="bi-ts-chart" v-if="tsData.length > 0">
           <svg :viewBox="`0 0 ${chartW} ${tsChartH}`" class="bi-ts-svg">
@@ -130,6 +142,58 @@
             <template #default="{ row }">{{ fmtNum(row.daily_videos) }}</template>
           </el-table-column>
         </el-table>
+      </el-tab-pane>
+
+      <!-- 文章统计 -->
+      <el-tab-pane label="文章统计" name="article">
+        <div class="bi-toolbar">
+          <el-button type="primary" size="small" @click="exportCSV('article')">导出 CSV</el-button>
+        </div>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap">
+          <div style="flex: 1; min-width: 300px">
+            <h4 class="bi-subtitle">文章分类分布</h4>
+            <el-table :data="articleByCategory" stripe size="small" max-height="300">
+              <el-table-column prop="category" label="分类" />
+              <el-table-column prop="count" label="文章数" width="100" />
+            </el-table>
+          </div>
+          <div style="flex: 1; min-width: 300px">
+            <h4 class="bi-subtitle">热门文章 TOP10</h4>
+            <el-table :data="topArticles?.slice(0, 10)" stripe size="small" max-height="300">
+              <el-table-column prop="title" label="标题" show-overflow-tooltip />
+              <el-table-column label="阅读" width="80">
+                <template #default="{ row }">{{ fmtNum(row.view_count) }}</template>
+              </el-table-column>
+              <el-table-column label="评论" width="70">
+                <template #default="{ row }">{{ row.comment_count }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </el-tab-pane>
+
+      <!-- 互动统计 -->
+      <el-tab-pane label="互动统计" name="engagement">
+        <div class="bi-toolbar">
+          <el-button type="primary" size="small" @click="exportCSV('engagement')">导出 CSV</el-button>
+        </div>
+        <div class="bi-engage-cards">
+          <div class="bi-engage-card">👍 累计点赞 <b>{{ fmtNum(engageTotals.total_likes) }}</b></div>
+          <div class="bi-engage-card">⭐ 累计收藏 <b>{{ fmtNum(engageTotals.total_favs) }}</b></div>
+          <div class="bi-engage-card">🪙 视频投币 <b>{{ fmtNum(engageTotals.total_video_coins) }}</b></div>
+          <div class="bi-engage-card">📝 文章投币 <b>{{ fmtNum(engageTotals.total_article_coins) }}</b></div>
+        </div>
+        <div class="bi-ts-chart" v-if="engagementTS.length > 0">
+          <svg :viewBox="`0 0 ${chartW} ${tsChartH}`" class="bi-ts-svg">
+            <line v-for="i in 5" :key="'egl'+i" :x1="40" :y1="tsPad + (i-1)*tsStepH" :x2="chartW" :y2="tsPad + (i-1)*tsStepH" stroke="#e8e9eb" stroke-width="1" />
+            <g v-for="(series, si) in engagementTS" :key="'es'+si">
+              <polyline :points="series.points.map((p, i) => `${engX(i)},${engY(p.value, series.maxVal)}`).join(' ')" fill="none" :stroke="series.color" stroke-width="2" />
+            </g>
+          </svg>
+          <div class="bi-ts-legend">
+            <span v-for="s in engagementTS" :key="s.key" class="bi-ts-leg"><i :style="{background: s.color}"></i> {{ s.label }}</span>
+          </div>
+        </div>
       </el-tab-pane>
     </el-tabs>
 
@@ -205,6 +269,18 @@ const tsPad = 20
 const savedReports = ref([])
 const newReportName = ref('')
 
+// Summary dashboard
+const summaryCards = ref([])
+const summaryUpdated = ref('')
+
+// Article stats
+const articleByCategory = ref([])
+const topArticles = ref([])
+
+// Engagement stats
+const engagementTS = ref([])
+const engageTotals = ref({})
+
 const zoneChartH = computed(() => Math.max(120, zoneData.value.length * 36 + 20))
 const zoneBarStep = 36
 const zoneBarH = 28
@@ -252,7 +328,14 @@ async function fetchZones() {
   loading.value = true
   try {
     const d = await api('/bi/zone-stats')
-    zoneData.value = d.items || d || []
+    // Backend returns { zones: [{ zone, video_count, play_count, avg_plays_per_video }] }
+    const raw = d.zones || d.items || d || []
+    zoneData.value = raw.map(z => ({
+      zone_name: z.zone || z.zone_name,
+      video_count: z.video_count || 0,
+      avg_play_count: z.avg_plays_per_video || z.avg_play_count || 0,
+      total_play_count: z.play_count || z.total_play_count || 0,
+    }))
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -263,8 +346,22 @@ async function fetchZones() {
 async function fetchCreators() {
   loading.value = true
   try {
-    const d = await api(`/bi/creator-stats?metric=${creatorMetric.value}`)
-    creatorData.value = d.items || d || []
+    // Map frontend metric to backend dimension
+    const dimMap = { total_plays: 'play_count', total_coins: 'coin_count', fans_count: 'fan_count' }
+    const dimension = dimMap[creatorMetric.value] || 'play_count'
+    const d = await api(`/bi/creator-stats?dimension=${dimension}`)
+    // Backend returns { creators: [{ user_id, username, play_count/coin_count/fan_count }], dimension }
+    const raw = d.creators || d.items || d || []
+    creatorData.value = raw.map(c => ({
+      user_id: c.user_id,
+      nickname: c.username || c.nickname,
+      username: c.username || c.nickname,
+      total_plays: dimension === 'play_count' ? (c.play_count || 0) : 0,
+      total_coins: dimension === 'coin_count' ? (c.coin_count || 0) : 0,
+      fans_count: dimension === 'fan_count' ? (c.fan_count || 0) : 0,
+      video_count: c.video_count || 0,
+      article_count: c.article_count || 0,
+    }))
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -275,13 +372,29 @@ async function fetchCreators() {
 async function fetchTimeSeries() {
   loading.value = true
   try {
-    const params = new URLSearchParams({ metric: tsMetric.value })
-    if (tsRange.value && tsRange.value.length === 2) {
-      params.set('start_date', new Date(tsRange.value[0]).toISOString().slice(0, 10))
-      params.set('end_date', new Date(tsRange.value[1]).toISOString().slice(0, 10))
+    // Map frontend metric to backend metric name
+    const metricMap = { daily_plays: 'plays', daily_users: 'new_users', daily_videos: 'new_videos' }
+    // Fetch all three metrics in parallel and merge by date
+    const fetches = ['plays', 'new_users', 'new_videos'].map(m =>
+      api(`/bi/time-series?metric=${m}&days=30`)
+    )
+    const results = await Promise.all(fetches)
+    // results: [{ metric, granularity, points: [{date, value}] }, ...]
+    const dateMap = {}
+    results.forEach((res, idx) => {
+      const fieldName = ['daily_plays', 'daily_users', 'daily_videos'][idx]
+      const pts = res.points || res.items || res || []
+      pts.forEach(p => {
+        if (!dateMap[p.date]) {
+          dateMap[p.date] = { date: p.date, daily_plays: 0, daily_users: 0, daily_videos: 0 }
+        }
+        dateMap[p.date][fieldName] = p.value || 0
+      })
+    })
+    tsData.value = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date))
+    if (tsData.value.length > 0) {
+      tsMetric.value = 'daily_plays' // set active metric for chart
     }
-    const d = await api(`/bi/timeseries?${params}`)
-    tsData.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -296,10 +409,77 @@ async function fetchSavedReports() {
   } catch { /* ignore */ }
 }
 
+async function fetchSummary() {
+  try {
+    const d = await api('/bi/summary')
+    summaryCards.value = d.cards || []
+    summaryUpdated.value = d.updated || ''
+  } catch (e) {
+    ElMessage.error(e.message || '加载总览失败')
+  }
+}
+
+async function fetchArticleStats() {
+  loading.value = true
+  try {
+    const d = await api('/bi/article-stats?days=30')
+    articleByCategory.value = d.by_category || []
+    topArticles.value = d.top_articles || []
+  } catch (e) {
+    ElMessage.error(e.message || '加载文章统计失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchEngagementStats() {
+  loading.value = true
+  try {
+    const d = await api('/bi/engagement-stats?days=30')
+    engageTotals.value = {
+      total_likes: d.total_likes || 0,
+      total_favs: d.total_favs || 0,
+      total_video_coins: d.total_video_coins || 0,
+      total_article_coins: d.total_article_coins || 0,
+    }
+    const series = [
+      { key: 'comments', label: '评论', color: '#00a1d6', data: d.comments_ts || [] },
+      { key: 'danmaku', label: '弹幕', color: '#fb7299', data: d.danmaku_ts || [] },
+      { key: 'likes', label: '点赞', color: '#02b340', data: d.likes_ts || [] },
+      { key: 'favs', label: '收藏', color: '#e6a23c', data: d.favs_ts || [] },
+      { key: 'coins', label: '投币', color: '#909399', data: d.coins_ts || [] },
+    ]
+    engagementTS.value = series.map(s => ({
+      ...s,
+      points: s.data,
+      maxVal: Math.max(1, ...s.data.map(p => p.value || 0)),
+    }))
+  } catch (e) {
+    ElMessage.error(e.message || '加载互动统计失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function engX(idx) {
+  const s = engagementTS.value[0]
+  const n = (s?.points?.length) || 1
+  const w = chartW - 40
+  return 40 + (idx / (n - 1 || 1)) * w
+}
+
+function engY(val, max) {
+  const ratio = val / (max || 1)
+  return tsPad + (tsChartH - tsPad - 20) * (1 - ratio)
+}
+
 function onTabChange(tab) {
+  if (tab === 'summary' && summaryCards.value.length === 0) fetchSummary()
   if (tab === 'zone' && zoneData.value.length === 0) fetchZones()
   if (tab === 'creator' && creatorData.value.length === 0) fetchCreators()
   if (tab === 'timeseries' && tsData.value.length === 0) fetchTimeSeries()
+  if (tab === 'article' && articleByCategory.value.length === 0) fetchArticleStats()
+  if (tab === 'engagement' && engagementTS.value.length === 0) fetchEngagementStats()
 }
 
 async function saveReport() {
@@ -363,6 +543,20 @@ function exportCSV(type) {
       日期: t.date, 播放量: t.daily_plays, 新用户: t.daily_users, 新视频: t.daily_videos,
     }))
     filename = 'timeseries.csv'
+  } else if (type === 'article') {
+    rows = topArticles.value.map(a => ({
+      标题: a.title, 阅读量: a.view_count, 评论数: a.comment_count, 发布时间: a.created_at,
+    }))
+    filename = 'article_stats.csv'
+  } else if (type === 'engagement') {
+    if (engagementTS.value.length === 0) { ElMessage.warning('暂无互动数据'); return }
+    const first = engagementTS.value[0]
+    rows = first.points.map((p, i) => {
+      const r = { 日期: p.date || '' }
+      engagementTS.value.forEach(s => { r[s.label] = s.points[i]?.value ?? 0 })
+      return r
+    })
+    filename = 'engagement_stats.csv'
   }
   if (rows.length === 0) {
     ElMessage.warning('暂无数据可导出')
@@ -380,6 +574,16 @@ function exportCSV(type) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// Server-side export (with TaskLog tracking)
+async function serverExport(metric) {
+  try {
+    await api('/bi/export', { method: 'POST', body: { metric, days: 30 } })
+    ElMessage.success(`已触发服务端导出 (${metric})，可在任务队列查看`)
+  } catch (e) {
+    ElMessage.error(e.message || '导出失败')
+  }
 }
 
 function fmtNum(n) {
@@ -416,4 +620,19 @@ onMounted(() => {
 .bi-saved__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .bi-saved__title { margin: 0; font-size: 14px; font-weight: 600; color: #18191c; }
 .bi-saved__actions { display: flex; gap: 8px; align-items: center; }
+
+/* Summary cards */
+.bi-summary-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 12px; }
+.bi-summary-card { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px; text-align: center; }
+.bi-summary-card__value { display: block; font-size: 24px; font-weight: 700; color: #18191c; }
+.bi-summary-card__label { display: block; margin-top: 4px; font-size: 12px; color: #9499a0; }
+.bi-summary-update { font-size: 12px; color: #c9ccd0; margin-bottom: 8px; }
+
+/* Subtitle */
+.bi-subtitle { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #18191c; }
+
+/* Engagement cards */
+.bi-engage-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.bi-engage-card { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #61666d; }
+.bi-engage-card b { font-size: 18px; color: #18191c; margin-left: 6px; }
 </style>

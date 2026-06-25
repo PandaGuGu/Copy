@@ -15,6 +15,7 @@ import (
 func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Use(corsMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
+	r.Use(middleware.TraceRecordMiddleware(a.DB))
 
 	r.GET("/api/v1/health", a.Health)
 
@@ -232,6 +233,9 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 
 		// Permission-protected: dashboard.export (BI reports)
 		biOps := admin.Group("", middleware.RequirePermission(a.DB, "dashboard", "export"))
+		biOps.GET("/bi/summary", a.AdminGetBISummary)
+		biOps.GET("/bi/article-stats", a.AdminGetArticleStats)
+		biOps.GET("/bi/engagement-stats", a.AdminGetEngagementStats)
 		biOps.GET("/bi/zone-stats", a.AdminGetZoneStats)
 		biOps.GET("/bi/creator-stats", a.AdminGetCreatorStats)
 		biOps.GET("/bi/time-series", a.AdminGetTimeSeries)
@@ -269,14 +273,17 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		opsOps.POST("/ops/alert-rules/:id/toggle", a.AdminToggleAlertRule)
 		opsOps.GET("/ops/alert-records", a.AdminListAlertRecords)
 		opsOps.POST("/ops/alert-records/:id/ack", a.AdminAckAlert)
+		opsOps.POST("/ops/alerts/evaluate", a.AdminEvaluateAlerts)
+		opsOps.POST("/ops/sync/trigger", a.AdminTriggerSync)
 		opsOps.GET("/ops/health", a.AdminGetSystemHealth)
 		opsOps.GET("/ops/traces", a.AdminSearchTraces)
 		opsOps.GET("/ops/traces/:id", a.AdminGetTrace)
 		opsOps.POST("/ops/cdn/refresh", a.AdminCreateCDNRefresh)
 		opsOps.GET("/ops/cdn/refresh", a.AdminListCDNRefreshTasks)
-		opsOps.GET("/ops/oss/lifecycle", a.AdminListOSSLifecycleRules)
-		opsOps.POST("/ops/oss/lifecycle", a.AdminCreateOSSLifecycleRule)
-		opsOps.DELETE("/ops/oss/lifecycle/:id", a.AdminDeleteOSSLifecycleRule)
+		opsOps.GET("/ops/storage/lifecycle-rules", a.AdminListOSSLifecycleRules)
+		opsOps.POST("/ops/storage/lifecycle-rules", a.AdminCreateOSSLifecycleRule)
+		opsOps.PUT("/ops/storage/lifecycle-rules/:id", a.AdminUpdateOSSLifecycleRule)
+		opsOps.DELETE("/ops/storage/lifecycle-rules/:id", a.AdminDeleteOSSLifecycleRule)
 
 		// Permission-protected: config.manage
 		cfgOps := admin.Group("", middleware.RequirePermission(a.DB, "config", "manage"))

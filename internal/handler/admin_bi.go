@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/csv"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -200,8 +201,10 @@ func (a *API) AdminGetTimeSeries(c *gin.Context) {
 	})
 }
 
-// AdminExportReport POST /admin/bi/export
+// AdminExportReport POST /admin/bi/export — export report CSV with TaskLog tracking
 func (a *API) AdminExportReport(c *gin.Context) {
+	adminID, _ := middleware.AdminID(c)
+
 	var body struct {
 		Metric string `json:"metric"` // plays / new_users / new_videos
 		Days   int    `json:"days"`
@@ -214,30 +217,54 @@ func (a *API) AdminExportReport(c *gin.Context) {
 		body.Days = 30
 	}
 
+	// Create TaskLog for report_export
+	now := time.Now()
+	task := model.TaskLog{
+		TaskType:  "report_export",
+		TargetID:  adminID,
+		Status:    "running",
+		StartedAt: &now,
+	}
+	if err := a.DB.Create(&task).Error; err != nil {
+		a.Log.Warn("create report_export tasklog failed", zap.Error(err))
+	}
+
 	type point struct {
 		Date  string
 		Value int64
 	}
 	var points []point
+	var queryErr error
 
 	switch body.Metric {
 	case "new_users":
-		_ = a.DB.Model(&model.User{}).
+		queryErr = a.DB.Model(&model.User{}).
 			Select("DATE(created_at) as date, COUNT(*) as value").
 			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", body.Days).
 			Group("date").Order("date ASC").Find(&points).Error
 	case "new_videos":
-		_ = a.DB.Model(&model.Video{}).
+		queryErr = a.DB.Model(&model.Video{}).
 			Select("DATE(created_at) as date, COUNT(*) as value").
 			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", body.Days).
 			Group("date").Order("date ASC").Find(&points).Error
 	case "plays":
 		fallthrough
 	default:
-		_ = a.DB.Model(&model.Video{}).
+		queryErr = a.DB.Model(&model.Video{}).
 			Select("DATE(created_at) as date, COALESCE(SUM(play_count), 0) as value").
 			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", body.Days).
 			Group("date").Order("date ASC").Find(&points).Error
+	}
+
+	if queryErr != nil {
+		// Mark TaskLog as failed
+		a.DB.Model(&task).Updates(map[string]interface{}{
+			"status":    "failed",
+			"error_msg": fmt.Sprintf("query failed: %v", queryErr),
+			"finished_at": time.Now(),
+		})
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
 	}
 
 	var buf strings.Builder
@@ -247,6 +274,15 @@ func (a *API) AdminExportReport(c *gin.Context) {
 		_ = w.Write([]string{points[i].Date, strconv.FormatInt(points[i].Value, 10)})
 	}
 	w.Flush()
+
+	// Mark TaskLog as success
+	a.DB.Model(&task).Updates(map[string]interface{}{
+		"status":    "success",
+		"finished_at": time.Now(),
+	})
+
+	// Also record audit
+	a.recordAudit(c, adminID, "export_report", "bi_report", task.ID, fmt.Sprintf(`{"metric":"%s","days":%d,"rows":%d}`, body.Metric, body.Days, len(points)))
 
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename=report.csv")
@@ -348,4 +384,226 @@ func (a *API) AdminDeleteSavedReport(c *gin.Context) {
 
 	a.Log.Info("report deleted", zap.Uint64("report_id", id), zap.Uint64("admin_id", adminID))
 	resp.OK(c, gin.H{"status": "deleted"})
+}
+
+// ──────────────────────────────────────────────
+// BI Dashboard Summary / Article Stats / Engagement
+// ──────────────────────────────────────────────
+
+// AdminGetBISummary GET /admin/bi/summary — dashboard overview cards
+func (a *API) AdminGetBISummary(c *gin.Context) {
+	type card struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+		Value int64  `json:"value"`
+		Icon  string `json:"icon,omitempty"`
+	}
+
+	var summary struct {
+		Cards   []card `json:"cards"`
+		Updated string `json:"updated"`
+	}
+
+	// Total users
+	var totalUsers int64
+	a.DB.Model(&model.User{}).Count(&totalUsers)
+	summary.Cards = append(summary.Cards, card{Key: "total_users", Label: "注册用户", Value: totalUsers})
+
+	// Total videos (published)
+	var totalVideos int64
+	a.DB.Model(&model.Video{}).Where("status != ?", "deleted").Count(&totalVideos)
+	summary.Cards = append(summary.Cards, card{Key: "total_videos", Label: "视频总量", Value: totalVideos})
+
+	// Total articles
+	var totalArticles int64
+	a.DB.Model(&model.Article{}).Where("status != ?", "deleted").Count(&totalArticles)
+	summary.Cards = append(summary.Cards, card{Key: "total_articles", Label: "专栏文章", Value: totalArticles})
+
+	// Total comments
+	var totalComments int64
+	a.DB.Model(&model.Comment{}).Count(&totalComments)
+	summary.Cards = append(summary.Cards, card{Key: "total_comments", Label: "评论总量", Value: totalComments})
+
+	// Today's plays
+	var todayPlays int64
+	a.DB.Model(&model.VideoViewHistory{}).Where("DATE(viewed_at) = CURDATE()").Count(&todayPlays)
+	summary.Cards = append(summary.Cards, card{Key: "today_plays", Label: "今日播放", Value: todayPlays})
+
+	// Today's new users
+	var todayUsers int64
+	a.DB.Model(&model.User{}).Where("DATE(created_at) = CURDATE()").Count(&todayUsers)
+	summary.Cards = append(summary.Cards, card{Key: "today_new_users", Label: "今日新增用户", Value: todayUsers})
+
+	// Total video plays (all time)
+	var totalPlays int64
+	totalPlaysRow := a.DB.Model(&model.Video{}).Select("COALESCE(SUM(play_count), 0)").Row()
+	_ = totalPlaysRow.Scan(&totalPlays)
+	summary.Cards = append(summary.Cards, card{Key: "total_plays", Label: "累计播放", Value: totalPlays})
+
+	// Total danmaku
+	var totalDanmaku int64
+	a.DB.Model(&model.Danmaku{}).Count(&totalDanmaku)
+	summary.Cards = append(summary.Cards, card{Key: "total_danmaku", Label: "弹幕总量", Value: totalDanmaku})
+
+	// Coins in circulation (sum of all user balances)
+	var coinBalance int64
+	coinRow := a.DB.Model(&model.User{}).Select("COALESCE(SUM(coin_balance_tenths), 0)").Row()
+	_ = coinRow.Scan(&coinBalance)
+	summary.Cards = append(summary.Cards, card{Key: "coins_circulation", Label: "流通硬币 (十分之一单位)", Value: coinBalance})
+
+	summary.Updated = time.Now().Format("2006-01-02 15:04:05")
+	resp.OK(c, summary)
+}
+
+// AdminGetArticleStats GET /admin/bi/article-stats
+func (a *API) AdminGetArticleStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days < 1 || days > 365 {
+		days = 30
+	}
+
+	// Articles by category
+	type catRow struct {
+		Category string `json:"category"`
+		Count    int64  `json:"count"`
+	}
+	var byCategory []catRow
+	a.DB.Model(&model.Article{}).
+		Select("category, COUNT(*) as count").
+		Where("category != '' AND status != 'deleted'").
+		Group("category").Order("count DESC").
+		Find(&byCategory)
+
+	// Top articles by views
+	type topArticle struct {
+		ID        uint64 `json:"id"`
+		Title     string `json:"title"`
+		ViewCount int64  `json:"view_count"`
+		CommentCount int64 `json:"comment_count"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	var topArticles []topArticle
+	a.DB.Model(&model.Article{}).
+		Select("id, title, view_count, comment_count, created_at").
+		Where("status != 'deleted'").
+		Order("view_count DESC").
+		Limit(20).
+		Find(&topArticles)
+
+	// Article time series (new articles per day)
+	type point struct {
+		Date  string `json:"date"`
+		Value int64  `json:"value"`
+	}
+	var tsNewArticles []point
+	a.DB.Model(&model.Article{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&tsNewArticles)
+
+	// Article view time series
+	var tsArticleViews []point
+	a.DB.Model(&model.ArticleViewHistory{}).
+		Select("DATE(viewed_at) as date, COUNT(*) as value").
+		Where("viewed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&tsArticleViews)
+
+	resp.OK(c, gin.H{
+		"by_category":       byCategory,
+		"top_articles":      topArticles,
+		"new_articles_ts":   tsNewArticles,
+		"article_views_ts":  tsArticleViews,
+	})
+}
+
+// AdminGetEngagementStats GET /admin/bi/engagement-stats
+func (a *API) AdminGetEngagementStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days < 1 || days > 365 {
+		days = 30
+	}
+
+	type point struct {
+		Date  string `json:"date"`
+		Value int64  `json:"value"`
+	}
+
+	// Comments per day
+	var commentsTS []point
+	a.DB.Model(&model.Comment{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&commentsTS)
+
+	// Danmaku per day
+	var danmakuTS []point
+	a.DB.Model(&model.Danmaku{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&danmakuTS)
+
+	// Likes per day
+	var likesTS []point
+	a.DB.Model(&model.VideoLike{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&likesTS)
+
+	// Favorites per day
+	var favsTS []point
+	a.DB.Model(&model.VideoFavorite{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&favsTS)
+
+	// Coins per day
+	var coinsTS []point
+	a.DB.Model(&model.VideoCoin{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&coinsTS)
+
+	// Article coins per day
+	var articleCoinsTS []point
+	a.DB.Model(&model.ArticleCoin{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&articleCoinsTS)
+
+	// Follows per day
+	var followsTS []point
+	a.DB.Model(&model.UserFollow{}).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&followsTS)
+
+	// Engagement totals
+	var totalLikes, totalFavs, totalCoins, totalVideoCoins int64
+	a.DB.Model(&model.VideoLike{}).Count(&totalLikes)
+	a.DB.Model(&model.VideoFavorite{}).Count(&totalFavs)
+	a.DB.Model(&model.VideoCoin{}).Count(&totalVideoCoins)
+	a.DB.Model(&model.ArticleCoin{}).Count(&totalCoins)
+
+	resp.OK(c, gin.H{
+		"comments_ts":       commentsTS,
+		"danmaku_ts":        danmakuTS,
+		"likes_ts":          likesTS,
+		"favs_ts":           favsTS,
+		"coins_ts":          coinsTS,
+		"article_coins_ts":  articleCoinsTS,
+		"follows_ts":        followsTS,
+		"total_likes":       totalLikes,
+		"total_favs":        totalFavs,
+		"total_video_coins": totalVideoCoins,
+		"total_article_coins": totalCoins,
+	})
 }

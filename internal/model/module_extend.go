@@ -423,8 +423,8 @@ func (ReleaseRecord) TableName() string { return "release_records" }
 // CDNRefreshTask records a CDN cache purge / refresh request.
 type CDNRefreshTask struct {
 	ID          uint64    `gorm:"primaryKey"`
-	Type        string    `gorm:"size:16;not null"` // url / directory
-	Target      string    `gorm:"type:text;not null"` // URLs or directory paths
+	RefreshType string    `gorm:"size:16;not null"`  // url / directory
+	Urls        string    `gorm:"type:text;not null"` // JSON array of URLs
 	Status      string    `gorm:"size:32;not null;default:pending;index"` // pending / processing / success / failed
 	RequestedBy uint64    `gorm:"not null"`
 	FinishedAt  *time.Time
@@ -435,14 +435,17 @@ func (CDNRefreshTask) TableName() string { return "cdn_refresh_tasks" }
 
 // OSSLifecycleRule configures OSS object lifecycle management.
 type OSSLifecycleRule struct {
-	ID            uint64    `gorm:"primaryKey"`
-	Prefix        string    `gorm:"size:256;not null"` // e.g. "temp/", "originals/"
-	Action        string    `gorm:"size:32;not null"` // delete / transition_to_ia / transition_to_archive
-	Days          int       `gorm:"not null"` // age in days before action triggers
-	Enabled       bool      `gorm:"not null;default:1;index"`
-	CreatedBy     uint64    `gorm:"not null"`
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID          uint64    `gorm:"primaryKey"`
+	Name        string    `gorm:"size:80;not null"`  // human-readable rule name
+	Bucket      string    `gorm:"size:128;not null"` // OSS bucket name
+	Prefix      string    `gorm:"size:256;not null"` // e.g. "temp/", "originals/"
+	IADays      int       `gorm:"not null;default:0"`     // days before transition to IA
+	ArchiveDays int       `gorm:"not null;default:0"`     // days before transition to Archive
+	DeleteDays  int       `gorm:"not null;default:0"`     // days before deletion
+	Enabled     bool      `gorm:"not null;default:1;index"`
+	CreatedBy   uint64    `gorm:"not null"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func (OSSLifecycleRule) TableName() string { return "oss_lifecycle_rules" }
