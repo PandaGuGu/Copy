@@ -15,7 +15,7 @@
     <div class="adm-body">
       <aside class="adm-side">
         <div
-          v-for="g in groups" :key="g.key"
+          v-for="g in visibleGroups" :key="g.key"
           class="adm-side__sec"
           :class="{ 'adm-side__sec--open': isOpen(g.key) }"
         >
@@ -43,50 +43,61 @@
 <script>
 import { adminMe } from "@/api/admin";
 import { clearAdminTokens } from "@/utils/adminAuth";
+import adminHttp from "@/utils/adminHttp";
 
 const GROUPS = [
   { key:"data",  title:"数据", items:[
-    { name:"adminDashboard", label:"数据概览" },
-    { name:"adminBIReport", label:"数据报表" }
+    { name:"adminDashboard", label:"数据概览",  perm:"dashboard:view" },
+    { name:"adminBIReport", label:"数据报表",   perm:"dashboard:export" }
   ]},
   { key:"ops",   title:"运营", items:[
-    { name:"adminBanners", label:"首页轮播" },
-    { name:"adminHotSearch", label:"热搜运营" },
-    { name:"adminSpecialManage", label:"专题活动" },
-    { name:"adminDynamicManage", label:"动态管理" },
-    { name:"adminSubtitleManage", label:"字幕管理" }
+    { name:"adminBanners", label:"首页轮播",     perm:"banner:manage" },
+    { name:"adminHotSearch", label:"热搜运营",    perm:"hotsearch:manage" },
+    { name:"adminSpecialManage", label:"专题活动", perm:"special:manage" },
+    { name:"adminDynamicManage", label:"动态管理", perm:"dynamic:manage" },
+    { name:"adminSubtitleManage", label:"字幕管理", perm:"subtitle:manage" }
   ]},
   { key:"audit", title:"审核", items:[
-    { name:"adminVideoReview", label:"视频审核" },
-    { name:"adminArticleReview", label:"专栏审核" },
-    { name:"adminComments", label:"评论管理" },
-    { name:"adminReports", label:"举报处理" },
-    { name:"adminCopyrightManage", label:"版权管理" },
-    { name:"adminRiskManage", label:"风控管理" }
+    { name:"adminVideoReview", label:"视频审核",      perm:"video:approve" },
+    { name:"adminArticleReview", label:"专栏审核",     perm:"article:approve" },
+    { name:"adminComments", label:"评论管理",          perm:"comment:delete" },
+    { name:"adminReports", label:"举报处理",           perm:"report:handle" },
+    { name:"adminCopyrightManage", label:"版权管理",   perm:"copyright:handle" },
+    { name:"adminRiskManage", label:"风控管理",        perm:"risk:manage" }
   ]},
   { key:"user",  title:"用户", items:[
-    { name:"adminUsers", label:"用户管理" },
-    { name:"adminCSManage", label:"客服后台" },
-    { name:"adminTicketManage", label:"工单管理" }
+    { name:"adminUsers", label:"用户管理",     perm:"user:ban" },
+    { name:"adminCSManage", label:"客服后台",   perm:"cs:manage" },
+    { name:"adminTicketManage", label:"工单管理", perm:"ticket:handle" }
   ]},
   { key:"ai",    title:"AI", items:[
-    { name:"adminAgent", label:"AI 角色" }
+    { name:"adminAgent", label:"AI 角色",  perm:"agent:manage" }
   ]},
   { key:"sys",   title:"系统", items:[
-    { name:"adminRBACManage", label:"权限审计" },
-    { name:"adminSettings", label:"系统设置" },
-    { name:"adminConfigManage", label:"配置发布" },
-    { name:"adminOpsMonitor", label:"运维监控" }
+    { name:"adminRBACManage", label:"权限审计",  perm:"rbac:manage" },
+    { name:"adminSettings", label:"系统设置",     perm:"setting:manage" },
+    { name:"adminConfigManage", label:"配置发布", perm:"config:manage" },
+    { name:"adminOpsMonitor", label:"运维监控",   perm:"ops:manage" }
   ]}
 ];
 
 export default {
   name: 'AdminLayout',
   data() {
-    return { me: null, groups: GROUPS, open: {} };
+    return { me: null, groups: GROUPS, open: {}, perms: [] };
+  },
+  computed: {
+    visibleGroups() {
+      if (this.perms.length === 0) return this.groups; // loading
+      return this.groups.map(g => ({
+        ...g,
+        items: g.items.filter(it => this.perms.includes(it.perm))
+      })).filter(g => g.items.length > 0);
+    }
   },
   created() {
     this.loadMe();
+    this.fetchPerms();
     this.autoOpen();
   },
   watch: {
@@ -118,6 +129,12 @@ export default {
       } catch {
         this.$router.replace({ name: "adminLogin" });
       }
+    },
+    async fetchPerms() {
+      try {
+        const r = await adminHttp.get("/api/v1/admin/rbac/me/permissions");
+        this.perms = (r.data && r.data.permissions) || [];
+      } catch { /* silently fail, show all groups */ }
     },
     logout() {
       clearAdminTokens();
