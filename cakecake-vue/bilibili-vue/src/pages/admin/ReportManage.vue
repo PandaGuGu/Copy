@@ -98,30 +98,14 @@
       <el-table-column label="时间" width="150">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <template v-if="row.status === 'pending'">
-            <el-button size="small" text type="primary" @click="openHandle(row)">处理</el-button>
-            <el-popconfirm title="确认驳回？" @confirm="doHandle(row, 'dismiss', 'none')">
-              <template #reference>
-                <el-button size="small" text type="warning">驳回</el-button>
-              </template>
-            </el-popconfirm>
-            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
-              <template #reference>
-                <el-button size="small" text type="danger">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-          <template v-else>
-            <span class="rp-muted" style="margin-right:4px">{{ row.handler_note || '已完成' }}</span>
-            <el-button size="small" text type="warning" @click="doHandle(row, 'revert', 'none')">撤回</el-button>
-            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
-              <template #reference>
-                <el-button size="small" text type="danger">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
+          <el-button size="small" plain @click="doHandle(row, 'revert', 'none')">撤回</el-button>
+          <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
+            <template #reference>
+              <el-button size="small" plain>删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
