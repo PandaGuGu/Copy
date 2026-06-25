@@ -1,7 +1,7 @@
 # 运营后台 & 23 模块扩展状态
 
-> 最后更新：2026-06-24
-> 状态：P0-P2 已完成，23 模块扩展后端+前端已实施
+> 最后更新：2026-06-25
+> 状态：运维监控 5 模块全面补全（2026-06-25）
 
 ---
 
@@ -40,6 +40,23 @@
 新增路由：80+ API 端点（admin 60+ / auth 20+ / public 5+）
 
 ---
+
+## 运维监控 5 合 1 生产化（2026-06-25）
+
+| 模块 | 状态 | 生产者 | 说明 |
+|------|------|--------|------|
+| 任务队列 | ✅ | `worker/transcode.go` finishTaskLog | 转码任务生命周期写入 TaskLog |
+| 告警 | ✅ | `POST /ops/alerts/evaluate` | 指标采集+阈值比较+告警记录 |
+| 链路追踪 | ✅ | `middleware/trace.go` 全局中间件 | 自动记录 TraceRecord |
+| 系统健康 | ✅ | `GET /ops/health` 增强 | items[] 格式 + 延迟/详情 |
+| CDN / 存储 | 🟡 | CRUD 前后端已对齐 | 未对接真实 CDN/OSS 服务；字段/路径已于 2026-06-25 对齐 |
+| 告警级别 | ✅ | 阈值偏离度分级 | critical (≥2x) / warning (≥1.3x) / info，2026-06-25 修复 |
+| 生命周期 | ✅ | CRUD + PUT | 路径对齐 `/ops/storage/lifecycle-rules`，字段对齐前端 |
+| report_export TaskLog | ✅ | admin_bi.go AdminExportReport | 服务端导出自动写 TaskLog 生命周期 |
+| sync TaskLog | ✅ | admin_ops.go AdminTriggerSync | POST /ops/sync/trigger 触发 ES/播放量同步，写 TaskLog |
+| BI 总览 | ✅ | GET /bi/summary | 9 张概览卡片（用户/视频/文章/评论/播放/弹幕等） |
+| 文章统计 | ✅ | GET /bi/article-stats | 分类分布、热门文章 TOP20、时序 |
+| 互动统计 | ✅ | GET /bi/engagement-stats | 评论/弹幕/点赞/收藏/投币/关注时序+累计值 |
 
 ## 侧边栏顺序（更新）
 

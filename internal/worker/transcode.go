@@ -73,10 +73,23 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 		return
 	}
 	lg.Info("transcode job received", zap.Uint64("video_id", job.VideoID), zap.String("raw", job.RawPath))
+
+	now := time.Now()
+	taskLog := model.TaskLog{
+		TaskType:  "transcode",
+		TargetID:  job.VideoID,
+		Status:    "running",
+		StartedAt: &now,
+	}
+	if err := db.Create(&taskLog).Error; err != nil {
+		lg.Warn("tasklog create failed", zap.Error(err))
+	}
+
 	if ossClient == nil {
 		lg.Error("oss not configured, failing job", zap.Uint64("video_id", job.VideoID))
 		failVideo(db, job.VideoID, "OSS 未配置")
 		cleanupPaths(job.RawPath, job.CoverPath, "", "", "")
+		finishTaskLog(db, taskLog.ID, "failed", "OSS 未配置")
 		_ = d.Ack(false)
 		return
 	}
@@ -93,10 +106,12 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 		if ffmpeg.IsPermanentTranscodeFailure(stderr) {
 			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
 			cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+			finishTaskLog(db, taskLog.ID, "failed", strings.TrimSpace(stderr))
 			_ = d.Ack(false)
 			return
 		}
 		requeueOrFail(ctx, cfg, db, pubCh, lg, job, stderr, outMP4, coverOut)
+		finishTaskLog(db, taskLog.ID, "retrying", strings.TrimSpace(stderr))
 		_ = d.Ack(false)
 		return
 	}
@@ -118,10 +133,12 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 			if ffmpeg.IsPermanentTranscodeFailure(se) {
 				failVideo(db, job.VideoID, strings.TrimSpace(se))
 				cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+				finishTaskLog(db, taskLog.ID, "failed", strings.TrimSpace(se))
 				_ = d.Ack(false)
 				return
 			}
 			requeueOrFail(ctx, cfg, db, pubCh, lg, job, se, outMP4, coverOut)
+			finishTaskLog(db, taskLog.ID, "retrying", strings.TrimSpace(se))
 			_ = d.Ack(false)
 			return
 		}
@@ -136,8 +153,10 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	if err := ossClient.UploadFile(videoKey, outMP4); err != nil {
 		lg.Error("oss upload video", zap.Error(err))
 		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
-			// 重试仍依赖 RawPath / 用户封面：只删可再生中间产物（下一轮会重新转码 / 截帧）
 			cleanupPaths(outMP4, coverOut)
+			finishTaskLog(db, taskLog.ID, "retrying", err.Error())
+		} else {
+			finishTaskLog(db, taskLog.ID, "failed", err.Error())
 		}
 		_ = d.Ack(false)
 		return
@@ -145,7 +164,10 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	if err := ossClient.UploadFile(coverKey, finalCoverPath); err != nil {
 		lg.Error("oss upload cover", zap.Error(err))
 		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
+			finishTaskLog(db, taskLog.ID, "retrying", err.Error())
 			cleanupPaths(outMP4, coverOut)
+		} else {
+			finishTaskLog(db, taskLog.ID, "failed", err.Error())
 		}
 		_ = d.Ack(false)
 		return
@@ -170,6 +192,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	}
 	cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
 	lg.Info("transcode completed", zap.Uint64("video_id", job.VideoID))
+	finishTaskLog(db, taskLog.ID, "success", "")
 	_ = d.Ack(false)
 }
 
@@ -194,6 +217,20 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 		"status":      "failed",
 		"fail_reason": truncate(msg, 1900),
 	}).Error
+}
+
+func finishTaskLog(db *gorm.DB, taskID uint64, status, errMsg string) {
+	now := time.Now()
+	upd := map[string]interface{}{
+		"status":     status,
+		"finished_at": &now,
+	}
+	if errMsg != "" {
+		upd["error_msg"] = truncate(errMsg, 2000)
+	}
+	if err := db.Model(&model.TaskLog{}).Where("id = ?", taskID).Updates(upd).Error; err != nil {
+		logger.L.Warn("tasklog update failed", zap.Uint64("task_id", taskID), zap.Error(err))
+	}
 }
 
 func truncate(s string, n int) string {
