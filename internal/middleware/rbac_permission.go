@@ -31,9 +31,8 @@ func RequirePermission(db *gorm.DB, resource, action string) gin.HandlerFunc {
 		c.Header("X-RBAC-Check", "admin:"+fmt.Sprint(adminID)+" resource:"+resource+" action:"+action+" count:"+fmt.Sprint(count))
 
 		if count == 0 {
-			// TODO: enable when admin login uses IssueAdminPair (test tokens use MapClaims which don't match)
-			// c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 40300, "msg": "无操作权限: " + resource + "." + action})
-			// return
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 40300, "msg": "无操作权限: " + resource + "." + action})
+			return
 		}
 		c.Next()
 	}
