@@ -7,7 +7,7 @@
 
     <!-- 概览卡片 -->
     <div class="db-cards">
-      <div class="db-card">
+      <div class="db-card db-card--accent">
         <div class="db-card__value">{{ fmtNum(data.total_users) }}</div>
         <div class="db-card__label">总用户</div>
         <div class="db-card__sub">今日 +{{ fmtNum(data.today_users) }}</div>
@@ -31,13 +31,19 @@
 
     <!-- 审核队列 -->
     <div class="db-cards db-cards--review">
-      <div class="db-card db-card--warn">
+      <div class="db-card db-card--pending">
         <div class="db-card__value">{{ fmtNum(data.pending_videos) }}</div>
         <div class="db-card__label">待审视频</div>
+        <div class="db-card__indicator" v-if="data.pending_videos > 0">
+          <span class="db-card__dot"></span>需要处理
+        </div>
       </div>
-      <div class="db-card db-card--warn">
+      <div class="db-card db-card--pending">
         <div class="db-card__value">{{ fmtNum(data.pending_articles) }}</div>
         <div class="db-card__label">待审文章</div>
+        <div class="db-card__indicator" v-if="data.pending_articles > 0">
+          <span class="db-card__dot"></span>需要处理
+        </div>
       </div>
     </div>
 
@@ -47,7 +53,10 @@
       <div class="db-chart" ref="chartBox">
         <svg :viewBox="`0 0 ${chartW} ${chartH}`" class="db-chart__svg">
           <!-- grid lines -->
-          <line v-for="i in 4" :key="'gl'+i" :x1="0" :y1="chartPad + (i-1)*chartStepH" :x2="chartW" :y2="chartPad + (i-1)*chartStepH" stroke="#e8e9eb" stroke-width="1" />
+          <line v-for="i in 4" :key="'gl'+i"
+            :x1="0" :y1="chartPad + (i-1)*chartStepH"
+            :x2="chartW" :y2="chartPad + (i-1)*chartStepH"
+            stroke="#ecf0f4" stroke-width="1" />
           <!-- bars: users -->
           <g v-for="(pt, idx) in chartTrend" :key="'u'+idx">
             <rect
@@ -55,8 +64,8 @@
               :y="chartY(pt.users)"
               :width="chartStepW * 0.3"
               :height="chartH - chartPad - chartY(pt.users)"
-              fill="#00a1d6"
-              rx="2"
+              fill="url(#barGradA)"
+              rx="3"
             />
           </g>
           <!-- bars: videos -->
@@ -66,8 +75,8 @@
               :y="chartY(pt.videos)"
               :width="chartStepW * 0.3"
               :height="chartH - chartPad - chartY(pt.videos)"
-              fill="#fb7299"
-              rx="2"
+              fill="url(#barGradB)"
+              rx="3"
             />
           </g>
           <!-- x labels -->
@@ -76,10 +85,21 @@
             :y="chartH - 4"
             text-anchor="middle" font-size="11" fill="#9499a0"
           >{{ pt.date }}</text>
+          <!-- gradient defs -->
+          <defs>
+            <linearGradient id="barGradA" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#00a1d6" />
+              <stop offset="100%" stop-color="#4fc3f7" />
+            </linearGradient>
+            <linearGradient id="barGradB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#008fc5" />
+              <stop offset="100%" stop-color="#00b5e5" />
+            </linearGradient>
+          </defs>
         </svg>
         <div class="db-chart__legend">
-          <span class="db-chart__leg"><i style="background:#00a1d6"></i> 新增用户</span>
-          <span class="db-chart__leg"><i style="background:#fb7299"></i> 新增视频</span>
+          <span class="db-chart__leg"><i class="db-chart__leg--a"></i> 新增用户</span>
+          <span class="db-chart__leg"><i class="db-chart__leg--b"></i> 新增视频</span>
         </div>
       </div>
     </div>
@@ -164,21 +184,134 @@ export default {
 </script>
 
 <style scoped>
-.db-page { padding: 20px 24px; max-width: 900px; }
-.db-page__head { margin-bottom: 20px; }
-.db-page__title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #18191c; }
-.db-page__desc { margin: 0; font-size: 13px; color: #9499a0; }
-.db-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
-.db-cards--review { grid-template-columns: repeat(4, 1fr); }
-.db-card { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px 20px; }
-.db-card--warn { border-color: #ffe0b0; background: #fffaf3; }
-.db-card__value { font-size: 28px; font-weight: 700; color: #18191c; line-height: 1.2; }
-.db-card--warn .db-card__value { color: #e6a23c; }
-.db-card__label { font-size: 13px; color: #61666d; margin-top: 4px; }
-.db-card__sub { font-size: 12px; color: #9499a0; margin-top: 2px; }
-.db-chart-section { margin-top: 6px; background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px 20px; }
-.db-chart__title { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #18191c; }
-.db-chart__svg { width: 100%; height: auto; }
-.db-chart__legend { display: flex; gap: 20px; margin-top: 8px; font-size: 12px; color: #61666d; }
-.db-chart__leg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+/* ── 整体 ── */
+.db-page {
+  padding: 24px 28px;
+  max-width: 920px;
+}
+
+.db-page__head {
+  margin-bottom: 24px;
+}
+.db-page__title {
+  margin: 0 0 4px;
+  font-size: 20px; font-weight: 700;
+  color: #0d2b45;
+  letter-spacing: 0.3px;
+}
+.db-page__desc {
+  margin: 0;
+  font-size: 13px; color: #8c97a6;
+}
+
+/* ── 卡片网格 ── */
+.db-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.db-cards--review {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* ── 通用卡片 ── */
+.db-card {
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, #f4f9fd 100%);
+  border: 1px solid #dde7f0;
+  border-radius: 10px;
+  padding: 18px 22px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.db-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 161, 214, 0.08);
+  transform: translateY(-1px);
+}
+
+/* 首卡强调（总用户）使用蓝色渐变顶边 */
+.db-card--accent {
+  background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+  border-color: #c4dff5;
+}
+.db-card--accent::before {
+  content: "";
+  position: absolute; top: 0; left: 16px; right: 16px;
+  height: 3px;
+  background: linear-gradient(90deg, #00a1d6, #4fc3f7);
+  border-radius: 0 0 3px 3px;
+}
+
+/* 预警卡片 */
+.db-card--pending {
+  background: linear-gradient(135deg, #fefaf3 0%, #fff8ec 100%);
+  border-color: #f0d8a4;
+}
+.db-card--pending .db-card__value {
+  color: #c7802d;
+}
+
+.db-card__value {
+  font-size: 30px; font-weight: 700;
+  color: #0d2b45;
+  line-height: 1.1;
+}
+.db-card__label {
+  font-size: 13px; color: #5f6b7a;
+  margin-top: 6px;
+}
+.db-card__sub {
+  font-size: 12px; color: #8c97a6;
+  margin-top: 4px;
+}
+.db-card__indicator {
+  font-size: 12px; color: #b8862d;
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px;
+}
+.db-card__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #e6a23c;
+  animation: db-dot-pulse 2s infinite;
+}
+@keyframes db-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── 图表 ── */
+.db-chart-section {
+  margin-top: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fafd 100%);
+  border: 1px solid #dde7f0;
+  border-radius: 10px;
+  padding: 20px 24px;
+}
+.db-chart__title {
+  margin: 0 0 16px;
+  font-size: 14px; font-weight: 600;
+  color: #0d2b45;
+}
+.db-chart__svg {
+  width: 100%; height: auto;
+}
+.db-chart__legend {
+  display: flex; gap: 24px;
+  margin-top: 12px;
+  font-size: 12px; color: #5f6b7a;
+}
+.db-chart__leg i {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+.db-chart__leg--a {
+  background: linear-gradient(180deg, #00a1d6, #4fc3f7);
+}
+.db-chart__leg--b {
+  background: linear-gradient(180deg, #008fc5, #00b5e5);
+}
 </style>
