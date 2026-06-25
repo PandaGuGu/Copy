@@ -38,7 +38,8 @@
         <div class="rb-subsection">
           <h4 class="rb-subsection__title">管理员列表</h4>
           <div class="rb-toolbar">
-            <el-button type="primary" size="small" @click="openAssignRoleDialog(null)">分配角色</el-button>
+            <el-button type="primary" size="small" @click="openCreateAdminDialog">创建管理员</el-button>
+            <el-button size="small" @click="openAssignRoleDialog(null)">分配角色</el-button>
           </div>
           <el-table :data="adminList" stripe size="small" empty-text="暂无管理员">
             <el-table-column prop="id" label="ID" width="60" />
@@ -248,6 +249,30 @@
         <el-button type="primary" :loading="saving" @click="saveAssign">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 创建管理员弹窗 -->
+    <el-dialog v-model="createAdminVisible" title="创建管理员" width="400px" destroy-on-close>
+      <el-form label-width="70px" size="default">
+        <el-form-item label="用户名" required>
+          <el-input v-model="createAdminForm.username" placeholder="登录账号" />
+        </el-form-item>
+        <el-form-item label="密码" required>
+          <el-input v-model="createAdminForm.password" type="password" placeholder="密码" show-password />
+        </el-form-item>
+        <el-form-item label="显示名">
+          <el-input v-model="createAdminForm.display_name" placeholder="显示名称" />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="createAdminForm.role_id" placeholder="选择角色" clearable style="width: 100%">
+            <el-option v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createAdminVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="createAdmin">创建</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -335,6 +360,36 @@ const approvalFilter = reactive({ status: '' })
 // Assign role
 const assignDialogVisible = ref(false)
 const assignForm = reactive({ admin: null, role_id: null })
+
+// Create admin
+const createAdminVisible = ref(false)
+const createAdminForm = reactive({ username: '', password: '', display_name: '', role_id: null })
+
+function openCreateAdminDialog() {
+  createAdminForm.username = ''
+  createAdminForm.password = ''
+  createAdminForm.display_name = ''
+  createAdminForm.role_id = null
+  createAdminVisible.value = true
+}
+
+async function createAdmin() {
+  if (!createAdminForm.username || !createAdminForm.password) {
+    ElMessage.warning('用户名和密码不能为空')
+    return
+  }
+  saving.value = true
+  try {
+    await api('/rbac/admins', { method: 'POST', body: { ...createAdminForm } })
+    ElMessage.success('管理员创建成功')
+    createAdminVisible.value = false
+    fetchAdmins()
+  } catch (e) {
+    ElMessage.error(e.message || '创建失败')
+  } finally {
+    saving.value = false
+  }
+}
 
 async function fetchRoles() {
   loading.value = true
