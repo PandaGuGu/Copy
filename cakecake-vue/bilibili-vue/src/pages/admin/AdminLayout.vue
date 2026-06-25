@@ -14,9 +14,17 @@
     </header>
     <div class="adm-body">
       <aside class="adm-side">
-        <div v-for="g in groups" :key="g.key" class="adm-side__sec">
-          <div class="adm-side__sec-title">{{ g.title }}</div>
+        <div
+          v-for="g in groups" :key="g.key"
+          class="adm-side__sec"
+          :class="{ 'adm-side__sec--open': isOpen(g.key) }"
+        >
+          <div class="adm-side__sec-title" @click="toggle(g.key)">
+            <span>{{ g.title }}</span>
+            <span class="adm-side__sec-arrow">▾</span>
+          </div>
           <a
+            v-show="isOpen(g.key)"
             v-for="it in g.items" :key="it.name"
             href="javascript:;"
             class="adm-side__item"
@@ -75,15 +83,25 @@ const GROUPS = [
 export default {
   name: 'AdminLayout',
   data() {
-    return { me: null, groups: GROUPS };
+    return { me: null, groups: GROUPS, open: {} };
   },
   created() {
     this.loadMe();
+    this.autoOpen();
+  },
+  watch: {
+    '$route.name'() { this.autoOpen(); }
   },
   methods: {
     navigate(name) {
       if (this.$route.name === name) return;
       this.$router.push({ name });
+    },
+    isOpen(key) { return !!this.open[key]; },
+    toggle(key) { this.open[key] = !this.open[key]; },
+    autoOpen() {
+      const g = this.groups.find(g => g.items.some(it => it.name === this.$route.name));
+      if (g) this.open[g.key] = true;
     },
     async loadMe() {
       try {
@@ -127,8 +145,16 @@ export default {
 }
 .adm-side__sec { }
 .adm-side__sec-title {
-  padding:14px 16px 6px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px 6px; cursor:pointer; user-select:none;
   @include sc(12px,#9499a0); font-weight:600; letter-spacing:.5px;
+  &:hover { color:#61666d; }
+}
+.adm-side__sec-arrow {
+  font-size:10px; color:#c0c4cc; transition:transform .25s;
+}
+.adm-side__sec--open .adm-side__sec-arrow {
+  transform:rotate(-180deg);
 }
 .adm-side__item {
   display:block; padding:9px 16px 9px 28px; @include sc(13px,#61666d);
