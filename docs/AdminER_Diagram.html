@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cakecake Admin ER Diagram · 运营后台数据模型</title>
+<style>
+  :root {
+    --bg: #f8fafc; --grid: #e2e8f0; --card-bg: #ffffff;
+    --border: #e2e8f0; --text-main: #0f172a; --text-sub: #64748b;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --c-ticket: #3b82f6; --c-ticket-bg: #eff6ff;
+    --c-risk: #ef4444; --c-risk-bg: #fef2f2;
+    --c-copyright: #10b981; --c-copyright-bg: #ecfdf5;
+    --c-cs: #8b5cf6; --c-cs-bg: #f5f3ff;
+    --c-ops: #f59e0b; --c-ops-bg: #fffbeb;
+    --c-config: #06b6d4; --c-config-bg: #ecfeff;
+    --c-rbac: #64748b; --c-rbac-bg: #f1f5f9;
+    --c-bi: #ec4899; --c-bi-bg: #fdf2f8;
+    --c-special: #a855f7; --c-special-bg: #faf5ff;
+    --c-subtitle: #14b8a6; --c-subtitle-bg: #f0fdfa;
+    --c-core: #0ea5e9; --c-core-bg: #f0f9ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); font-family: 'Inter', -apple-system, sans-serif;
+    overflow: hidden; height: 100vh; display: flex; flex-direction: column;
+  }
+  .top-bar {
+    height: 56px; background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border); display: flex; align-items: center;
+    padding: 0 24px; flex-shrink: 0; z-index: 100; gap: 16px;
+  }
+  .top-bar-title { font-size: 15px; font-weight: 700; color: var(--text-main); }
+  .badge {
+    font-size: 11px; font-weight: 600; color: var(--text-sub);
+    background: #f1f5f9; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+  }
+  .canvas-container {
+    flex: 1; position: relative; overflow: auto; background-color: var(--bg);
+    background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 24px 24px;
+  }
+  .canvas { position: relative; width: 3200px; height: 2200px; }
+  .lines-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+  .card {
+    position: absolute; background: var(--card-bg); border-radius: 12px;
+    box-shadow: var(--shadow-sm); border: 1px solid var(--border); overflow: hidden;
+    z-index: 10; transition: box-shadow 0.2s, transform 0.2s; min-width: 200px;
+  }
+  .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); border-color: #cbd5e1; z-index: 20; }
+
+  .card-header { padding: 10px 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f1f5f9; }
+  .card-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+  .card-name { font-size: 12px; font-weight: 700; color: var(--text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-count { font-size: 10px; color: #94a3b8; font-weight: 600; }
+
+  .label-ticket { background: var(--c-ticket-bg); color: var(--c-ticket); }
+  .label-risk { background: var(--c-risk-bg); color: var(--c-risk); }
+  .label-copyright { background: var(--c-copyright-bg); color: var(--c-copyright); }
+  .label-cs { background: var(--c-cs-bg); color: var(--c-cs); }
+  .label-ops { background: var(--c-ops-bg); color: var(--c-ops); }
+  .label-config { background: var(--c-config-bg); color: var(--c-config); }
+  .label-rbac { background: var(--c-rbac-bg); color: var(--c-rbac); }
+  .label-bi { background: var(--c-bi-bg); color: var(--c-bi); }
+  .label-special { background: var(--c-special-bg); color: var(--c-special); }
+  .label-subtitle { background: var(--c-subtitle-bg); color: var(--c-subtitle); }
+  .label-core { background: var(--c-core-bg); color: var(--c-core); }
+
+  .card-fields { padding: 8px 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .field {
+    font-size: 10px; color: #475569; padding: 2px 6px; background: #f8fafc;
+    border: 1px solid #f1f5f9; border-radius: 5px; font-family: monospace; white-space: nowrap;
+  }
+  .field.pk { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: 600; }
+  .field.fk { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+
+  .legend {
+    position: fixed; bottom: 16px; left: 16px; background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(8px); border-radius: 10px; box-shadow: var(--shadow-md);
+    border: 1px solid var(--border); padding: 10px 14px; z-index: 200;
+    display: flex; gap: 12px; flex-wrap: wrap; max-width: 80vw;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #475569; font-weight: 600; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  .zoom-controls {
+    position: fixed; bottom: 16px; right: 16px; background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(8px); border-radius: 10px; box-shadow: var(--shadow-md);
+    border: 1px solid var(--border); display: flex; overflow: hidden; z-index: 200;
+  }
+  .zoom-btn {
+    width: 34px; height: 34px; border: none; background: transparent; cursor: pointer;
+    font-size: 15px; color: #475569; display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-btn:hover { background: #f1f5f9; }
+  .zoom-btn:not(:last-child) { border-right: 1px solid var(--border); }
+  .zoom-label { display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: #64748b; font-weight: 700; min-width: 45px; justify-content: center; border-right: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-title">cakecake 运营后台 ER 图</div>
+  <span class="badge">10 模块 · 38 张表 · Crow's Foot</span>
+</div>
+
+<div class="canvas-container" id="canvasContainer">
+  <div class="canvas" id="canvas">
+    <svg class="lines-svg" id="linesSvg"></svg>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-ticket)"></div>工单</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-risk)"></div>风控</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-copyright)"></div>版权</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-cs)"></div>客服</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-ops)"></div>运维</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-config)"></div>配置</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-rbac)"></div>RBAC</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-bi)"></div>报表</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-special)"></div>专题</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-subtitle)"></div>字幕</div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" onclick="zoomOut()">−</button>
+  <span class="zoom-label" id="zoomLabel">70%</span>
+  <button class="zoom-btn" onclick="zoomIn()">+</button>
+  <button class="zoom-btn" onclick="zoomReset()" style="font-size:10px;font-weight:700">1:1</button>
+</div>
+
+<script>
+const tables = [
+  // ── CORE (外部引用) ──
+  { id: 'admins', x: 40, y: 60, w: 200, cat:'core', fields:['id PK','username','password_hash','role','status','last_login_at'] },
+  { id: 'users', x: 40, y: 220, w: 200, cat:'core', fields:['id PK','username','email','nickname','status','banned_reason','banned_at'] },
+  { id: 'videos', x: 40, y: 440, w: 200, cat:'core', fields:['id PK','user_id FK','title','description','status','view_count','created_at'] },
+  { id: 'comments', x: 40, y: 640, w: 200, cat:'core', fields:['id PK','video_id FK','user_id FK','content','approved','created_at'] },
+  { id: 'reports', x: 40, y: 840, w: 200, cat:'core', fields:['id PK','reporter_id FK','target_type','target_id','reason_type','reason','status','handler_note'] },
+
+  // ── TICKET 工单 (6张) ──
+  { id: 'tickets', x: 300, y: 60, w: 230, cat:'ticket', fields:['id PK','reporter_id FK','assignee_id FK','category','subject','description','status','priority','sla_deadline','resolved_at'] },
+  { id: 'ticket_messages', x: 300, y: 260, w: 230, cat:'ticket', fields:['id PK','ticket_id FK','sender_id FK','sender_type','content','is_internal','created_at'] },
+  { id: 'ticket_satisfactions', x: 300, y: 460, w: 230, cat:'ticket', fields:['id PK','ticket_id FK','user_id FK','score','comment','created_at'] },
+  { id: 'cs_conversations', x: 560, y: 60, w: 230, cat:'cs', fields:['id PK','user_id FK','assignee_id FK','status','title','created_at','updated_at'] },
+  { id: 'cs_messages', x: 560, y: 260, w: 230, cat:'cs', fields:['id PK','conversation_id FK','sender_id FK','sender_type','content','type','created_at'] },
+  { id: 'cs_templates', x: 560, y: 460, w: 230, cat:'cs', fields:['id PK','created_by FK','name','category','content','is_active','created_at'] },
+
+  // ── RISK 风控 (3张) ──
+  { id: 'risk_rules', x: 300, y: 700, w: 230, cat:'risk', fields:['id PK','name','category','rule_type','pattern','action','enabled','priority','created_at'] },
+  { id: 'risk_hit_logs', x: 300, y: 920, w: 230, cat:'risk', fields:['id PK','rule_id FK','rule_name','target_id','target_type','match_text','action','created_at'] },
+  { id: 'black_white_lists', x: 300, y: 1120, w: 230, cat:'risk', fields:['id PK','list_type','target_type','target','reason','expires_at','created_at'] },
+
+  // ── COPYRIGHT 版权 (2张) ──
+  { id: 'copyright_complaints', x: 560, y: 700, w: 230, cat:'copyright', fields:['id PK','complainant_id FK','related_id','related_type','description','evidence_urls','status','handler_comment','takedown_at','restored_at'] },
+  { id: 'counter_notices', x: 560, y: 940, w: 230, cat:'copyright', fields:['id PK','complaint_id FK','user_id FK','statement','evidence_urls','contact','status','handler_note'] },
+
+  // ── BI 报表 (4张) ──
+  { id: 'saved_reports', x: 880, y: 60, w: 220, cat:'bi', fields:['id PK','admin_id FK','name','category','query_json','chart_config','created_at'] },
+  { id: 'video_daily_stats', x: 880, y: 260, w: 220, cat:'bi', fields:['id PK','video_id FK','date','play_count','created_at'] },
+  { id: 'admin_login_logs', x: 880, y: 420, w: 220, cat:'rbac', fields:['id PK','admin_id FK','username','ip','success','fail_reason','created_at'] },
+  { id: 'audit_logs', x: 880, y: 620, w: 220, cat:'rbac', fields:['id PK','admin_id FK','user_id','action','resource_type','resource_id','detail','ip_addr','created_at'] },
+
+  // ── OPS 运维 (7张) ──
+  { id: 'task_logs', x: 880, y: 840, w: 220, cat:'ops', fields:['id PK','task_name','status','message','started_at','finished_at','created_at'] },
+  { id: 'alert_rules', x: 880, y: 1040, w: 220, cat:'ops', fields:['id PK','name','metric','condition','threshold','enabled','created_at'] },
+  { id: 'alert_records', x: 880, y: 1240, w: 220, cat:'ops', fields:['id PK','rule_id FK','status','value','acknowledged_at','created_at'] },
+  { id: 'trace_records', x: 1160, y: 840, w: 220, cat:'ops', fields:['id PK','trace_id','service','endpoint','duration_ms','status_code','created_at'] },
+  { id: 'cdn_refresh_tasks', x: 1160, y: 1040, w: 220, cat:'ops', fields:['id PK','admin_id FK','urls','status','created_at'] },
+  { id: 'oss_lifecycle_rules', x: 1160, y: 1240, w: 220, cat:'ops', fields:['id PK','bucket','prefix','days_to_archive','days_to_delete','enabled'] },
+
+  // ── CONFIG 配置 (2张) ──
+  { id: 'feature_flags', x: 1160, y: 60, w: 220, cat:'config', fields:['id PK','flag_key','name','description','rollout_pct','whitelist','enabled','created_at'] },
+  { id: 'release_records', x: 1160, y: 260, w: 220, cat:'config', fields:['id PK','admin_id FK','flag_id FK','version','changes','status','created_at'] },
+
+  // ── RBAC 权限 (5张) ──
+  { id: 'admin_roles', x: 1450, y: 60, w: 220, cat:'rbac', fields:['id PK','name','display_name','description','created_at'] },
+  { id: 'admin_permissions', x: 1450, y: 260, w: 220, cat:'rbac', fields:['id PK','name','resource','action','description'] },
+  { id: 'role_permissions', x: 1450, y: 420, w: 220, cat:'rbac', fields:['id PK','role_id FK','permission_id FK'] },
+  { id: 'admin_role_assignments', x: 1450, y: 620, w: 220, cat:'rbac', fields:['id PK','admin_id FK','role_id FK','created_at'] },
+  { id: 'approval_flows', x: 1450, y: 840, w: 220, cat:'rbac', fields:['id PK','admin_id FK','action','resource','target_id','status','notes','created_at'] },
+
+  // ── SPECIAL 专题 (2张) ──
+  { id: 'special_pages', x: 1450, y: 1080, w: 220, cat:'special', fields:['id PK','title','slug','cover_url','blocks_json','status','start_at','end_at','created_at'] },
+  { id: 'campaigns', x: 1450, y: 1280, w: 220, cat:'special', fields:['id PK','title','description','cover_url','type','start_at','end_at','status','rules_json','created_at'] },
+
+  // ── SUBTITLE 字幕 (2张) ──
+  { id: 'subtitles', x: 1160, y: 460, w: 220, cat:'subtitle', fields:['id PK','video_id FK','lang','title','content','format','auto_gen','created_at'] },
+  { id: 'video_chapters', x: 1160, y: 640, w: 220, cat:'subtitle', fields:['id PK','video_id FK','title','time_sec','sort_order'] },
+];
+
+const catMap = {
+  core: {label:'Core',cls:'label-core'},
+  ticket:{label:'Ticket',cls:'label-ticket'},
+  risk:{label:'Risk',cls:'label-risk'},
+  copyright:{label:'Copyright',cls:'label-copyright'},
+  cs:{label:'CS',cls:'label-cs'},
+  ops:{label:'Ops',cls:'label-ops'},
+  config:{label:'Config',cls:'label-config'},
+  rbac:{label:'RBAC',cls:'label-rbac'},
+  bi:{label:'BI',cls:'label-bi'},
+  special:{label:'Special',cls:'label-special'},
+  subtitle:{label:'Subtitle',cls:'label-subtitle'},
+};
+
+const relations = [
+  // Reports → Copyright linkage
+  { from:'reports', to:'copyright_complaints', label:'版权举报→投诉', fc:'1', tc:'1' },
+  // Ticket chain
+  { from:'users', to:'tickets', label:'提交', fc:'1', tc:'N' },
+  { from:'tickets', to:'ticket_messages', label:'对话', fc:'1', tc:'N' },
+  { from:'tickets', to:'ticket_satisfactions', label:'评分', fc:'1', tc:'1' },
+  { from:'admins', to:'tickets', label:'指派处理', fc:'1', tc:'N' },
+  // CS chain
+  { from:'users', to:'cs_conversations', label:'发起', fc:'1', tc:'N' },
+  { from:'admins', to:'cs_conversations', label:'接入', fc:'1', tc:'N' },
+  { from:'cs_conversations', to:'cs_messages', label:'消息', fc:'1', tc:'N' },
+  // Risk
+  { from:'risk_rules', to:'risk_hit_logs', label:'命中', fc:'1', tc:'N' },
+  { from:'comments', to:'risk_hit_logs', label:'触发', fc:'1', tc:'N' },
+  // Copyright
+  { from:'users', to:'copyright_complaints', label:'投诉', fc:'1', tc:'N' },
+  { from:'videos', to:'copyright_complaints', label:'被投诉', fc:'1', tc:'N' },
+  { from:'copyright_complaints', to:'counter_notices', label:'反通知', fc:'1', tc:'1' },
+  // BI
+  { from:'admins', to:'saved_reports', label:'创建', fc:'1', tc:'N' },
+  { from:'videos', to:'video_daily_stats', label:'统计', fc:'1', tc:'N' },
+  // Ops
+  { from:'alert_rules', to:'alert_records', label:'告警', fc:'1', tc:'N' },
+  // Config
+  { from:'admins', to:'release_records', label:'发布', fc:'1', tc:'N' },
+  { from:'feature_flags', to:'release_records', label:'版本', fc:'1', tc:'N' },
+  // RBAC
+  { from:'admin_roles', to:'role_permissions', label:'权限', fc:'1', tc:'N' },
+  { from:'admin_permissions', to:'role_permissions', label:'包含', fc:'1', tc:'N' },
+  { from:'admin_roles', to:'admin_role_assignments', label:'绑定', fc:'1', tc:'N' },
+  { from:'admins', to:'admin_role_assignments', label:'拥有', fc:'1', tc:'N' },
+  // Audit
+  { from:'admins', to:'audit_logs', label:'操作', fc:'1', tc:'N' },
+  { from:'admins', to:'admin_login_logs', label:'登录', fc:'1', tc:'N' },
+  { from:'admins', to:'approval_flows', label:'审批', fc:'1', tc:'N' },
+  // Subtitle
+  { from:'videos', to:'subtitles', label:'字幕', fc:'1', tc:'N' },
+  { from:'videos', to:'video_chapters', label:'章节', fc:'1', tc:'N' },
+];
+
+// ── DOM rendering ──
+const canvas = document.getElementById('canvas');
+const svg = document.getElementById('linesSvg');
+const cardHeights = {}, cardElements = {};
+
+tables.forEach(t => {
+  const cat = catMap[t.cat] || {label:'Other',cls:'label-core'};
+  const card = document.createElement('div');
+  card.className = 'card'; card.id = 'card-'+t.id; card.dataset.id = t.id;
+  card.style.left = t.x+'px'; card.style.top = t.y+'px'; card.style.width = t.w+'px';
+
+  let fHtml = '';
+  t.fields.forEach(f => {
+    let cls = 'field', icon = '';
+    if (f.includes('PK')) { cls += ' pk'; icon = 'PK '; }
+    else if (f.includes('FK')) { cls += ' fk'; icon = 'FK '; }
+    fHtml += `<span class="${cls}">${icon}${f.replace(/ PK| FK/g,'')}</span>`;
+  });
+
+  card.innerHTML = `<div class="card-header"><span class="card-label ${cat.cls}">${cat.label}</span><span class="card-name">${t.id}</span><span class="card-count">${t.fields.length}</span></div><div class="card-fields">${fHtml}</div>`;
+  canvas.appendChild(card);
+  cardElements[t.id] = card;
+  cardHeights[t.id] = 130;
+});
+
+requestAnimationFrame(() => {
+  tables.forEach(t => { const el = cardElements[t.id]; if (el) cardHeights[t.id] = el.offsetHeight || 130; });
+  drawRelations();
+});
+
+function getEdge(rect1, rect2) {
+  const c1 = {x:rect1.x+rect1.w/2, y:rect1.y+rect1.h/2};
+  const c2 = {x:rect2.x+rect2.w/2, y:rect2.y+rect2.h/2};
+  const dx = c2.x-c1.x, dy = c2.y-c1.y;
+  let p1,p2,d1,d2;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx>0) { p1={x:rect1.x+rect1.w,y:c1.y}; p2={x:rect2.x,y:c2.y}; d1={x:1,y:0}; d2={x:-1,y:0}; }
+    else { p1={x:rect1.x,y:c1.y}; p2={x:rect2.x+rect2.w,y:c2.y}; d1={x:-1,y:0}; d2={x:1,y:0}; }
+  } else {
+    if (dy>0) { p1={x:c1.x,y:rect1.y+rect1.h}; p2={x:c2.x,y:rect2.y}; d1={x:0,y:1}; d2={x:0,y:-1}; }
+    else { p1={x:c1.x,y:rect1.y}; p2={x:c2.x,y:rect2.y+rect2.h}; d1={x:0,y:-1}; d2={x:0,y:1}; }
+  }
+  return {p1,p2,d1,d2};
+}
+
+function drawCard(svgG, x, y, dir, type) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  const a = Math.atan2(dir.y, dir.x)*180/Math.PI;
+  g.setAttribute('transform', `translate(${x},${y}) rotate(${a})`);
+  const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+  l.setAttribute('x1',0); l.setAttribute('y1',-6); l.setAttribute('x2',0); l.setAttribute('y2',6);
+  l.setAttribute('stroke','#64748b'); l.setAttribute('stroke-width','1.3'); l.setAttribute('stroke-linecap','round');
+  g.appendChild(l);
+  if (type==='N'||type==='M') {
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d','M 0,-6 L 10,0 L 0,6');
+    p.setAttribute('stroke','#64748b'); p.setAttribute('stroke-width','1.3');
+    p.setAttribute('fill','none'); p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');
+    g.appendChild(p);
+  }
+  svgG.appendChild(g);
+  return g;
+}
+
+function drawRelations() {
+  svg.innerHTML = '';
+  relations.forEach(rel => {
+    const ft = tables.find(t=>t.id===rel.from), tt = tables.find(t=>t.id===rel.to);
+    if (!ft||!tt) return;
+    const r1={x:ft.x,y:ft.y,w:ft.w,h:cardHeights[rel.from]};
+    const r2={x:tt.x,y:tt.y,w:tt.w,h:cardHeights[rel.to]};
+    const {p1,p2,d1,d2} = getEdge(r1,r2);
+    const offset = Math.max(50, Math.hypot(p2.x-p1.x, p2.y-p1.y)*0.35);
+    const cp1={x:p1.x+d1.x*offset,y:p1.y+d1.y*offset}, cp2={x:p2.x+d2.x*offset,y:p2.y+d2.y*offset};
+    const d = `M${p1.x} ${p1.y} C${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${p2.x} ${p2.y}`;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',d); path.setAttribute('stroke','#94a3b8'); path.setAttribute('stroke-width','1.5'); path.setAttribute('fill','none');
+    g.appendChild(path);
+
+    const lx=(p1.x+p2.x)/2, ly=(p1.y+p2.y)/2;
+    const tw=rel.label.length*12+20;
+    const lr = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    lr.setAttribute('x',lx-tw/2); lr.setAttribute('y',ly-11); lr.setAttribute('width',tw); lr.setAttribute('height',22);
+    lr.setAttribute('rx',11); lr.setAttribute('fill','#fff'); lr.setAttribute('stroke','#e2e8f0');
+    g.appendChild(lr);
+    const lt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lt.setAttribute('x',lx); lt.setAttribute('y',ly+4); lt.setAttribute('text-anchor','middle');
+    lt.setAttribute('font-size','10'); lt.setAttribute('font-weight','600'); lt.setAttribute('fill','#475569');
+    lt.textContent = rel.label;
+    g.appendChild(lt);
+
+    drawCard(g, p1.x+d1.x*8, p1.y+d1.y*8, d1, rel.fc);
+    drawCard(g, p2.x+d2.x*8, p2.y+d2.y*8, d2, rel.tc);
+
+    g.addEventListener('mouseenter', ()=>{
+      path.setAttribute('stroke','#3b82f6'); path.setAttribute('stroke-width','2');
+      lr.setAttribute('stroke','#3b82f6'); lr.setAttribute('fill','#eff6ff');
+      lt.setAttribute('fill','#1d4ed8');
+    });
+    g.addEventListener('mouseleave', ()=>{
+      path.setAttribute('stroke','#94a3b8'); path.setAttribute('stroke-width','1.5');
+      lr.setAttribute('stroke','#e2e8f0'); lr.setAttribute('fill','#fff');
+      lt.setAttribute('fill','#475569');
+    });
+
+    svg.appendChild(g);
+  });
+}
+
+let zoom = 0.7;
+const container = document.getElementById('canvasContainer');
+function applyZoom() { canvas.style.transform=`scale(${zoom})`; document.getElementById('zoomLabel').textContent=Math.round(zoom*100)+'%'; }
+function zoomIn(){zoom=Math.min(1.5,zoom+0.1);applyZoom();}
+function zoomOut(){zoom=Math.max(0.3,zoom-0.1);applyZoom();}
+function zoomReset(){zoom=0.7;applyZoom();}
+applyZoom();
+
+let panning=false, sx, sy;
+container.addEventListener('mousedown',e=>{
+  if (e.target===container||e.target===canvas||e.target===svg){panning=true;sx=e.clientX+container.scrollLeft;sy=e.clientY+container.scrollTop;container.style.cursor='grabbing';}
+});
+window.addEventListener('mousemove',e=>{if(!panning)return;container.scrollLeft=sx-e.clientX;container.scrollTop=sy-e.clientY;});
+window.addEventListener('mouseup',()=>{panning=false;container.style.cursor='';});
+</script>
+</body>
+</html>

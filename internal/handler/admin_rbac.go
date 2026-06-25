@@ -20,6 +20,37 @@ import (
 // Module 23: RBAC & Audit
 // ──────────────────────────────────────────────
 
+// AdminListAdmins GET /admin/rbac/admins — list all admins with their assigned roles
+func (a *API) AdminListAdmins(c *gin.Context) {
+	var admins []model.Admin
+	if err := a.DB.Select("id, username, display_name, status, last_login_at, created_at").Order("id ASC").Find(&admins).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	items := make([]gin.H, 0, len(admins))
+	for _, adm := range admins {
+		h := gin.H{
+			"id": adm.ID, "username": adm.Username, "display_name": adm.DisplayName,
+			"status": adm.Status, "created_at": adm.CreatedAt,
+		}
+		if adm.LastLoginAt != nil { h["last_login_at"] = adm.LastLoginAt }
+		// Look up assigned role
+		var assign model.AdminRoleAssignment
+		if err := a.DB.Where("admin_id = ?", adm.ID).First(&assign).Error; err == nil {
+			var role model.AdminRole
+			if err := a.DB.First(&role, assign.RoleID).Error; err == nil {
+				h["role"] = gin.H{
+					"id": role.ID, "name": role.Name,
+					"description": role.Description,
+				}
+				h["role_id"] = role.ID
+			}
+		}
+		items = append(items, h)
+	}
+	resp.OK(c, gin.H{"items": items, "total": len(items)})
+}
+
 // AdminListRoles GET /admin/rbac/roles — list roles
 func (a *API) AdminListRoles(c *gin.Context) {
 	var roles []model.AdminRole
@@ -184,7 +215,8 @@ func (a *API) AdminListPermissions(c *gin.Context) {
 }
 
 type assignPermsReq struct {
-	PermissionIDs []uint64 `json:"permission_ids"`
+	PermissionIDs  []uint64 `json:"permission_ids"`
+	PermissionCodes []string `json:"permissions"`
 }
 
 // AdminAssignRolePermissions POST /admin/rbac/roles/:id/permissions — assign permissions to role
@@ -204,6 +236,18 @@ func (a *API) AdminAssignRolePermissions(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
+	// Resolve permission codes to IDs if codes are provided
+	permIDs := req.PermissionIDs
+	if len(req.PermissionCodes) > 0 {
+		var perms []model.AdminPermission
+		if err := a.DB.Where("code IN ?", req.PermissionCodes).Find(&perms).Error; err != nil {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+		for _, p := range perms {
+			permIDs = append(permIDs, p.ID)
+		}
+	}
 	var role model.AdminRole
 	if err := a.DB.First(&role, id).Error; err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
@@ -214,13 +258,13 @@ func (a *API) AdminAssignRolePermissions(c *gin.Context) {
 		if err := tx.Where("role_id = ?", id).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
-		if len(req.PermissionIDs) == 0 {
+		if len(permIDs) == 0 {
 			return nil
 		}
 		// Deduplicate.
 		seen := map[uint64]bool{}
-		rows := make([]model.RolePermission, 0, len(req.PermissionIDs))
-		for _, pid := range req.PermissionIDs {
+		rows := make([]model.RolePermission, 0, len(permIDs))
+		for _, pid := range permIDs {
 			if pid == 0 || seen[pid] {
 				continue
 			}
@@ -236,8 +280,8 @@ func (a *API) AdminAssignRolePermissions(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.recordAudit(c, adminID, "assign_role_permissions", "role", id, `{"permission_ids_count":`+strconv.Itoa(len(req.PermissionIDs))+`}`)
-	resp.OK(c, gin.H{"id": id, "assigned": len(req.PermissionIDs)})
+	a.recordAudit(c, adminID, "assign_role_permissions", "role", id, `{"permission_ids_count":`+strconv.Itoa(len(permIDs))+`}`)
+	resp.OK(c, gin.H{"id": id, "assigned": len(permIDs)})
 }
 
 // AdminGetRolePermissions GET /admin/rbac/roles/:id/permissions — get role's permissions

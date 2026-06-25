@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"minibili/internal/errcode"
@@ -339,6 +340,11 @@ func (a *API) AdminHandleReport(c *gin.Context) {
 		return
 	}
 
+	// P0: 版权举报联动 → 自动生成版权投诉工单
+	if r.ReasonType == "copyright" && req.Action == "resolve" && r.TargetType == "video" {
+		a.autoCreateCopyrightFromReport(&r, adminID)
+	}
+
 	resp.OK(c, gin.H{"status": newStatus, "content_result": contentResult})
 }
 
@@ -590,4 +596,49 @@ func (a *API) AdminBatchHandleReports(c *gin.Context) {
 		})
 
 	resp.OK(c, gin.H{"handled": count.RowsAffected})
+}
+
+// autoCreateCopyrightFromReport creates a copyright complaint linked to a handled report.
+func (a *API) autoCreateCopyrightFromReport(r *model.Report, adminID uint64) {
+	var v model.Video
+	if a.DB.Select("id, user_id, title").First(&v, r.TargetID).Error != nil { return }
+	cp := model.CopyrightComplaint{
+		ComplainantID: r.ReporterID,
+		RelatedID:     r.TargetID,
+		RelatedType:   "video",
+		Description:   "举报联动：视频《" + truncateTitle(v.Title) + "》— " + r.ReasonDetail,
+		EvidenceURLs:  "[]",
+		Status:        "accepted",
+		HandlerID:     &adminID,
+		HandlerComment: "举报处理自动生成",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	if err := a.DB.Create(&cp).Error; err != nil {
+		a.Log.Error("auto create copyright complaint from report", zap.Error(err))
+		return
+	}
+	// Auto-takedown the video
+	_ = a.DB.Model(&v).Update("status", "takedown").Error
+	_ = a.DB.Model(&cp).Updates(map[string]interface{}{
+		"status": "takedown", "takedown_at": time.Now(),
+	}).Error
+	// Notify video owner about copyright takedown
+	a.notifyVideoOwner(v.UserID, v.ID, "版权举报处理通知", "您的视频《"+truncateTitle(v.Title)+"》因版权举报已被下架。如有异议，请通过版权投诉系统提交反通知。")
+	a.Log.Info("auto copyright takedown from report",
+		zap.Uint64("report_id", r.ID),
+		zap.Uint64("complaint_id", cp.ID),
+		zap.Uint64("video_id", r.TargetID),
+	)
+}
+
+func (a *API) notifyVideoOwner(userID, videoID uint64, title, content string) {
+	n := model.NotificationRecord{
+		RecipientID: userID, RecipientType: "user",
+		Channel: "in_app", Title: title, Content: content,
+		RelatedType: "video", RelatedID: videoID, Status: "pending",
+	}
+	if err := a.DB.Create(&n).Error; err != nil {
+		a.Log.Error("create notification failed", zap.Error(err))
+	}
 }

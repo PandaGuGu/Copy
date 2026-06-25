@@ -259,17 +259,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
 
-function getToken() { return localStorage.getItem("minibili_admin_access_token") || "" }
 async function api(path, opts = {}) {
-  const res = await fetch(ADMIN_API + path, {
-    method: opts.method || "GET",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken(), ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  })
-  const body = await res.json()
-  if (!res.ok || (body.code != null && body.code !== 0)) { throw new Error(body.msg || body.message || "请求失败") }
-  return body.data || body
+  const m = (opts.method || 'GET').toLowerCase();
+  let r;
+  if (m === 'get') r = await http.get(ADMIN_API + path);
+  else if (m === 'post') r = await http.post(ADMIN_API + path, opts.body || {});
+  else if (m === 'put') r = await http.put(ADMIN_API + path, opts.body || {});
+  else if (m === 'delete') r = await http.delete(ADMIN_API + path);
+  else r = await http.get(ADMIN_API + path);
+  return r.data;
 }
+
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -349,7 +350,7 @@ async function fetchRoles() {
 
 async function fetchAdmins() {
   try {
-    const d = await api('/admins')
+    const d = await api('/rbac/admins')
     adminList.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -409,8 +410,8 @@ async function deleteRole(row) {
 async function openPermissionDialog(row) {
   try {
     const d = await api(`/rbac/roles/${row.id}`)
-    permissionForm.role = d
-    permissionForm.permissions = d.permissions || []
+    permissionForm.role = d.role
+    permissionForm.permissions = (d.permissions || []).map(p => typeof p === 'string' ? p : p.code)
     permissionDialogVisible.value = true
   } catch (e) {
     ElMessage.error(e.message || '获取权限失败')
@@ -450,7 +451,7 @@ async function savePermissions() {
   saving.value = true
   try {
     await api(`/rbac/roles/${permissionForm.role.id}/permissions`, {
-      method: 'PUT',
+      method: 'POST',
       body: { permissions: permissionForm.permissions },
     })
     ElMessage.success('权限已更新')
@@ -474,7 +475,7 @@ async function saveAssign() {
   saving.value = true
   try {
     await api(`/rbac/admins/${assignForm.admin.id}/role`, {
-      method: 'PUT',
+      method: 'POST',
       body: { role_id: assignForm.role_id },
     })
     ElMessage.success('已分配')
@@ -518,7 +519,7 @@ async function fetchApprovals() {
   try {
     const params = new URLSearchParams()
     if (approvalFilter.status) params.set('status', approvalFilter.status)
-    const d = await api(`/rbac/approvals?${params}`)
+    const d = await api(`/rbac/approval-flows?${params}`)
     approvals.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -533,7 +534,7 @@ async function doApprove(row, approved) {
     await ElMessageBox.confirm(`确认${label}此审批？`, '提示', {
       type: approved ? 'info' : 'warning',
     })
-    await api(`/rbac/approvals/${row.id}/${approved ? 'approve' : 'reject'}`, {
+    await api(`/rbac/approval-flows/${row.id}/${approved ? 'approve' : 'reject'}`, {
       method: 'POST',
     })
     ElMessage.success(`已${label}`)

@@ -14,157 +14,32 @@
     </header>
     <div class="adm-body">
       <aside class="adm-side">
-        <router-link
-          :to="{ name: 'adminDashboard' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          数据概览
-        </router-link>
-        <router-link
-          :to="{ name: 'adminBanners' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          首页轮播
-        </router-link>
-        <router-link
-          :to="{ name: 'adminHotSearch' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          热搜运营
-        </router-link>
-        <router-link
-          :to="{ name: 'adminUsers' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          用户管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminVideoReview' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          视频审核
-        </router-link>
-        <router-link
-          :to="{ name: 'adminArticleReview' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          专栏审核
-        </router-link>
-        <router-link
-          :to="{ name: 'adminDynamicManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          动态管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminComments' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          评论管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminSettings' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          系统设置
-        </router-link>
-        <router-link
-          :to="{ name: 'adminReports' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          举报处理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminAgent' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          AI 角色
-        </router-link>
-        <!-- ─── 23-module expansion: new sidebar items ─── -->
-        <router-link
-          :to="{ name: 'adminTicketManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          工单管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminRiskManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          风控管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminCopyrightManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          版权管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminBIReport' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          数据报表
-        </router-link>
-        <router-link
-          :to="{ name: 'adminCSManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          客服后台
-        </router-link>
-        <router-link
-          :to="{ name: 'adminOpsMonitor' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          运维监控
-        </router-link>
-        <router-link
-          :to="{ name: 'adminConfigManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          配置发布
-        </router-link>
-        <router-link
-          :to="{ name: 'adminRBACManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          权限审计
-        </router-link>
-        <router-link
-          :to="{ name: 'adminSubtitleManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          字幕管理
-        </router-link>
-        <router-link
-          :to="{ name: 'adminSpecialManage' }"
-          class="adm-side__item"
-          active-class="adm-side__item--on"
-        >
-          专题活动
-        </router-link>
+        <a href="javascript:;" @click="navigate('adminDashboard')"       class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminDashboard' }" >数据概览</a>
+        <a href="javascript:;" @click="navigate('adminBanners')"         class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminBanners' }" >首页轮播</a>
+        <a href="javascript:;" @click="navigate('adminHotSearch')"       class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminHotSearch' }" >热搜运营</a>
+        <a href="javascript:;" @click="navigate('adminUsers')"           class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminUsers' }" >用户管理</a>
+        <a href="javascript:;" @click="navigate('adminVideoReview')"     class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminVideoReview' }" >视频审核</a>
+        <a href="javascript:;" @click="navigate('adminArticleReview')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminArticleReview' }" >专栏审核</a>
+        <a href="javascript:;" @click="navigate('adminDynamicManage')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminDynamicManage' }" >动态管理</a>
+        <a href="javascript:;" @click="navigate('adminComments')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminComments' }" >评论管理</a>
+        <a href="javascript:;" @click="navigate('adminSettings')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSettings' }" >系统设置</a>
+        <a href="javascript:;" @click="navigate('adminReports')"         class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminReports' }" >举报处理</a>
+        <a href="javascript:;" @click="navigate('adminAgent')"           class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminAgent' }" >AI 角色</a>
+        <a href="javascript:;" @click="navigate('adminTicketManage')"    class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminTicketManage' }" >工单管理</a>
+        <a href="javascript:;" @click="navigate('adminRiskManage')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminRiskManage' }" >风控管理</a>
+        <a href="javascript:;" @click="navigate('adminCopyrightManage')" class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminCopyrightManage' }" >版权管理</a>
+        <a href="javascript:;" @click="navigate('adminBIReport')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminBIReport' }" >数据报表</a>
+        <a href="javascript:;" @click="navigate('adminCSManage')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminCSManage' }" >客服后台</a>
+        <a href="javascript:;" @click="navigate('adminOpsMonitor')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminOpsMonitor' }" >运维监控</a>
+        <a href="javascript:;" @click="navigate('adminConfigManage')"    class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminConfigManage' }" >配置发布</a>
+        <a href="javascript:;" @click="navigate('adminRBACManage')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminRBACManage' }" >权限审计</a>
+        <a href="javascript:;" @click="navigate('adminSubtitleManage')"  class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSubtitleManage' }" >字幕管理</a>
+        <a href="javascript:;" @click="navigate('adminSpecialManage')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSpecialManage' }" >专题活动</a>
       </aside>
       <main class="adm-main">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <component :is="Component" :key="$route.fullPath" />
+        </router-view>
       </main>
     </div>
   </div>
@@ -175,6 +50,7 @@ import { adminMe } from "@/api/admin";
 import { clearAdminTokens } from "@/utils/adminAuth";
 
 export default {
+  name: 'AdminLayout',
   data() {
     return {
       me: null
@@ -183,7 +59,33 @@ export default {
   created() {
     this.loadMe();
   },
+  watch: {
+    '$route.fullPath': {
+      handler() {
+        this.$nextTick(() => {
+          this.$forceUpdate();
+        });
+      },
+      immediate: false
+    }
+  },
   methods: {
+    navigate(name) {
+      // 路由名称 → 路径映射
+      const routes = {
+        adminDashboard: 'dashboard', adminBanners: 'banners', adminHotSearch: 'hot-search',
+        adminUsers: 'users', adminVideoReview: 'video-review', adminArticleReview: 'article-review',
+        adminDynamicManage: 'dynamic-manage', adminComments: 'comments', adminSettings: 'settings',
+        adminReports: 'reports', adminAgent: 'agent',
+        adminTicketManage: 'tickets', adminRiskManage: 'risk', adminCopyrightManage: 'copyright',
+        adminBIReport: 'bi', adminCSManage: 'cs', adminOpsMonitor: 'ops',
+        adminConfigManage: 'config', adminRBACManage: 'rbac',
+        adminSubtitleManage: 'subtitles', adminSpecialManage: 'specials'
+      };
+      const path = routes[name] || 'dashboard';
+      location.hash = '#/admin/' + path;
+      location.reload();
+    },
     async loadMe() {
       try {
         const body = await adminMe();
