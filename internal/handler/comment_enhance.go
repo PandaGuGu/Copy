@@ -100,6 +100,13 @@ func (a *API) PostCommentWithImage(c *gin.Context) {
 		return
 	}
 
+	// P0: 风控扫描
+	if a.ScanContentRisk("comment", cm.ID, content) {
+		_ = a.DB.Delete(&cm).Error
+		resp.Err(c, http.StatusForbidden, errcode.CodeParamError)
+		return
+	}
+
 	// Handle image upload if present
 	file, err := c.FormFile("image")
 	if err == nil && file != nil {

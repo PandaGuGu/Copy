@@ -135,6 +135,22 @@ func main() {
 		log.Info("transcode consumer disabled (rabbitmq unavailable)")
 	}
 
+	// P0: SLA worker — scan stale tickets every 60s
+	go func() {
+		t := time.NewTicker(60 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done(): return
+			case <-t.C:
+				// open > 2h → escalate priority
+				db.Exec("UPDATE tickets SET priority = 'urgent' WHERE status = 'open' AND updated_at < ?", time.Now().Add(-2*time.Hour))
+				// open > 48h → auto close
+				db.Exec("UPDATE tickets SET status = 'closed' WHERE status = 'open' AND updated_at < ?", time.Now().Add(-48*time.Hour))
+			}
+		}
+	}()
+
 	pc := &service.PlayCounter{Rdb: rdb, DB: db}
 	go func() {
 		t := time.NewTicker(10 * time.Second)

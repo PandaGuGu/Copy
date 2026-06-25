@@ -73,7 +73,7 @@ func (a *API) AdminListVideos(c *gin.Context) {
 	if pageSize < 1 || pageSize > 50 {
 		pageSize = 20
 	}
-	statusQ := c.DefaultQuery("status", "pending_review")
+	statusQ := c.DefaultQuery("status", "")
 	titleQ := strings.TrimSpace(c.Query("q"))
 
 	q := a.DB.Model(&model.Video{})

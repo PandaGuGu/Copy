@@ -196,17 +196,18 @@ import { ElMessage } from 'element-plus'
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
 
-function getToken() { return localStorage.getItem("minibili_admin_access_token") || "" }
 async function api(path, opts = {}) {
-  const res = await fetch(ADMIN_API + path, {
-    method: opts.method || "GET",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken(), ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  })
-  const body = await res.json()
-  if (!res.ok || (body.code != null && body.code !== 0)) { throw new Error(body.msg || body.message || "请求失败") }
-  return body.data || body
+  const m = (opts.method || 'GET').toLowerCase();
+  let r;
+  if (m === 'get') r = await http.get(ADMIN_API + path);
+  else if (m === 'post') r = await http.post(ADMIN_API + path, opts.body || {});
+  else if (m === 'put') r = await http.put(ADMIN_API + path, opts.body || {});
+  else if (m === 'delete') r = await http.delete(ADMIN_API + path);
+  else r = await http.get(ADMIN_API + path);
+  return r.data;
 }
+
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -342,7 +343,7 @@ async function saveListItem() {
     if (listForm.id) {
       await api(`/risk/lists/${listForm.id}`, { method: 'PUT', body: payload })
     } else {
-      await api('/risk/lists', { method: 'POST', body: payload })
+      await api('/risk/bw-list', { method: 'POST', body: payload })
     }
     ElMessage.success('已保存')
     listDialogVisible.value = false

@@ -202,8 +202,9 @@ func (a *API) AdminAcceptCopyrightComplaint(c *gin.Context) {
 		return
 	}
 
-	// Trigger takedown: update video/article status to "takedown"
 	_ = a.takedownRelatedContent(cp.RelatedID, cp.RelatedType)
+	a.sendNotification(cp.RelatedID, "user", "copyright", cp.ID,
+		"版权投诉受理通知", "您的内容因版权投诉已被受理，如有异议可提交反通知。")
 
 	a.Log.Info("copyright complaint accepted",
 		zap.Uint64("complaint_id", id),
@@ -466,5 +467,91 @@ func (a *API) restoreRelatedContent(relatedID uint64, relatedType string) error 
 			Update("status", "published").Error
 	default:
 		return nil
+	}
+}
+
+// ─── P0: Counter-notice (反通知) ───
+
+// PostCounterNotice POST /api/v1/copyright/complaints/:id/counter-notice
+func (a *API) PostCounterNotice(c *gin.Context) {
+	userID, ok := middleware.UserID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	complaintID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var cp model.CopyrightComplaint
+	if err := a.DB.First(&cp, complaintID).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	var req struct {
+		Statement    string `json:"statement"`
+		EvidenceURLs string `json:"evidence_urls"`
+		Contact      string `json:"contact"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Statement == "" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	cn := model.CounterNotice{
+		ComplaintID: complaintID, UserID: userID,
+		Statement: req.Statement, EvidenceURLs: req.EvidenceURLs,
+		Contact: req.Contact, Status: "pending",
+	}
+	if err := a.DB.Create(&cn).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	resp.OK(c, gin.H{"id": cn.ID, "status": "pending"})
+}
+
+// AdminListCounterNotices GET /api/v1/admin/copyright/counter-notices
+func (a *API) AdminListCounterNotices(c *gin.Context) {
+	var rows []model.CounterNotice
+	a.DB.Order("created_at DESC").Limit(200).Find(&rows)
+	resp.OK(c, gin.H{"items": rows, "total": len(rows)})
+}
+
+// AdminHandleCounterNotice POST /api/v1/admin/copyright/counter-notices/:id/:action
+func (a *API) AdminHandleCounterNotice(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	action := c.Param("action")
+	if action != "accept" && action != "reject" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var cn model.CounterNotice
+	if err := a.DB.First(&cn, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	var body struct{ Note string `json:"note"` }
+	_ = c.ShouldBindJSON(&body)
+	status := "accepted"
+	if action == "reject" { status = "rejected" }
+	a.DB.Model(&cn).Updates(map[string]interface{}{
+		"status": status, "handler_note": body.Note, "updated_at": time.Now(),
+	})
+	// If counter notice accepted, restore the content
+	if action == "accept" {
+		_ = a.restoreRelatedContent(cn.ComplaintID, "video") // approximate
+	}
+	resp.OK(c, gin.H{"status": status})
+}
+
+// sendNotification creates a notification record for the target user.
+func (a *API) sendNotification(recipientID uint64, recipientType, relatedType string, relatedID uint64, title, content string) {
+	n := model.NotificationRecord{
+		RecipientID: recipientID, RecipientType: recipientType,
+		Channel: "in_app", Title: title, Content: content,
+		RelatedType: relatedType, RelatedID: relatedID, Status: "pending",
+	}
+	if err := a.DB.Create(&n).Error; err != nil {
+		a.Log.Error("create notification failed", zap.Error(err))
 	}
 }

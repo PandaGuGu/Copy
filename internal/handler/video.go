@@ -234,6 +234,9 @@ func (a *API) UploadVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	// P0: 风控扫描视频标题+简介
+	a.ScanContentRisk("video", v.ID, v.Title+" "+v.Description)
+
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
 	if a.MQ != nil {

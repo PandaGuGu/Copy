@@ -117,6 +117,18 @@ type TicketMessage struct {
 
 func (TicketMessage) TableName() string { return "ticket_messages" }
 
+// TicketSatisfaction records user rating after ticket resolution.
+type TicketSatisfaction struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	TicketID  uint64    `gorm:"uniqueIndex;not null" json:"ticket_id"`
+	UserID    uint64    `gorm:"index;not null" json:"user_id"`
+	Score     int       `gorm:"not null" json:"score"`
+	Comment   string    `gorm:"type:text" json:"comment,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (TicketSatisfaction) TableName() string { return "ticket_satisfactions" }
+
 // ──────────────────────────────────────────────
 // Module 14: Risk Control & Ban Management
 // ──────────────────────────────────────────────
@@ -200,6 +212,44 @@ type CopyrightComplaint struct {
 }
 
 func (CopyrightComplaint) TableName() string { return "copyright_complaints" }
+
+// CounterNotice is filed by the accused party to dispute a copyright complaint.
+type CounterNotice struct {
+	ID           uint64    `gorm:"primaryKey" json:"id"`
+	ComplaintID  uint64    `gorm:"index;not null" json:"complaint_id"`
+	UserID       uint64    `gorm:"index;not null" json:"user_id"`
+	Statement    string    `gorm:"type:text;not null" json:"statement"`
+	EvidenceURLs string    `gorm:"type:text" json:"evidence_urls,omitempty"`
+	Contact      string    `gorm:"size:200" json:"contact,omitempty"`
+	Status       string    `gorm:"size:32;not null;default:pending" json:"status"` // pending/accepted/rejected
+	HandlerNote  string    `gorm:"size:500" json:"handler_note,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (CounterNotice) TableName() string { return "counter_notices" }
+
+// ──────────────────────────────────────────────
+// Notification system (admin → user / admin → admin)
+// ──────────────────────────────────────────────
+
+// NotificationRecord tracks admin-originated notifications across modules.
+type NotificationRecord struct {
+	ID            uint64     `gorm:"primaryKey" json:"id"`
+	RecipientID   uint64     `gorm:"index;not null" json:"recipient_id"`
+	RecipientType string     `gorm:"size:16;not null;default:user" json:"recipient_type"` // user / admin
+	Channel       string     `gorm:"size:16;not null;default:in_app" json:"channel"`      // in_app / email
+	Title         string     `gorm:"size:200;not null" json:"title"`
+	Content       string     `gorm:"type:text;not null" json:"content"`
+	RelatedType   string     `gorm:"size:32" json:"related_type,omitempty"` // copyright / ticket / report / ban
+	RelatedID     uint64     `gorm:"index" json:"related_id,omitempty"`
+	Status        string     `gorm:"size:16;not null;default:pending" json:"status"` // pending / sent / read
+	SentAt        *time.Time `json:"sent_at,omitempty"`
+	ReadAt        *time.Time `json:"read_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+func (NotificationRecord) TableName() string { return "notification_records" }
 
 // ──────────────────────────────────────────────
 // Module 16: BI / Statistics Report

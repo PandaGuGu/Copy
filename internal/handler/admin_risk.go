@@ -465,3 +465,31 @@ func (a *API) AdminDeleteBWEntry(c *gin.Context) {
 
 	resp.OK(c, nil)
 }
+
+// ─── P0: 风控执行引擎 ───
+
+// ScanContentRisk checks text against all enabled risk rules and logs hits.
+func (a *API) ScanContentRisk(targetType string, targetID uint64, text string) bool {
+	if text == "" { return false }
+	var rules []model.RiskRule
+	if err := a.DB.Where("enabled = 1").Order("priority DESC").Find(&rules).Error; err != nil {
+		return false
+	}
+	for _, r := range rules {
+		if r.Pattern == "" { continue }
+		matched := strings.Contains(strings.ToLower(text), strings.ToLower(r.Pattern))
+		if !matched { continue }
+		a.DB.Create(&model.RiskHitLog{
+			RuleID: r.ID, RuleName: r.Name,
+			TargetID: targetID, TargetType: targetType,
+			MatchText: text[:min(len(text), 200)], Action: r.Action,
+		})
+		if r.Action == "reject" || r.Action == "auto_ban" {
+			return true
+		}
+		if r.Action == "quarantine" && targetType == "comment" {
+			a.DB.Model(&model.Comment{}).Where("id = ?", targetID).Update("approved", false)
+		}
+	}
+	return false
+}

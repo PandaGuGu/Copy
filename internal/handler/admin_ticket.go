@@ -761,6 +761,44 @@ func (a *API) AppealTicket(c *gin.Context) {
 	resp.OK(c, gin.H{"ticket_id": id, "status": "reopened"})
 }
 
+// PostTicketSatisfaction POST /api/v1/tickets/:id/satisfaction
+func (a *API) PostTicketSatisfaction(c *gin.Context) {
+	userID, _ := middleware.UserID(c)
+	if userID == 0 {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var t model.Ticket
+	if err := a.DB.Where("id = ? AND reporter_id = ?", id, userID).First(&t).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	if t.Status != "resolved" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var req struct {
+		Score   int    `json:"score"`
+		Comment string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Score < 1 || req.Score > 5 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	s := model.TicketSatisfaction{TicketID: id, UserID: userID, Score: req.Score, Comment: req.Comment}
+	if err := a.DB.Create(&s).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	a.DB.Model(&t).Update("status", "closed")
+	resp.OK(c, gin.H{"id": s.ID})
+}
+
 // ---------- shared helpers ----------
 
 func loadUserBrief(db *gorm.DB, userID uint64) gin.H {

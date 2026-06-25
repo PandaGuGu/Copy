@@ -172,16 +172,15 @@ import { ElMessage } from 'element-plus'
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
 
-function getToken() { return localStorage.getItem("minibili_admin_access_token") || "" }
 async function api(path, opts = {}) {
-  const res = await fetch(ADMIN_API + path, {
-    method: opts.method || "GET",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken(), ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  })
-  const body = await res.json()
-  if (!res.ok || (body.code != null && body.code !== 0)) { throw new Error(body.msg || body.message || "请求失败") }
-  return body.data || body
+  const m = (opts.method || 'GET').toLowerCase()
+  let r
+  if (m === 'get') r = await http.get(ADMIN_API + path)
+  else if (m === 'post') r = await http.post(ADMIN_API + path, opts.body || {})
+  else if (m === 'put') r = await http.put(ADMIN_API + path, opts.body || {})
+  else if (m === 'delete') r = await http.delete(ADMIN_API + path)
+  else r = await http.get(ADMIN_API + path)
+  return r.data
 }
 
 const loading = ref(false)
@@ -252,7 +251,7 @@ const tsMetricLabel = computed(() => ({
 async function fetchZones() {
   loading.value = true
   try {
-    const d = await api('/bi/zones')
+    const d = await api('/bi/zone-stats')
     zoneData.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -264,7 +263,7 @@ async function fetchZones() {
 async function fetchCreators() {
   loading.value = true
   try {
-    const d = await api(`/bi/creators?metric=${creatorMetric.value}`)
+    const d = await api(`/bi/creator-stats?metric=${creatorMetric.value}`)
     creatorData.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -347,7 +346,7 @@ function loadReport(row) {
 }
 
 function exportCSV(type) {
-  let r; ows = []
+  let rows = []
   let filename = ''
   if (type === 'zone') {
     rows = zoneData.value.map(z => ({

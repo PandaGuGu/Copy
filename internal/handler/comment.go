@@ -196,6 +196,12 @@ func (a *API) PostComment(c *gin.Context) {
 		cm.Approved = false
 	}
 	if approved {
+		// P0: 风控扫描 — 命中 reject 规则则拒绝评论
+		if a.ScanContentRisk("comment", cm.ID, content) {
+			_ = a.DB.Delete(&cm).Error
+			resp.Err(c, http.StatusForbidden, errcode.CodeParamError)
+			return
+		}
 		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("comment_count", gorm.Expr("comment_count + ?", 1)).Error
 	}
 	if parentID == 0 && uid != v.UserID {

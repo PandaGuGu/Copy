@@ -95,6 +95,9 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.VideoDailyStat{},
 		&model.RiskHitLog{},
 		&model.AdminLoginLog{},
+		&model.TicketSatisfaction{},
+		&model.CounterNotice{},
+		&model.NotificationRecord{},
 	); err != nil {
 		return err
 	}

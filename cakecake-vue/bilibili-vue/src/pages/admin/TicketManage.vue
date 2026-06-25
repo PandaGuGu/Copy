@@ -295,7 +295,7 @@ async function openDetail(row) {
     // load admin list for assignment
     if (adminList.value.length === 0) {
       try {
-        const ad = await api('/admins')
+        const ad = await api('/rbac/admins')
         adminList.value = ad.items || ad || []
       } catch { /* ignore */ }
     }
