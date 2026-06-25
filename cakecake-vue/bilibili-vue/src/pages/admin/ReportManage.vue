@@ -100,16 +100,16 @@
       </el-table-column>
       <el-table-column label="操作" width="80" fixed="right">
         <template #default="{ row }">
-          <template v-if="row.status === 'pending'">
-            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
-              <template #reference>
-                <el-button size="small" plain>删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-          <template v-else>
-            <el-button size="small" plain @click="doHandle(row, 'revert', 'none')">撤回</el-button>
-          </template>
+          <el-button
+            v-if="row.status === 'pending'"
+            size="small" plain
+            @click="confirmDelete(row.id)"
+          >删除</el-button>
+          <el-button
+            v-else
+            size="small" plain
+            @click="doHandle(row, 'revert', 'none')"
+          >撤回</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -331,6 +331,16 @@ export default {
       } catch (e) {
         ElMessage.error((e && e.message) || "删除失败");
       }
+    },
+    async confirmDelete(id) {
+      try {
+        await ElMessageBox.confirm("确认删除此记录？不可恢复", "删除确认", {
+          confirmButtonText: "删除",
+          cancelButtonText: "取消",
+          type: "warning",
+        });
+      } catch { return; }
+      this.doDelete(id);
     },
     typeLabel(t) {
       return { video: "视频", article: "文章", dynamic: "动态", comment: "评论", user: "用户" }[t] || t;
