@@ -107,16 +107,21 @@
                 <el-button size="small" text type="warning">驳回</el-button>
               </template>
             </el-popconfirm>
+            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
+              <template #reference>
+                <el-button size="small" text type="danger">删除</el-button>
+              </template>
+            </el-popconfirm>
           </template>
           <template v-else>
-            <span class="rp-muted" style="margin-right:6px">{{ row.handler_note || '已完成' }}</span>
+            <span class="rp-muted" style="margin-right:4px">{{ row.handler_note || '已完成' }}</span>
             <el-button size="small" text type="warning" @click="doHandle(row, 'revert', 'none')">撤回</el-button>
+            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
+              <template #reference>
+                <el-button size="small" text type="danger">删除</el-button>
+              </template>
+            </el-popconfirm>
           </template>
-          <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
-            <template #reference>
-              <el-button size="small" text type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
