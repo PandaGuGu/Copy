@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"minibili/internal/errcode"
@@ -322,6 +323,70 @@ func (a *API) AdminGetRolePermissions(c *gin.Context) {
 		},
 		"permissions": items,
 	})
+}
+
+type createAdminReq struct {
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	DisplayName string `json:"display_name"`
+	RoleID      uint64 `json:"role_id"`
+}
+
+// AdminCreateAdmin POST /admin/rbac/admins — create new admin account
+func (a *API) AdminCreateAdmin(c *gin.Context) {
+	curAdminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	var req createAdminReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if req.Username == "" || req.Password == "" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	// Check uniqueness
+	var exist int64
+	a.DB.Model(&model.Admin{}).Where("username = ?", req.Username).Count(&exist)
+	if exist > 0 {
+		resp.Err(c, http.StatusConflict, errcode.CodeParamError)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		a.Log.Error("create admin hash", zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	admin := model.Admin{
+		Username:     req.Username,
+		PasswordHash: string(hash),
+		DisplayName:  req.DisplayName,
+		Status:       "active",
+	}
+	if err := a.DB.Create(&admin).Error; err != nil {
+		a.Log.Error("create admin", zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	// Assign role if specified
+	if req.RoleID > 0 {
+		var role model.AdminRole
+		if a.DB.First(&role, req.RoleID).Error == nil {
+			a.DB.Create(&model.AdminRoleAssignment{AdminID: admin.ID, RoleID: req.RoleID})
+		}
+	}
+
+	a.recordAudit(c, curAdminID, "create_admin", "admin", admin.ID, `{"username":"`+admin.Username+`"}`)
+	resp.OK(c, gin.H{"id": admin.ID, "username": admin.Username, "display_name": admin.DisplayName})
 }
 
 type assignAdminRoleReq struct {

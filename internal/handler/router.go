@@ -241,6 +241,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.POST("/rbac/admins/:adminId/role", a.AdminAssignAdminRole)
 		admin.GET("/rbac/admins/:adminId/role", a.AdminGetAdminRole)
 		admin.GET("/rbac/admins", a.AdminListAdmins)
+		admin.POST("/rbac/admins", a.AdminCreateAdmin)
 		admin.GET("/rbac/audit-logs", a.AdminListAuditLogs)
 		admin.GET("/rbac/audit-logs/:id", a.AdminGetAuditLog)
 		admin.GET("/rbac/login-logs", a.AdminListLoginLogs)
