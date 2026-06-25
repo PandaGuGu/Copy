@@ -37,8 +37,10 @@
         <a href="javascript:;" @click="navigate('adminSpecialManage')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSpecialManage' }" >专题活动</a>
       </aside>
       <main class="adm-main">
-        <router-view v-slot="{ Component }">
-          <component :is="Component" :key="$route.fullPath" />
+        <router-view v-slot="{ Component, route }">
+          <transition name="adm-page" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </transition>
         </router-view>
       </main>
     </div>
@@ -59,32 +61,10 @@ export default {
   created() {
     this.loadMe();
   },
-  watch: {
-    '$route.fullPath': {
-      handler() {
-        this.$nextTick(() => {
-          this.$forceUpdate();
-        });
-      },
-      immediate: false
-    }
-  },
   methods: {
     navigate(name) {
-      // 路由名称 → 路径映射
-      const routes = {
-        adminDashboard: 'dashboard', adminBanners: 'banners', adminHotSearch: 'hot-search',
-        adminUsers: 'users', adminVideoReview: 'video-review', adminArticleReview: 'article-review',
-        adminDynamicManage: 'dynamic-manage', adminComments: 'comments', adminSettings: 'settings',
-        adminReports: 'reports', adminAgent: 'agent',
-        adminTicketManage: 'tickets', adminRiskManage: 'risk', adminCopyrightManage: 'copyright',
-        adminBIReport: 'bi', adminCSManage: 'cs', adminOpsMonitor: 'ops',
-        adminConfigManage: 'config', adminRBACManage: 'rbac',
-        adminSubtitleManage: 'subtitles', adminSpecialManage: 'specials'
-      };
-      const path = routes[name] || 'dashboard';
-      location.hash = '#/admin/' + path;
-      location.reload();
+      if (this.$route.name === name) return;
+      this.$router.push({ name });
     },
     async loadMe() {
       try {
@@ -175,5 +155,24 @@ export default {
 .adm-main {
   flex: 1;
   min-width: 0;
+}
+
+/* ── 页面切换过渡动画 ── */
+.adm-page-enter-active,
+.adm-page-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.adm-page-enter-from {
+  opacity: 0;
+  transform: translateX(12px);
+}
+.adm-page-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+/* 侧栏 active 态过渡 */
+.adm-side__item {
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
 </style>
