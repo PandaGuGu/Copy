@@ -111,6 +111,11 @@
           <span v-else class="rp-muted">
             {{ row.handler_note || '已完成' }}
             <el-button size="small" text type="warning" @click="doHandle(row, 'revert', 'none')" style="margin-left:4px">撤回</el-button>
+            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
+              <template #reference>
+                <el-button size="small" text type="danger" style="margin-left:4px">删除</el-button>
+              </template>
+            </el-popconfirm>
           </span>
         </template>
       </el-table-column>
@@ -184,7 +189,7 @@
 
 <script>
 import { ElMessage, ElMessageBox } from "element-plus";
-import { adminListReports, adminHandleReport } from "@/api/admin";
+import { adminListReports, adminHandleReport, adminDeleteReport } from "@/api/admin";
 import adminHttp from "@/utils/adminHttp";
 
 const reasonIcons = {
@@ -323,6 +328,15 @@ export default {
         ElMessage.error((e && e.message) || "操作失败");
       } finally {
         this.handling = false;
+      }
+    },
+    async doDelete(id) {
+      try {
+        await adminDeleteReport(id);
+        ElMessage.success("已删除");
+        this.fetch();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "删除失败");
       }
     },
     typeLabel(t) {
