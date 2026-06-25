@@ -52,6 +52,22 @@ func (a *API) AdminListAdmins(c *gin.Context) {
 	resp.OK(c, gin.H{"items": items, "total": len(items)})
 }
 
+// AdminGetMyPermissions GET /admin/rbac/me/permissions — current admin's permission codes
+func (a *API) AdminGetMyPermissions(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	var codes []string
+	a.DB.Raw(`SELECT DISTINCT ap.code
+		FROM admin_role_assignments ara
+		JOIN role_permissions rp ON rp.role_id = ara.role_id
+		JOIN admin_permissions ap ON ap.id = rp.permission_id
+		WHERE ara.admin_id = ?`, adminID).Scan(&codes)
+	resp.OK(c, gin.H{"permissions": codes})
+}
+
 // AdminListRoles GET /admin/rbac/roles — list roles
 func (a *API) AdminListRoles(c *gin.Context) {
 	var roles []model.AdminRole
