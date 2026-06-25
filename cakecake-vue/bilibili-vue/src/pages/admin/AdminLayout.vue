@@ -14,27 +14,30 @@
     </header>
     <div class="adm-body">
       <aside class="adm-side">
-        <a href="javascript:;" @click="navigate('adminDashboard')"       class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminDashboard' }" >数据概览</a>
-        <a href="javascript:;" @click="navigate('adminBanners')"         class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminBanners' }" >首页轮播</a>
-        <a href="javascript:;" @click="navigate('adminHotSearch')"       class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminHotSearch' }" >热搜运营</a>
-        <a href="javascript:;" @click="navigate('adminUsers')"           class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminUsers' }" >用户管理</a>
-        <a href="javascript:;" @click="navigate('adminVideoReview')"     class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminVideoReview' }" >视频审核</a>
-        <a href="javascript:;" @click="navigate('adminArticleReview')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminArticleReview' }" >专栏审核</a>
-        <a href="javascript:;" @click="navigate('adminDynamicManage')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminDynamicManage' }" >动态管理</a>
-        <a href="javascript:;" @click="navigate('adminComments')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminComments' }" >评论管理</a>
-        <a href="javascript:;" @click="navigate('adminSettings')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSettings' }" >系统设置</a>
-        <a href="javascript:;" @click="navigate('adminReports')"         class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminReports' }" >举报处理</a>
-        <a href="javascript:;" @click="navigate('adminAgent')"           class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminAgent' }" >AI 角色</a>
-        <a href="javascript:;" @click="navigate('adminTicketManage')"    class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminTicketManage' }" >工单管理</a>
-        <a href="javascript:;" @click="navigate('adminRiskManage')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminRiskManage' }" >风控管理</a>
-        <a href="javascript:;" @click="navigate('adminCopyrightManage')" class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminCopyrightManage' }" >版权管理</a>
-        <a href="javascript:;" @click="navigate('adminBIReport')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminBIReport' }" >数据报表</a>
-        <a href="javascript:;" @click="navigate('adminCSManage')"        class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminCSManage' }" >客服后台</a>
-        <a href="javascript:;" @click="navigate('adminOpsMonitor')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminOpsMonitor' }" >运维监控</a>
-        <a href="javascript:;" @click="navigate('adminConfigManage')"    class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminConfigManage' }" >配置发布</a>
-        <a href="javascript:;" @click="navigate('adminRBACManage')"      class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminRBACManage' }" >权限审计</a>
-        <a href="javascript:;" @click="navigate('adminSubtitleManage')"  class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSubtitleManage' }" >字幕管理</a>
-        <a href="javascript:;" @click="navigate('adminSpecialManage')"   class="adm-side__item" :class="{ 'adm-side__item--on': $route.name === 'adminSpecialManage' }" >专题活动</a>
+        <div
+          v-for="group in groups"
+          :key="group.key"
+          class="adm-side__group"
+          :class="{ 'adm-side__group--open': isGroupOpen(group) }"
+        >
+          <div class="adm-side__group-hd" @click="toggleGroup(group.key)">
+            <span class="adm-side__group-icon">{{ group.icon }}</span>
+            <span class="adm-side__group-label">{{ group.title }}</span>
+            <span class="adm-side__group-arrow">▾</span>
+          </div>
+          <transition name="adm-group-slide">
+            <div v-if="isGroupOpen(group)" class="adm-side__group-bd">
+              <a
+                v-for="item in group.items"
+                :key="item.name"
+                href="javascript:;"
+                class="adm-side__item"
+                :class="{ 'adm-side__item--on': $route.name === item.name }"
+                @click="navigate(item.name)"
+              >{{ item.label }}</a>
+            </div>
+          </transition>
+        </div>
       </aside>
       <main class="adm-main">
         <router-view v-slot="{ Component, route }">
@@ -51,20 +54,98 @@
 import { adminMe } from "@/api/admin";
 import { clearAdminTokens } from "@/utils/adminAuth";
 
+const GROUPS = [
+  {
+    key: "data", icon: "📊", title: "数据",
+    items: [
+      { name: "adminDashboard", label: "数据概览" },
+      { name: "adminBIReport", label: "数据报表" }
+    ]
+  },
+  {
+    key: "ops", icon: "📢", title: "运营",
+    items: [
+      { name: "adminBanners", label: "首页轮播" },
+      { name: "adminHotSearch", label: "热搜运营" },
+      { name: "adminSpecialManage", label: "专题活动" },
+      { name: "adminDynamicManage", label: "动态管理" },
+      { name: "adminSubtitleManage", label: "字幕管理" }
+    ]
+  },
+  {
+    key: "audit", icon: "🛡️", title: "审核",
+    items: [
+      { name: "adminVideoReview", label: "视频审核" },
+      { name: "adminArticleReview", label: "专栏审核" },
+      { name: "adminComments", label: "评论管理" },
+      { name: "adminReports", label: "举报处理" },
+      { name: "adminCopyrightManage", label: "版权管理" },
+      { name: "adminRiskManage", label: "风控管理" }
+    ]
+  },
+  {
+    key: "user", icon: "👤", title: "用户",
+    items: [
+      { name: "adminUsers", label: "用户管理" },
+      { name: "adminCSManage", label: "客服后台" },
+      { name: "adminTicketManage", label: "工单管理" }
+    ]
+  },
+  {
+    key: "ai", icon: "🤖", title: "AI",
+    items: [
+      { name: "adminAgent", label: "AI 角色" }
+    ]
+  },
+  {
+    key: "sys", icon: "⚙️", title: "系统",
+    items: [
+      { name: "adminRBACManage", label: "权限审计" },
+      { name: "adminSettings", label: "系统设置" },
+      { name: "adminConfigManage", label: "配置发布" },
+      { name: "adminOpsMonitor", label: "运维监控" }
+    ]
+  }
+];
+
 export default {
   name: 'AdminLayout',
   data() {
     return {
-      me: null
+      me: null,
+      groups: GROUPS,
+      expanded: {}
     };
   },
   created() {
     this.loadMe();
+    // 初始化：当前路由所在分組默认展开
+    this.syncExpanded();
+  },
+  watch: {
+    '$route.name'() {
+      this.syncExpanded();
+    }
   },
   methods: {
     navigate(name) {
       if (this.$route.name === name) return;
       this.$router.push({ name });
+    },
+    getGroupByRoute() {
+      return this.groups.find(g => g.items.some(it => it.name === this.$route.name));
+    },
+    syncExpanded() {
+      const g = this.getGroupByRoute();
+      if (g) {
+        this.$set(this.expanded, g.key, true);
+      }
+    },
+    isGroupOpen(group) {
+      return !!this.expanded[group.key];
+    },
+    toggleGroup(key) {
+      this.$set(this.expanded, key, !this.expanded[key]);
     },
     async loadMe() {
       try {
@@ -102,25 +183,15 @@ export default {
   display: flex;
   align-items: center;
   gap: 10px;
-  img {
-    height: 24px;
-  }
-  strong {
-    @include sc(15px, $blue);
-  }
+  img { height: 24px; }
+  strong { @include sc(15px, $blue); }
 }
 .adm-header__right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: flex; align-items: center; gap: 16px;
   @include sc(13px, #61666d);
 }
-.adm-header__link {
-  color: $blue;
-  &:hover {
-    color: #00b5e5;
-  }
-}
+.adm-header__link { color: $blue; &:hover { color: #00b5e5; } }
+
 .adm-body {
   display: flex;
   max-width: 1200px;
@@ -128,51 +199,93 @@ export default {
   padding: 20px 16px 40px;
   gap: 16px;
 }
+
+/* ── 侧栏 ── */
 .adm-side {
-  width: 160px;
-  flex-shrink: 0;
+  width: 190px; flex-shrink: 0;
   background: $white;
   border-radius: 8px;
-  padding: 8px 0;
   border: 1px solid #e3e5e7;
   height: fit-content;
+  overflow: hidden;
+  padding-bottom: 6px;
+}
+
+/* 分组 */
+.adm-side__group { }
+
+.adm-side__group-hd {
+  display: flex; align-items: center;
+  padding: 14px 16px 10px;
+  cursor: pointer; user-select: none;
+  transition: background 0.15s;
+  &:hover { background: #f6f7f8; }
+}
+.adm-side__group-icon {
+  font-size: 14px; width: 22px; text-align: center;
+}
+.adm-side__group-label {
+  flex: 1;
+  @include sc(13px, #9499a0);
+  font-weight: 600; letter-spacing: 0.5px;
+}
+.adm-side__group-arrow {
+  @include sc(10px, #c0c4cc);
+  transition: transform 0.25s ease;
+}
+.adm-side__group--open .adm-side__group-arrow {
+  transform: rotate(-180deg);
+  color: $blue;
+}
+.adm-side__group--open .adm-side__group-label {
+  color: #61666d;
+}
+
+/* 子项 */
+.adm-side__group-bd {
+  overflow: hidden;
 }
 .adm-side__item {
   display: block;
-  padding: 12px 20px;
-  @include sc(14px, #61666d);
+  padding: 10px 16px 10px 40px;
+  @include sc(13px, #61666d);
+  transition: color 0.2s, background 0.2s;
   &:hover {
     color: $blue;
     background: #f6f7f8;
   }
 }
 .adm-side__item--on {
-  color: $blue;
-  font-weight: 600;
+  color: $blue; font-weight: 600;
   background: #e3f3ff;
   border-right: 3px solid $blue;
 }
-.adm-main {
-  flex: 1;
-  min-width: 0;
+
+/* 分组展开/折叠动画 */
+.adm-group-slide-enter-active,
+.adm-group-slide-leave-active {
+  transition: all 0.25s ease;
+  max-height: 500px;
+}
+.adm-group-slide-enter-from,
+.adm-group-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
-/* ── 页面切换过渡动画 ── */
+.adm-main {
+  flex: 1; min-width: 0;
+}
+
+/* ── 页面切换过渡 ── */
 .adm-page-enter-active,
 .adm-page-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .adm-page-enter-from {
-  opacity: 0;
-  transform: translateX(12px);
+  opacity: 0; transform: translateX(12px);
 }
 .adm-page-leave-to {
-  opacity: 0;
-  transform: translateX(-12px);
-}
-
-/* 侧栏 active 态过渡 */
-.adm-side__item {
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  opacity: 0; transform: translateX(-12px);
 }
 </style>
