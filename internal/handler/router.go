@@ -106,6 +106,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		rOps := admin.Group("", middleware.RequirePermission(a.DB, "ticket", "handle"))
 		rOps.POST("/reports/:id/handle", a.AdminHandleReport)
 		rOps.POST("/reports/batch", a.AdminBatchHandleReports)
+		rOps.DELETE("/reports/:id", a.AdminDeleteReport)
 
 		// Permission-protected: article.approve
 		aOps := admin.Group("", middleware.RequirePermission(a.DB, "article", "approve"))

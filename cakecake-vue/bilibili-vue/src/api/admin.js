@@ -265,3 +265,7 @@ export function adminHandleReport(id, payload) {
 export function adminBatchHandleReports(payload) {
   return adminHttp.post("/api/v1/admin/reports/batch", payload);
 }
+
+export function adminDeleteReport(id) {
+  return adminHttp.delete(`/api/v1/admin/reports/${id}`);
+}

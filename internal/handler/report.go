@@ -598,6 +598,34 @@ func (a *API) AdminBatchHandleReports(c *gin.Context) {
 	resp.OK(c, gin.H{"handled": count.RowsAffected})
 }
 
+// AdminDeleteReport DELETE /api/v1/admin/reports/:id
+func (a *API) AdminDeleteReport(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	var r model.Report
+	if err := a.DB.First(&r, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	if err := a.DB.Delete(&r).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	adminID, _ := middleware.AdminID(c)
+	a.Log.Info("admin delete report",
+		zap.Uint64("report_id", id),
+		zap.Uint64("admin_id", adminID),
+	)
+
+	resp.OK(c, gin.H{"deleted": id})
+}
+
 // autoCreateCopyrightFromReport creates a copyright complaint linked to a handled report.
 func (a *API) autoCreateCopyrightFromReport(r *model.Report, adminID uint64) {
 	var v model.Video
