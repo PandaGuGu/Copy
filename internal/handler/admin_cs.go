@@ -51,17 +51,39 @@ func (a *API) AdminListCSConversations(c *gin.Context) {
 		return
 	}
 
-	// Batch load user names
-	uids := make([]uint64, 0, len(rows))
+	// Batch load user & admin info
+	uidSet := make(map[uint64]bool)
+	aidSet := make(map[uint64]bool)
 	for i := range rows {
-		uids = append(uids, rows[i].UserID)
+		uidSet[rows[i].UserID] = true
+		if rows[i].AdminID != nil {
+			aidSet[*rows[i].AdminID] = true
+		}
 	}
-	userNameMap := make(map[uint64]string, len(uids))
-	if len(uids) > 0 {
-		var users []model.User
-		_ = a.DB.Select("id, username, nickname").Where("id IN ?", uids).Find(&users).Error
-		for i := range users {
-			userNameMap[users[i].ID] = model.DisplayUsername(&users[i])
+
+	type brief struct {
+		ID       uint64
+		Username string
+		Nickname string
+	}
+	var uList []brief
+	userBriefs := make(map[uint64]gin.H)
+	if len(uidSet) > 0 {
+		uidList := make([]uint64, 0, len(uidSet))
+		for id := range uidSet { uidList = append(uidList, id) }
+		_ = a.DB.Model(&model.User{}).Select("id, username, nickname").Where("id IN ?", uidList).Find(&uList).Error
+		for _, u := range uList {
+			userBriefs[u.ID] = gin.H{"id": u.ID, "username": u.Username, "nickname": u.Nickname}
+		}
+	}
+	var aList []brief
+	adminBriefs := make(map[uint64]gin.H)
+	if len(aidSet) > 0 {
+		aidList := make([]uint64, 0, len(aidSet))
+		for id := range aidSet { aidList = append(aidList, id) }
+		_ = a.DB.Model(&model.Admin{}).Select("id, username, display_name").Where("id IN ?", aidList).Find(&aList).Error
+		for _, a := range aList {
+			adminBriefs[a.ID] = gin.H{"id": a.ID, "username": a.Username, "nickname": a.Nickname}
 		}
 	}
 
@@ -71,8 +93,9 @@ func (a *API) AdminListCSConversations(c *gin.Context) {
 		h := gin.H{
 			"id":         conv.ID,
 			"user_id":    conv.UserID,
-			"username":   userNameMap[conv.UserID],
+			"user":       userBriefs[conv.UserID],
 			"admin_id":   conv.AdminID,
+			"admin":      convAdminBrief(adminBriefs, conv.AdminID),
 			"ticket_id":  conv.TicketID,
 			"status":     conv.Status,
 			"created_at": conv.CreatedAt,
@@ -80,8 +103,11 @@ func (a *API) AdminListCSConversations(c *gin.Context) {
 		}
 		// Message count
 		var msgCount int64
+		var lastMsg struct{ Content string }
 		_ = a.DB.Model(&model.CSMessage{}).Where("conversation_id = ?", conv.ID).Count(&msgCount).Error
+		_ = a.DB.Model(&model.CSMessage{}).Select("content").Where("conversation_id = ?", conv.ID).Order("created_at DESC").Limit(1).Scan(&lastMsg).Error
 		h["message_count"] = msgCount
+		h["last_message"] = lastMsg.Content
 		items = append(items, h)
 	}
 
@@ -111,6 +137,15 @@ func (a *API) AdminGetCSConversation(c *gin.Context) {
 	var u model.User
 	_ = a.DB.Select("id, username, nickname, avatar_url").First(&u, conv.UserID).Error
 
+	// Load admin info if assigned
+	adminBrief := gin.H(nil)
+	if conv.AdminID != nil {
+		var adm model.Admin
+		if a.DB.Select("id, username, display_name").First(&adm, *conv.AdminID).Error == nil {
+			adminBrief = gin.H{"id": adm.ID, "username": adm.Username, "nickname": adm.DisplayName}
+		}
+	}
+
 	// Load messages
 	var msgs []model.CSMessage
 	_ = a.DB.Where("conversation_id = ?", id).Order("created_at ASC").Find(&msgs).Error
@@ -120,6 +155,7 @@ func (a *API) AdminGetCSConversation(c *gin.Context) {
 			"id":          msgs[i].ID,
 			"sender_id":   msgs[i].SenderID,
 			"sender_type": msgs[i].SenderType,
+			"is_admin":    msgs[i].SenderType == "admin",
 			"content":     msgs[i].Content,
 			"created_at":  msgs[i].CreatedAt,
 		})
@@ -134,6 +170,7 @@ func (a *API) AdminGetCSConversation(c *gin.Context) {
 			"avatar_url": u.AvatarURL,
 		},
 		"admin_id":  conv.AdminID,
+		"admin":     adminBrief,
 		"ticket_id": conv.TicketID,
 		"status":    conv.Status,
 		"messages":  msgItems,
@@ -202,6 +239,10 @@ func (a *API) AdminSendCSMessage(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
+	if conv.Status == "closed" {
+		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
+		return
+	}
 
 	msg := model.CSMessage{
 		ConversationID: id,
@@ -216,15 +257,27 @@ func (a *API) AdminSendCSMessage(c *gin.Context) {
 		return
 	}
 
-	// Update conversation timestamp and set to active if not already
-	a.DB.Model(&conv).Updates(map[string]interface{}{
+	// Update conversation timestamp and set to active if not already.
+	// Auto-assign to the responding admin if unassigned.
+	updates := map[string]interface{}{
 		"updated_at": time.Now(),
 		"status":     "active",
-	})
+	}
+	if conv.AdminID == nil {
+		updates["admin_id"] = adminID
+	}
+	a.DB.Model(&conv).Updates(updates)
 
 	a.Log.Info("cs admin message sent",
 		zap.Uint64("conversation_id", id),
 		zap.Uint64("message_id", msg.ID))
+
+	// Push real-time notification to user
+	a.pushCSNotification(conv.UserID, "new_message", gin.H{
+		"conversation_id": id,
+		"message":         gin.H{"id": msg.ID, "content": truncateText(body.Content, 60), "sender_type": "admin", "created_at": msg.CreatedAt},
+	})
+
 	resp.OK(c, gin.H{"id": msg.ID, "created_at": msg.CreatedAt})
 }
 
@@ -253,12 +306,42 @@ func (a *API) AdminCloseCSConversation(c *gin.Context) {
 	}
 
 	a.Log.Info("cs conversation closed", zap.Uint64("conversation_id", id))
+
+	// Push real-time notification
+	a.pushCSNotification(conv.UserID, "conversation_closed", gin.H{
+		"conversation_id": id,
+	})
+
 	resp.OK(c, gin.H{"status": "closed"})
 }
 
-// ──────────────────────────────────────────────
-// CS template admin handlers
-// ──────────────────────────────────────────────
+// pushCSNotification sends a real-time notification to a user via ChatHub.
+func (a *API) pushCSNotification(userID uint64, eventType string, data gin.H) {
+	if a.ChatHub == nil || userID == 0 {
+		return
+	}
+	a.ChatHub.PushJSON(userID, gin.H{
+		"type": "cs_" + eventType,
+		"data": data,
+	})
+}
+
+// truncateText truncates text to maxLen characters, adding "..." if truncated.
+func truncateText(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
+// convAdminBrief safely extracts admin brief from map, handling nil AdminID.
+func convAdminBrief(m map[uint64]gin.H, adminID *uint64) gin.H {
+	if adminID == nil {
+		return nil
+	}
+	return m[*adminID]
+}
 
 // AdminListCSTemplates GET /admin/cs/templates
 func (a *API) AdminListCSTemplates(c *gin.Context) {

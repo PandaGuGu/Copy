@@ -31,7 +31,8 @@ func (a *API) AdminListAdmins(c *gin.Context) {
 	items := make([]gin.H, 0, len(admins))
 	for _, adm := range admins {
 		h := gin.H{
-			"id": adm.ID, "username": adm.Username, "display_name": adm.DisplayName,
+			"id": adm.ID, "username": adm.Username,
+			"nickname": adm.DisplayName, "display_name": adm.DisplayName,
 			"status": adm.Status, "created_at": adm.CreatedAt,
 		}
 		if adm.LastLoginAt != nil { h["last_login_at"] = adm.LastLoginAt }

@@ -42,7 +42,7 @@
 
 <script>
 import { adminMe } from "@/api/admin";
-import { clearAdminTokens } from "@/utils/adminAuth";
+import { clearAdminTokens, setAdminPerms } from "@/utils/adminAuth";
 import adminHttp from "@/utils/adminHttp";
 
 const GROUPS = [
@@ -84,11 +84,11 @@ const GROUPS = [
 export default {
   name: 'AdminLayout',
   data() {
-    return { me: null, groups: GROUPS, open: {}, perms: [] };
+    return { me: null, groups: GROUPS, open: {}, perms: [], permsLoaded: false };
   },
   computed: {
     visibleGroups() {
-      if (this.perms.length === 0) return this.groups; // loading
+      if (!this.permsLoaded) return this.groups; // still loading → show all initially
       return this.groups.map(g => ({
         ...g,
         items: g.items.filter(it => this.perms.includes(it.perm))
@@ -134,7 +134,11 @@ export default {
       try {
         const r = await adminHttp.get("/api/v1/admin/rbac/me/permissions");
         this.perms = (r.data && r.data.permissions) || [];
-      } catch { /* silently fail, show all groups */ }
+        setAdminPerms(this.perms); // sync to localStorage for route guards
+      } catch {
+        this.perms = [];
+      }
+      this.permsLoaded = true;
     },
     logout() {
       clearAdminTokens();

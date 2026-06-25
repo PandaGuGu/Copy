@@ -252,6 +252,11 @@ func (a *API) AdminRejectCopyrightComplaint(c *gin.Context) {
 	a.Log.Info("copyright complaint rejected",
 		zap.Uint64("complaint_id", id),
 		zap.Uint64("admin_id", adminID))
+	a.sendNotification(cp.ComplainantID, "user", "copyright", cp.ID,
+		"版权投诉处理结果", "您的版权投诉已被驳回" + func() string {
+			if body.Comment != "" { return "：" + body.Comment }
+			return "。如有疑问请联系客服。"
+		}())
 	resp.OK(c, gin.H{"status": "rejected"})
 }
 
@@ -281,6 +286,13 @@ func (a *API) AdminTakedownContent(c *gin.Context) {
 		"takedown_at": now,
 		"updated_at":  now,
 	})
+
+	// Notify content owner
+	ownerID := a.getContentOwnerID(cp.RelatedID, cp.RelatedType)
+	if ownerID > 0 {
+		a.sendNotification(ownerID, "user", "copyright", cp.ID,
+			"内容下架通知", "您的"+cp.RelatedType+"因版权投诉已被下架。如有异议可提交反通知。")
+	}
 
 	a.Log.Info("content takedown executed",
 		zap.Uint64("complaint_id", id),
@@ -315,6 +327,13 @@ func (a *API) AdminRestoreContent(c *gin.Context) {
 		"restored_at": now,
 		"updated_at":  now,
 	})
+
+	// Notify content owner
+	ownerID := a.getContentOwnerID(cp.RelatedID, cp.RelatedType)
+	if ownerID > 0 {
+		a.sendNotification(ownerID, "user", "copyright", cp.ID,
+			"内容恢复通知", "您的"+cp.RelatedType+"已被恢复。")
+	}
 
 	a.Log.Info("content restored",
 		zap.Uint64("complaint_id", id),
@@ -517,7 +536,22 @@ func (a *API) AdminListCounterNotices(c *gin.Context) {
 	resp.OK(c, gin.H{"items": rows, "total": len(rows)})
 }
 
-// AdminHandleCounterNotice POST /api/v1/admin/copyright/counter-notices/:id/:action
+// getContentOwnerID returns the uploader/author ID for a published piece of content.
+func (a *API) getContentOwnerID(relatedID uint64, relatedType string) uint64 {
+	switch relatedType {
+	case "video":
+		var v model.Video
+		if err := a.DB.Select("user_id").First(&v, relatedID).Error; err == nil {
+			return v.UserID
+		}
+	case "article":
+		var ar model.Article
+		if err := a.DB.Select("user_id").First(&ar, relatedID).Error; err == nil {
+			return ar.UserID
+		}
+	}
+	return 0
+}
 func (a *API) AdminHandleCounterNotice(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	action := c.Param("action")
@@ -544,7 +578,7 @@ func (a *API) AdminHandleCounterNotice(c *gin.Context) {
 	resp.OK(c, gin.H{"status": status})
 }
 
-// sendNotification creates a notification record for the target user.
+// sendNotification creates a notification record and pushes it via WebSocket.
 func (a *API) sendNotification(recipientID uint64, recipientType, relatedType string, relatedID uint64, title, content string) {
 	n := model.NotificationRecord{
 		RecipientID: recipientID, RecipientType: recipientType,
@@ -553,5 +587,16 @@ func (a *API) sendNotification(recipientID uint64, recipientType, relatedType st
 	}
 	if err := a.DB.Create(&n).Error; err != nil {
 		a.Log.Error("create notification failed", zap.Error(err))
+		return
+	}
+	// Push real-time via WebSocket if user is connected
+	if a.ChatHub != nil {
+		a.ChatHub.PushJSON(recipientID, gin.H{
+			"type": "notification",
+			"data": gin.H{
+				"id": n.ID, "title": title, "content": content,
+				"related_type": relatedType, "related_id": relatedID,
+			},
+		})
 	}
 }

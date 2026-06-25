@@ -152,6 +152,15 @@ func main() {
 		}
 	}()
 
+	// P2: Subtitle ASR worker — auto-transcribe subtitles (mock backend by default)
+	asrWorker := &worker.SubtitleASRWorker{
+		Cfg:        cfg,
+		DB:         db,
+		Log:        log,
+		Transcribe: worker.NewMockTranscriber(log),
+	}
+	go asrWorker.Start(ctx)
+
 	pc := &service.PlayCounter{Rdb: rdb, DB: db}
 	go func() {
 		t := time.NewTicker(10 * time.Second)

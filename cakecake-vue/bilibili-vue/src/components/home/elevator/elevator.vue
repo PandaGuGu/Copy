@@ -1,12 +1,8 @@
 <template>
-  <div
-    class="report-wrap-module elevator-module"
-    :class="{ dragging: isDragging }"
-    :style="elevatorStyle"
-    @mousedown="startDrag"
-  >
-    <div class="nav-bg">
-      <div class="tips-img"></div>
+  <div class="report-wrap-module elevator-module">
+    <div class="cs-btn-wrap" @click.stop="goCustomerService" title="客服中心">
+      <div class="cs-btn-icon">🎧</div>
+      <span class="cs-btn-text">客服</span>
     </div>
     <div class="nav-list">
       <div class="item online-stats" v-if="online">
@@ -46,41 +42,10 @@ export default {
       vm.setScrollTop(scrollTop);
     };
   },
-  mounted() {
-    // 从 localStorage 恢复位置
-    const saved = localStorage.getItem("elevator_pos");
-    if (saved) {
-      try {
-        const pos = JSON.parse(saved);
-        this.posTop = pos.top;
-        this.posRight = pos.right;
-      } catch (e) {}
-    }
-    document.addEventListener("mousemove", this.onDrag);
-    document.addEventListener("mouseup", this.stopDrag);
-  },
-  beforeDestroy() {
-    document.removeEventListener("mousemove", this.onDrag);
-    document.removeEventListener("mouseup", this.stopDrag);
-  },
   components: {},
   props: {},
   computed: {
     ...mapGetters(["module", "online"]),
-    elevatorStyle() {
-      if (this.isDragging) {
-        return {
-          top: this.posTop + "px",
-          right: this.posRight + "px",
-          cursor: "move",
-          userSelect: "none"
-        };
-      }
-      return {
-        top: this.posTop + "px",
-        right: this.posRight + "px"
-      };
-    },
     activeTab() {
       let one = this.module.map((v, index) => {
         return this.scrollTop + 100 > v.offsetTop ? index : null;
@@ -91,77 +56,72 @@ export default {
   },
   data() {
     return {
-      scrollTop: 0,
-      isDragging: false,
-      dragStartX: 0,
-      dragStartY: 0,
-      dragOffsetX: 0,
-      dragOffsetY: 0,
-      posTop: 232,
-      posRight: 20
+      scrollTop: 0
     };
   },
   methods: {
     ...mapMutations({
       setScrollTop: "SET_SCROLL_TOP"
     }),
-    startDrag(e) {
-      // 只响应左键
-      if (e.button !== 0) return;
-      this.isDragging = true;
-      this.dragStartX = e.clientX;
-      this.dragStartY = e.clientY;
-      this.dragOffsetX = this.posRight;
-      this.dragOffsetY = this.posTop;
-      e.preventDefault();
-    },
-    onDrag(e) {
-      if (!this.isDragging) return;
-      const dx = this.dragStartX - e.clientX;
-      const dy = e.clientY - this.dragStartY;
-      this.posRight = Math.max(0, this.dragOffsetX + dx);
-      this.posTop = Math.max(0, this.dragOffsetY + dy);
-    },
-    stopDrag() {
-      if (!this.isDragging) return;
-      this.isDragging = false;
-      // 保存位置到 localStorage
-      localStorage.setItem(
-        "elevator_pos",
-        JSON.stringify({ top: this.posTop, right: this.posRight })
-      );
-    },
     goTop() {
       window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     },
     refreshPage() {
-      // 刷新首页：重新加载视频流
       this.$emit("refresh");
-      // 如果没用到事件，直接刷新路由
       if (this.$route.name === "home") {
         this.$router.go(0);
       }
     },
     goPosition(index) {
       document.documentElement.scrollTop = this.module[index].offsetTop - 30;
+    },
+    goCustomerService() {
+      this.$router.push("/customer-service");
     }
   }
 };
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="scss">
 @import "../../../style/mixin";
 
 .elevator-module {
   position: fixed;
   z-index: 299;
-  top: 232px;
+  top: 164px;
   right: 20px;
-  transition: top 0.3s;
-  cursor: grab;
-  &.dragging {
-    cursor: grabbing;
+  /* 客服按钮 */
+  .cs-btn-wrap {
+    width: 50px;
+    height: 52px;
+    background: #fff;
+    border: 1px solid #e5e9ef;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    &:hover {
+      background: #00a1d6;
+      border-color: #00a1d6;
+      .cs-btn-icon { transform: scale(1.15); }
+      .cs-btn-text { color: #fff; }
+    }
+    .cs-btn-icon {
+      font-size: 20px;
+      line-height: 1;
+      transition: transform .15s;
+    }
+    .cs-btn-text {
+      font-size: 10px;
+      color: #9499a0;
+      margin-top: 2px;
+      transition: color .15s;
+    }
   }
   .nav-bg {
     opacity: 0;

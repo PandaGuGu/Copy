@@ -140,34 +140,43 @@ func SeedRBAC(db *gorm.DB, lg *zap.Logger) {
 		{"cs_admin", "客服管理员", "cs_admin", "cs123"},
 	}
 	for _, sa := range seedAdmins {
-		var existing model.Admin
-		if db.Where("username = ?", sa.Username).First(&existing).Error == nil {
-			continue // already exists
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(sa.Password), bcrypt.DefaultCost)
-		if err != nil {
-			lg.Error("rbac seed: hash failed", zap.Error(err), zap.String("username", sa.Username))
+		var a model.Admin
+		err := db.Where("username = ?", sa.Username).First(&a).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			lg.Error("rbac seed: admin lookup failed", zap.Error(err), zap.String("username", sa.Username))
 			continue
 		}
-		a := model.Admin{
-			Username:     sa.Username,
-			PasswordHash: string(hash),
-			DisplayName:  sa.DisplayName,
-			Status:       "active",
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Create new admin account
+			hash, e := bcrypt.GenerateFromPassword([]byte(sa.Password), bcrypt.DefaultCost)
+			if e != nil {
+				lg.Error("rbac seed: hash failed", zap.Error(e), zap.String("username", sa.Username))
+				continue
+			}
+			a = model.Admin{
+				Username:     sa.Username,
+				PasswordHash: string(hash),
+				DisplayName:  sa.DisplayName,
+				Status:       "active",
+			}
+			if e := db.Create(&a).Error; e != nil {
+				lg.Error("rbac seed: create admin failed", zap.Error(e), zap.String("username", sa.Username))
+				continue
+			}
+			lg.Info("rbac seed: admin account created",
+				zap.String("username", sa.Username),
+				zap.String("password", strings.Repeat("*", len(sa.Password))),
+			)
 		}
-		if err := db.Create(&a).Error; err != nil {
-			lg.Error("rbac seed: create admin failed", zap.Error(err), zap.String("username", sa.Username))
-			continue
-		}
-		// Assign role
+		// Always ensure role assignment (new or existing admin)
 		var role model.AdminRole
 		if db.Where("name = ?", sa.RoleName).First(&role).Error == nil {
 			assign := model.AdminRoleAssignment{AdminID: a.ID, RoleID: role.ID}
 			db.Where("admin_id = ?", a.ID).FirstOrCreate(&assign)
-			lg.Info("rbac seed: admin account",
+			lg.Info("rbac seed: role assigned",
 				zap.String("username", sa.Username),
-				zap.String("password", strings.Repeat("*", len(sa.Password))),
 				zap.String("role", sa.RoleName),
+				zap.Uint64("adminID", a.ID),
 			)
 		}
 	}
