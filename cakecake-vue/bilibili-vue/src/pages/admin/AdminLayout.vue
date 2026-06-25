@@ -114,7 +114,7 @@ export default {
     return {
       me: null,
       groups: GROUPS,
-      expanded: {}
+      expanded: Object.fromEntries(GROUPS.map(g => [g.key, true]))
     };
   },
   created() {
@@ -275,17 +275,16 @@ export default {
 
 .adm-main {
   flex: 1; min-width: 0;
-}
-
-/* ── 页面切换过渡 ── */
-.adm-page-enter-active,
-.adm-page-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.adm-page-enter-from {
-  opacity: 0; transform: translateX(12px);
-}
-.adm-page-leave-to {
-  opacity: 0; transform: translateX(-12px);
+  /* :deep 穿透 scoped，确保 transition 类名能命中子组件根元素 */
+  :deep(.adm-page-enter-active),
+  :deep(.adm-page-leave-active) {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  :deep(.adm-page-enter-from) {
+    opacity: 0; transform: translateX(12px);
+  }
+  :deep(.adm-page-leave-to) {
+    opacity: 0; transform: translateX(-12px);
+  }
 }
 </style>
