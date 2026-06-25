@@ -95,6 +95,14 @@ export default {
   methods: {
     navigate(name) {
       if (this.$route.name === name) return;
+      // 数据板块（dashboard/bi）有渲染兼容问题，需要强刷新
+      const forceKeys = ['adminDashboard', 'adminBIReport'];
+      if (forceKeys.includes(name)) {
+        const pathMap = { adminDashboard: 'dashboard', adminBIReport: 'bi' };
+        location.hash = '#/admin/' + (pathMap[name] || 'dashboard');
+        location.reload();
+        return;
+      }
       this.$router.push({ name });
     },
     isOpen(key) { return !!this.open[key]; },
