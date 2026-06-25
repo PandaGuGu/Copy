@@ -98,7 +98,7 @@
       <el-table-column label="时间" width="150">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <template v-if="row.status === 'pending'">
             <el-button size="small" text type="primary" @click="openHandle(row)">处理</el-button>
@@ -111,12 +111,12 @@
           <span v-else class="rp-muted">
             {{ row.handler_note || '已完成' }}
             <el-button size="small" text type="warning" @click="doHandle(row, 'revert', 'none')" style="margin-left:4px">撤回</el-button>
-            <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
-              <template #reference>
-                <el-button size="small" text type="danger" style="margin-left:4px">删除</el-button>
-              </template>
-            </el-popconfirm>
           </span>
+          <el-popconfirm title="确认删除此记录？不可恢复" @confirm="doDelete(row.id)">
+            <template #reference>
+              <el-button size="small" text type="danger" style="margin-left:4px">删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
