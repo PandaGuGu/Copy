@@ -99,9 +99,10 @@
       <el-table-column label="创建时间" width="155">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="80" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button size="small" text type="primary" @click="openDetail(row)">详情</el-button>
+          <el-button v-if="row.status === 'open'" size="small" text type="success" @click="doAutoAssign(row)">自动分配</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -146,6 +147,17 @@
           </el-descriptions-item>
         </el-descriptions>
 
+        <!-- 满意度评分 -->
+        <div v-if="detail.satisfaction" class="tk-sat">
+          <el-divider>用户评价</el-divider>
+          <div class="tk-sat__stars">
+            <span v-for="s in 5" :key="s" class="tk-sat__star" :class="{ 'tk-sat__star--active': s <= detail.satisfaction.score }">★</span>
+            <span class="tk-sat__label">{{ detail.satisfaction.score }} 分</span>
+          </div>
+          <p v-if="detail.satisfaction.comment" class="tk-sat__comment">{{ detail.satisfaction.comment }}</p>
+          <span class="tk-sat__time">{{ fmtTime(detail.satisfaction.created_at) }}</span>
+        </div>
+
         <!-- 消息线程 -->
         <div class="tk-thread">
           <h4 class="tk-thread__title">消息记录</h4>
@@ -179,12 +191,11 @@
               <el-option v-for="a in adminList" :key="a.id" :label="a.nickname || a.username" :value="a.id" />
             </el-select>
             <el-button size="small" type="primary" @click="doAssign" :disabled="!actionAssignee">指派</el-button>
+            <el-button size="small" type="success" @click="doAutoAssignFromDetail" :disabled="detail.status === 'closed'" style="margin-left: 6px">自动分配</el-button>
 
             <el-select v-model="actionStatus" placeholder="更新状态" size="small" style="width: 130px; margin-left: 12px">
-              <el-option label="待处理" value="open" />
               <el-option label="处理中" value="processing" />
               <el-option label="已解决" value="resolved" />
-              <el-option label="已关闭" value="closed" />
             </el-select>
             <el-button size="small" @click="doUpdateStatus" :disabled="!actionStatus">更新状态</el-button>
           </div>
@@ -195,6 +206,8 @@
               type="textarea"
               :rows="3"
               placeholder="输入回复内容..."
+              maxlength="2000"
+              show-word-limit
               size="small"
             />
           </div>
@@ -215,28 +228,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '@/utils/adminHttp'
 
 async function api(path, opts = {}) {
-  try {
-    const method = (opts.method || 'GET').toLowerCase()
-    let res
-    if (method === 'get') {
-      res = await http.get('/api/v1/admin' + path)
-    } else if (method === 'post') {
-      res = await http.post('/api/v1/admin' + path, opts.body || {})
-    } else if (method === 'put') {
-      res = await http.put('/api/v1/admin' + path, opts.body || {})
-    } else if (method === 'delete') {
-      res = await http.delete('/api/v1/admin' + path)
-    } else {
-      res = await http.get('/api/v1/admin' + path)
-    }
-    const data = res.data || res
-    if (data && data.code != null && data.code !== 0) {
-      throw new Error(data.msg || '请求失败')
-    }
-    return data.data || data
-  } catch (e) {
-    throw e
+  const method = (opts.method || 'GET').toLowerCase()
+  let raw
+  if (method === 'post') {
+    raw = await http.post('/api/v1/admin' + path, opts.body || {})
+  } else if (method === 'put') {
+    raw = await http.put('/api/v1/admin' + path, opts.body || {})
+  } else {
+    raw = await http.get('/api/v1/admin' + path)
   }
+  // adminHttp interceptor returns response body {code, data, msg}
+  // code !== 0 already throws, so here code is always 0
+  return (raw && raw.data) || raw
 }
 
 const loading = ref(false)
@@ -307,12 +310,34 @@ async function openDetail(row) {
 async function doAssign() {
   if (!detail.value || !actionAssignee.value) return
   try {
-    await api(`/tickets/${detail.value.id}/assign`, { method: 'POST', body: { assignee_id: actionAssignee.value } })
+    await api(`/tickets/${detail.value.id}/assign`, { method: 'POST', body: { assignee_id: Number(actionAssignee.value) } })
     ElMessage.success('已指派')
-    await openDetail(detail.value)
+    await openDetail({ id: detail.value.id })
     fetch()
   } catch (e) {
     ElMessage.error(e.message || '操作失败')
+  }
+}
+
+async function doAutoAssign(row) {
+  try {
+    await api(`/tickets/${row.id}/auto-assign`, { method: 'POST' })
+    ElMessage.success('已自动分配')
+    fetch()
+  } catch (e) {
+    ElMessage.error(e.message || '自动分配失败')
+  }
+}
+
+async function doAutoAssignFromDetail() {
+  if (!detail.value) return
+  try {
+    await api(`/tickets/${detail.value.id}/auto-assign`, { method: 'POST' })
+    ElMessage.success('已自动分配给工作量最少的客服')
+    await openDetail({ id: detail.value.id })
+    fetch()
+  } catch (e) {
+    ElMessage.error(e.message || '自动分配失败')
   }
 }
 
@@ -458,4 +483,12 @@ onMounted(() => fetch())
 .tk-actions { margin-top: 4px; }
 .tk-actions__row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 .tk-actions__row .el-textarea { flex: 1; }
+
+.tk-sat { text-align: center; margin-bottom: 8px; }
+.tk-sat__stars { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.tk-sat__star { font-size: 28px; color: #ddd; }
+.tk-sat__star--active { color: #f5a623; }
+.tk-sat__label { font-size: 16px; font-weight: 600; color: #f5a623; margin-left: 6px; }
+.tk-sat__comment { font-size: 13px; color: #61666d; margin: 6px 0 2px; }
+.tk-sat__time { font-size: 11px; color: #9499a0; }
 </style>

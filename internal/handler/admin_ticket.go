@@ -66,16 +66,16 @@ func (a *API) AdminListTickets(c *gin.Context) {
 		}
 	}
 	userBriefs := loadUserBriefs(a.DB, uidSet)
-	assigneeBriefs := loadUserBriefs(a.DB, aidSet)
+	assigneeBriefs := loadAdminBriefs(a.DB, aidSet)
 
 	type item struct {
 		ID          uint64     `json:"id"`
-		ReporterID  uint64     `json:"reporter_id"`
-		Reporter    gin.H      `json:"reporter"`
+		UserID      uint64     `json:"user_id"`
+		User        gin.H      `json:"user"`
 		AssigneeID  *uint64    `json:"assignee_id"`
 		Assignee    gin.H      `json:"assignee"`
 		Category    string     `json:"category"`
-		Subject     string     `json:"subject"`
+		Title       string     `json:"title"`
 		Description string     `json:"description"`
 		Status      string     `json:"status"`
 		Priority    string     `json:"priority"`
@@ -91,11 +91,11 @@ func (a *API) AdminListTickets(c *gin.Context) {
 	for _, t := range tickets {
 		it := item{
 			ID:          t.ID,
-			ReporterID:  t.ReporterID,
-			Reporter:    userBriefs[t.ReporterID],
+			UserID:      t.ReporterID,
+			User:        userBriefs[t.ReporterID],
 			AssigneeID:  t.AssigneeID,
 			Category:    t.Category,
-			Subject:     t.Subject,
+			Title:       t.Subject,
 			Description: t.Description,
 			Status:      t.Status,
 			Priority:    t.Priority,
@@ -114,21 +114,21 @@ func (a *API) AdminListTickets(c *gin.Context) {
 	}
 
 	// Stats
-	var openCount, assignedCount, resolvedCount, closedCount int64
+	var openCount, processingCount, resolvedCount, closedCount int64
 	a.DB.Model(&model.Ticket{}).Where("status = 'open'").Count(&openCount)
-	a.DB.Model(&model.Ticket{}).Where("status IN ('assigned','processing')").Count(&assignedCount)
+	a.DB.Model(&model.Ticket{}).Where("status IN ('assigned','processing')").Count(&processingCount)
 	a.DB.Model(&model.Ticket{}).Where("status = 'resolved'").Count(&resolvedCount)
 	a.DB.Model(&model.Ticket{}).Where("status = 'closed'").Count(&closedCount)
 
 	resp.OK(c, gin.H{
-		"items":           items,
-		"total":           total,
-		"page":            page,
-		"page_size":       pageSize,
-		"open_count":      openCount,
-		"assigned_count":  assignedCount,
-		"resolved_count":  resolvedCount,
-		"closed_count":    closedCount,
+		"items":            items,
+		"total":            total,
+		"page":             page,
+		"page_size":        pageSize,
+		"open_count":       openCount,
+		"processing_count": processingCount,
+		"resolved_count":   resolvedCount,
+		"closed_count":     closedCount,
 	})
 }
 
@@ -175,27 +175,38 @@ func (a *API) AdminGetTicket(c *gin.Context) {
 		})
 	}
 
+	// Load satisfaction if exists
+	var sat model.TicketSatisfaction
+	satData := gin.H(nil)
+	if err := a.DB.Where("ticket_id = ?", id).First(&sat).Error; err == nil {
+		satData = gin.H{
+			"id":         sat.ID,
+			"score":      sat.Score,
+			"comment":    sat.Comment,
+			"created_at": sat.CreatedAt,
+		}
+	}
+
 	resp.OK(c, gin.H{
-		"ticket": gin.H{
-			"id":          t.ID,
-			"reporter_id": t.ReporterID,
-			"reporter":    loadUserBrief(a.DB, t.ReporterID),
-			"assignee_id": t.AssigneeID,
-			"assignee":    loadUserBriefNull(a.DB, t.AssigneeID),
-			"category":    t.Category,
-			"subject":     t.Subject,
-			"description": t.Description,
-			"status":      t.Status,
-			"priority":    t.Priority,
-			"related_id":  t.RelatedID,
-			"related_type": t.RelatedType,
-			"sla_deadline": t.SLADeadline,
-			"resolved_at":  t.ResolvedAt,
-			"closed_at":    t.ClosedAt,
-			"created_at":   t.CreatedAt,
-			"updated_at":   t.UpdatedAt,
-		},
-		"messages": msgItems,
+		"id":           t.ID,
+		"user_id":      t.ReporterID,
+		"user":         loadUserBrief(a.DB, t.ReporterID),
+		"assignee_id":  t.AssigneeID,
+		"assignee":     loadUserBriefNull(a.DB, t.AssigneeID),
+		"category":     t.Category,
+		"title":        t.Subject,
+		"description":  t.Description,
+		"status":       t.Status,
+		"priority":     t.Priority,
+		"related_id":   t.RelatedID,
+		"related_type": t.RelatedType,
+		"sla_deadline": t.SLADeadline,
+		"resolved_at":  t.ResolvedAt,
+		"closed_at":    t.ClosedAt,
+		"created_at":   t.CreatedAt,
+		"updated_at":   t.UpdatedAt,
+		"satisfaction": satData,
+		"messages":     msgItems,
 	})
 }
 
@@ -208,13 +219,29 @@ func (a *API) AdminAssignTicket(c *gin.Context) {
 	}
 
 	var req struct {
-		AssigneeID uint64 `json:"assignee_id"`
+		AssigneeID interface{} `json:"assignee_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		a.Log.Error("assign bind failed", zap.Error(err))
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if req.AssigneeID == 0 {
+
+	var aid uint64
+	switch v := req.AssigneeID.(type) {
+	case float64:
+		aid = uint64(v)
+	case string:
+		aid, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+			return
+		}
+	default:
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	if aid == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -231,12 +258,14 @@ func (a *API) AdminAssignTicket(c *gin.Context) {
 		return
 	}
 
-	aid := req.AssigneeID
-	if err := a.DB.Model(&t).Updates(map[string]interface{}{
-		"assignee_id": aid,
-		"status":      "assigned",
-		"updated_at":  time.Now(),
-	}).Error; err != nil {
+	slaDeadline := time.Now().Add(2 * time.Hour) // default SLA: 2h from assignment
+	updates := map[string]interface{}{
+		"assignee_id":  aid,
+		"status":       "assigned",
+		"sla_deadline": slaDeadline,
+		"updated_at":   time.Now(),
+	}
+	if err := a.DB.Model(&t).Updates(updates).Error; err != nil {
 		a.Log.Error("assign ticket", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -248,7 +277,154 @@ func (a *API) AdminAssignTicket(c *gin.Context) {
 		zap.Uint64("operator_id", adminID),
 	)
 
-	resp.OK(c, gin.H{"ticket_id": id, "assignee_id": aid, "status": "assigned"})
+	a.pushTicketNotification(t.ReporterID, id, "assigned", "您的工单已分配给客服处理")
+
+	resp.OK(c, gin.H{"ticket_id": id, "assignee_id": aid, "status": "assigned", "sla_deadline": slaDeadline})
+}
+
+// AdminGetSatisfactionStats GET /admin/tickets/satisfaction-stats
+// Returns aggregate satisfaction scores and trends.
+func (a *API) AdminGetSatisfactionStats(c *gin.Context) {
+	type row struct {
+		AvgScore  float64 `json:"avg_score"`
+		TotalRated int    `json:"total_rated"`
+		AdminID    uint64  `json:"admin_id"`
+		AdminName  string  `json:"admin_name"`
+		Month      string  `json:"month"`
+	}
+
+	var monthFilter string
+	if m := c.Query("months"); m != "" {
+		monthFilter = m // e.g. "3" = last 3 months
+	}
+	if monthFilter == "" {
+		monthFilter = "3"
+	}
+
+	var overall struct {
+		AvgScore  float64 `json:"avg_score"`
+		Total     int64   `json:"total"`
+		DistScore map[int]int `json:"distribution"`
+	}
+	a.DB.Raw(`SELECT COALESCE(AVG(score),0) as avg_score, COUNT(*) as total FROM ticket_satisfactions`).Scan(&overall)
+	
+	var dist []struct {
+		Score int `json:"score"`
+		Count int `json:"count"`
+	}
+	a.DB.Raw(`SELECT score, COUNT(*) as count FROM ticket_satisfactions GROUP BY score ORDER BY score`).Scan(&dist)
+	overall.DistScore = make(map[int]int)
+	for _, d := range dist {
+		overall.DistScore[d.Score] = d.Count
+	}
+
+	// By admin (per assigned ticket)
+	var byAdmin []gin.H
+	rows, _ := a.DB.Raw(`
+		SELECT ts.admin_id, a.display_name as admin_name,
+			ROUND(AVG(ts.score),2) as avg_score, COUNT(*) as total_rated
+		FROM ticket_satisfactions ts
+		JOIN tickets t ON t.id = ts.ticket_id
+		LEFT JOIN admins a ON a.id = ts.admin_id
+		GROUP BY ts.admin_id, a.display_name
+		ORDER BY avg_score DESC
+		LIMIT 20
+	`).Rows()
+	if rows != nil {
+		for rows.Next() {
+			var adminID uint64
+			var adminName string
+			var avg float64
+			var cnt int
+			rows.Scan(&adminID, &adminName, &avg, &cnt)
+			byAdmin = append(byAdmin, gin.H{
+				"admin_id": adminID, "admin_name": adminName,
+				"avg_score": avg, "total_rated": cnt,
+			})
+		}
+		rows.Close()
+	}
+
+	resp.OK(c, gin.H{
+		"overall":  overall,
+		"by_admin": byAdmin,
+	})
+}
+
+// AdminGetTicketStats GET /admin/tickets/stats
+// Returns dashboard counters for the ticket system.
+func (a *API) AdminGetTicketStats(c *gin.Context) {
+	var open, assigned, processing, resolved, closed, overdue int64
+	a.DB.Model(&model.Ticket{}).Where("status = 'open'").Count(&open)
+	a.DB.Model(&model.Ticket{}).Where("status = 'assigned'").Count(&assigned)
+	a.DB.Model(&model.Ticket{}).Where("status = 'processing'").Count(&processing)
+	a.DB.Model(&model.Ticket{}).Where("status = 'resolved'").Count(&resolved)
+	a.DB.Model(&model.Ticket{}).Where("status = 'closed'").Count(&closed)
+	a.DB.Model(&model.Ticket{}).Where("sla_deadline IS NOT NULL AND sla_deadline < NOW() AND status NOT IN ('closed','resolved')").Count(&overdue)
+
+	// Average satisfaction this month
+	var avgSat struct{ Avg float64 }
+	a.DB.Raw(`SELECT COALESCE(AVG(score),0) as avg FROM ticket_satisfactions WHERE created_at >= DATE_FORMAT(NOW(),'%Y-%m-01')`).Scan(&avgSat)
+
+	// Avg response time (minutes) for tickets resolved this week
+	var avgResp struct{ Min float64 }
+	a.DB.Raw(`SELECT COALESCE(AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)),0) as min FROM tickets WHERE status = 'resolved' AND resolved_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`).Scan(&avgResp)
+
+	resp.OK(c, gin.H{
+		"counts": gin.H{
+			"open": open, "assigned": assigned, "processing": processing,
+			"resolved": resolved, "closed": closed, "overdue": overdue,
+		},
+		"avg_satisfaction_this_month": avgSat.Avg,
+		"avg_response_minutes_this_week": int(avgResp.Min),
+	})
+}
+
+// AdminAutoAssignTicket POST /admin/tickets/:id/auto-assign
+// Auto-assigns a ticket to the admin with the least open assignments.
+func (a *API) AdminAutoAssignTicket(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	var t model.Ticket
+	if err := a.DB.First(&t, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// Find admin with fewest open tickets (round-robin via workload)
+	var bestAdmin struct {
+		AdminID uint64
+		Count   int64
+	}
+	a.DB.Raw(`
+		SELECT admins.id as admin_id, COALESCE(COUNT(tickets.id),0) as count
+		FROM admins
+		LEFT JOIN tickets ON tickets.assignee_id = admins.id AND tickets.status IN ('assigned','processing')
+		WHERE admins.status = 'active'
+		GROUP BY admins.id
+		ORDER BY count ASC
+		LIMIT 1
+	`).Scan(&bestAdmin)
+
+	if bestAdmin.AdminID == 0 {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	slaDeadline := time.Now().Add(2 * time.Hour)
+	a.DB.Model(&t).Updates(map[string]interface{}{
+		"assignee_id":  bestAdmin.AdminID,
+		"status":       "assigned",
+		"sla_deadline": slaDeadline,
+		"updated_at":   time.Now(),
+	})
+
+	a.pushTicketNotification(t.ReporterID, id, "assigned", "工单已自动分配，请等待客服处理")
+	resp.OK(c, gin.H{"ticket_id": id, "assignee_id": bestAdmin.AdminID, "status": "assigned"})
 }
 
 // AdminUpdateTicketStatus POST /api/v1/admin/tickets/:id/status
@@ -310,6 +486,8 @@ func (a *API) AdminUpdateTicketStatus(c *gin.Context) {
 		zap.String("status", req.Status),
 		zap.Uint64("operator_id", adminID),
 	)
+
+	a.pushTicketNotification(t.ReporterID, id, "status_"+req.Status, "工单状态已更新为"+statusLabel(req.Status))
 
 	resp.OK(c, gin.H{"ticket_id": id, "status": req.Status})
 }
@@ -373,6 +551,8 @@ func (a *API) AdminAddTicketMessage(c *gin.Context) {
 		zap.Uint64("admin_id", adminID),
 	)
 
+	a.pushTicketNotification(t.ReporterID, id, "new_reply", truncateText(req.Content, 60))
+
 	resp.OK(c, gin.H{
 		"id":         msg.ID,
 		"ticket_id":  id,
@@ -416,6 +596,8 @@ func (a *API) AdminCloseTicket(c *gin.Context) {
 		zap.Uint64("ticket_id", id),
 		zap.Uint64("admin_id", adminID),
 	)
+
+	a.pushTicketNotification(t.ReporterID, id, "closed", "工单已关闭")
 
 	resp.OK(c, gin.H{"ticket_id": id, "status": "closed"})
 }
@@ -857,4 +1039,63 @@ func loadUserBriefs(db *gorm.DB, idSet map[uint64]bool) map[uint64]gin.H {
 		}
 	}
 	return result
+}
+
+// loadAdminBriefs loads basic admin info (from admins table, not users table).
+func loadAdminBriefs(db *gorm.DB, idSet map[uint64]bool) map[uint64]gin.H {
+	result := make(map[uint64]gin.H, len(idSet))
+	if len(idSet) == 0 {
+		return result
+	}
+	ids := make([]uint64, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	type brief struct {
+		ID          uint64
+		Username    string
+		DisplayName string
+	}
+	var admins []brief
+	if err := db.Model(&model.Admin{}).Select("id, username, display_name").Where("id IN ?", ids).Find(&admins).Error; err == nil {
+		for _, a := range admins {
+			name := a.DisplayName
+			if name == "" {
+				name = a.Username
+			}
+			result[a.ID] = gin.H{
+				"id":       a.ID,
+				"username": a.Username,
+				"nickname": name,
+			}
+		}
+	}
+	return result
+}
+
+// pushTicketNotification sends a real-time notification to a ticket owner via WebSocket.
+func (a *API) pushTicketNotification(userID uint64, ticketID uint64, eventType string, summary string) {
+	if a.ChatHub == nil || userID == 0 {
+		return
+	}
+	a.ChatHub.PushJSON(userID, gin.H{
+		"type": "ticket_" + eventType,
+		"data": gin.H{
+			"ticket_id": ticketID,
+			"summary":   summary,
+		},
+	})
+}
+
+// statusLabel converts a ticket status to Chinese label.
+func statusLabel(s string) string {
+	switch s {
+	case "open": return "待处理"
+	case "assigned": return "已分配"
+	case "processing": return "处理中"
+	case "resolved": return "已解决"
+	case "closed": return "已关闭"
+	case "reopened": return "已重开"
+	default: return s
+	}
 }

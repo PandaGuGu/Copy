@@ -134,7 +134,7 @@
         </div>
 
         <!-- 回复区 -->
-        <div class="cs-reply" v-if="convDetail.status === 'active'">
+        <div class="cs-reply" v-if="convDetail.status !== 'closed'">
           <div class="cs-reply__templates" v-if="templates.length > 0">
             <el-select
               v-model="selectedTemplate"
@@ -263,7 +263,7 @@ async function fetchTemplates() {
   loading.value = true
   try {
     const d = await api('/cs/templates')
-    templates.value = d.items || d || []
+    templates.value = d.templates || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {

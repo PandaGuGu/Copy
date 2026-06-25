@@ -3,7 +3,7 @@ import { nextTick } from "vue";
 import { ElMessageBox } from "element-plus";
 import { clearStuckPageOverlays } from "@/utils/clearPageOverlays";
 import { getAccessToken, getRefreshToken } from "@/utils/authTokens";
-import { isAdminLoggedIn } from "@/utils/adminAuth";
+import { isAdminLoggedIn, getAdminPerms } from "@/utils/adminAuth";
 import {
   isAccessTokenExpired,
   refreshMinibiliAccessToken
@@ -269,6 +269,30 @@ const routes = [
     meta: { title: "cakecake 上传", requireMinibiliAuth: true }
   },
   {
+    name: "minibiliTicketCreate",
+    path: "/minibili/ticket",
+    component: () => import("@/pages/minibili/TicketCreate.vue"),
+    meta: { title: "提交工单 - cakecake", requireMinibiliAuth: true }
+  },
+  {
+    name: "customerService",
+    path: "/customer-service",
+    component: () => import("@/pages/minibili/CustomerService.vue"),
+    meta: { title: "客服中心 - cakecake", requireMinibiliAuth: true }
+  },
+  {
+    name: "csChat",
+    path: "/cs-chat",
+    component: () => import("@/pages/minibili/CSChat.vue"),
+    meta: { title: "客服聊天 - cakecake", requireMinibiliAuth: true }
+  },
+  {
+    name: "minibiliSpecialPage",
+    path: "/minibili/special/:slug",
+    component: () => import("@/pages/minibili/SpecialPage.vue"),
+    meta: { title: "专题 - cakecake" }
+  },
+  {
     path: "/admin/login",
     name: "adminLogin",
     component: () => import("@/pages/admin/AdminLogin.vue"),
@@ -284,128 +308,128 @@ const routes = [
         path: "dashboard",
         name: "adminDashboard",
         component: () => import("@/pages/admin/Dashboard.vue"),
-        meta: { title: "数据仪表盘 - 运营后台" }
+        meta: { title: "数据仪表盘 - 运营后台", perm: "dashboard:view" }
       },
       {
         path: "banners",
         name: "adminBanners",
         component: () => import("@/pages/admin/BannerManage.vue"),
-        meta: { title: "首页轮播 - 运营后台" }
+        meta: { title: "首页轮播 - 运营后台", perm: "banner:manage" }
       },
       {
         path: "hot-search",
         name: "adminHotSearch",
         component: () => import("@/pages/admin/HotSearchManage.vue"),
-        meta: { title: "热搜运营 - 运营后台" }
+        meta: { title: "热搜运营 - 运营后台", perm: "hotsearch:manage" }
       },
       {
         path: "users",
         name: "adminUsers",
         component: () => import("@/pages/admin/UserManage.vue"),
-        meta: { title: "用户管理 - 运营后台" }
+        meta: { title: "用户管理 - 运营后台", perm: "user:ban" }
       },
       {
         path: "video-review",
         name: "adminVideoReview",
         component: () => import("@/pages/admin/VideoReview.vue"),
-        meta: { title: "视频审核 - 运营后台" }
+        meta: { title: "视频审核 - 运营后台", perm: "video:approve" }
       },
       {
         path: "article-review",
         name: "adminArticleReview",
         component: () => import("@/pages/admin/ArticleReview.vue"),
-        meta: { title: "专栏审核 - 运营后台" }
+        meta: { title: "专栏审核 - 运营后台", perm: "article:approve" }
       },
       {
         path: "dynamic-manage",
         name: "adminDynamicManage",
         component: () => import("@/pages/admin/DynamicManage.vue"),
-        meta: { title: "动态管理 - 运营后台" }
+        meta: { title: "动态管理 - 运营后台", perm: "dynamic:manage" }
       },
       {
         path: "comments",
         name: "adminComments",
         component: () => import("@/pages/admin/CommentManage.vue"),
-        meta: { title: "评论管理 - 运营后台" }
+        meta: { title: "评论管理 - 运营后台", perm: "comment:delete" }
       },
       {
         path: "settings",
         name: "adminSettings",
         component: () => import("@/pages/admin/Settings.vue"),
-        meta: { title: "系统设置 - 运营后台" }
+        meta: { title: "系统设置 - 运营后台", perm: "setting:manage" }
       },
       {
         path: "reports",
         name: "adminReports",
         component: () => import("@/pages/admin/ReportManage.vue"),
-        meta: { title: "举报处理 - 运营后台" }
+        meta: { title: "举报处理 - 运营后台", perm: "report:handle" }
       },
       {
         path: "agent",
         name: "adminAgent",
         component: () => import("@/pages/admin/AgentManage.vue"),
-        meta: { title: "AI 角色 - 运营后台" }
+        meta: { title: "AI 角色 - 运营后台", perm: "agent:manage" }
       },
       // ─── 23-module expansion: new admin routes ───
       {
         path: "tickets",
         name: "adminTicketManage",
         component: () => import("@/pages/admin/TicketManage.vue"),
-        meta: { title: "工单管理 - 运营后台" }
+        meta: { title: "工单管理 - 运营后台", perm: "ticket:handle" }
       },
       {
         path: "risk",
         name: "adminRiskManage",
         component: () => import("@/pages/admin/RiskManage.vue"),
-        meta: { title: "风控管理 - 运营后台" }
+        meta: { title: "风控管理 - 运营后台", perm: "risk:manage" }
       },
       {
         path: "copyright",
         name: "adminCopyrightManage",
         component: () => import("@/pages/admin/CopyrightManage.vue"),
-        meta: { title: "版权管理 - 运营后台" }
+        meta: { title: "版权管理 - 运营后台", perm: "copyright:handle" }
       },
       {
         path: "bi",
         name: "adminBIReport",
         component: () => import("@/pages/admin/BIReport.vue"),
-        meta: { title: "数据报表 - 运营后台" }
+        meta: { title: "数据报表 - 运营后台", perm: "dashboard:export" }
       },
       {
         path: "cs",
         name: "adminCSManage",
         component: () => import("@/pages/admin/CSManage.vue"),
-        meta: { title: "客服后台 - 运营后台" }
+        meta: { title: "客服后台 - 运营后台", perm: "cs:manage" }
       },
       {
         path: "ops",
         name: "adminOpsMonitor",
         component: () => import("@/pages/admin/OpsMonitor.vue"),
-        meta: { title: "运维监控 - 运营后台" }
+        meta: { title: "运维监控 - 运营后台", perm: "ops:manage" }
       },
       {
         path: "config",
         name: "adminConfigManage",
         component: () => import("@/pages/admin/ConfigManage.vue"),
-        meta: { title: "配置发布 - 运营后台" }
+        meta: { title: "配置发布 - 运营后台", perm: "config:manage" }
       },
       {
         path: "rbac",
         name: "adminRBACManage",
         component: () => import("@/pages/admin/RBACManage.vue"),
-        meta: { title: "权限审计 - 运营后台" }
+        meta: { title: "权限审计 - 运营后台", perm: "rbac:manage" }
       },
       {
         path: "subtitles",
         name: "adminSubtitleManage",
         component: () => import("@/pages/admin/SubtitleManage.vue"),
-        meta: { title: "字幕管理 - 运营后台" }
+        meta: { title: "字幕管理 - 运营后台", perm: "subtitle:manage" }
       },
       {
         path: "specials",
         name: "adminSpecialManage",
         component: () => import("@/pages/admin/SpecialManage.vue"),
-        meta: { title: "专题活动 - 运营后台" }
+        meta: { title: "专题活动 - 运营后台", perm: "special:manage" }
       }
     ]
   },
@@ -445,6 +469,14 @@ router.beforeEach(async (to, _from, next) => {
   if (needAdmin && !isAdminLoggedIn()) {
     next({ name: "adminLogin", replace: true });
     return;
+  }
+  // RBAC permission guard: redirect to dashboard if admin lacks permission for this route
+  if (needAdmin && to.meta.perm) {
+    const perms = getAdminPerms();
+    if (perms.length > 0 && !perms.includes(to.meta.perm)) {
+      next({ name: "adminDashboard", replace: true });
+      return;
+    }
   }
   if (to.name === "adminLogin" && isAdminLoggedIn()) {
     next({ name: "adminBanners", replace: true });

@@ -475,6 +475,7 @@ func (a *API) ScanContentRisk(targetType string, targetID uint64, text string) b
 	if err := a.DB.Where("enabled = 1").Order("priority DESC").Find(&rules).Error; err != nil {
 		return false
 	}
+	blocked := false
 	for _, r := range rules {
 		if r.Pattern == "" { continue }
 		matched := strings.Contains(strings.ToLower(text), strings.ToLower(r.Pattern))
@@ -485,11 +486,126 @@ func (a *API) ScanContentRisk(targetType string, targetID uint64, text string) b
 			MatchText: text[:min(len(text), 200)], Action: r.Action,
 		})
 		if r.Action == "reject" || r.Action == "auto_ban" {
-			return true
+			a.notifyRiskHit(targetType, targetID, r.Name, r.Action)
+			blocked = true
 		}
 		if r.Action == "quarantine" && targetType == "comment" {
 			a.DB.Model(&model.Comment{}).Where("id = ?", targetID).Update("approved", false)
+			a.notifyRiskHit(targetType, targetID, r.Name, "quarantine")
+		}
+		// notify_admin: push alert to connected admin Dashboards
+		if r.Action == "notify_admin" {
+			a.notifyAdminRiskAlert(r.Name, text[:min(len(text), 100)], targetType, targetID)
 		}
 	}
-	return false
+	return blocked
 }
+
+// notifyRiskHit sends a notification to the content creator when risk hits.
+func (a *API) notifyRiskHit(targetType string, targetID uint64, ruleName, action string) {
+	var ownerID uint64
+	switch targetType {
+	case "comment":
+		var c model.Comment
+		if err := a.DB.Select("user_id").First(&c, targetID).Error; err == nil {
+			ownerID = c.UserID
+		}
+	case "danmaku":
+		// Danmaku doesn't have user lookup easily accessible here; skip for now
+		return
+	}
+	if ownerID == 0 {
+		return
+	}
+	actionText := "已被拦截"
+	if action == "quarantine" {
+		actionText = "已被隐藏待审核"
+	}
+	_ = a.DB.Create(&model.NotificationRecord{
+		RecipientID: ownerID, RecipientType: "user",
+		Channel: "in_app", Title: "内容风控通知",
+		Content: "您发布的内容因违反「" + ruleName + "」规则，"+ actionText + "。",
+		RelatedType: targetType, RelatedID: targetID, Status: "pending",
+	})
+}
+
+// notifyAdminRiskAlert pushes a risk alert to admins via ChatHub.
+func (a *API) notifyAdminRiskAlert(ruleName string, matchedText string, targetType string, targetID uint64) {
+	// Push to admin notification channel — any connected admin sees this
+	// For MVP, we store a notification record visible to all admins
+	_ = a.DB.Create(&model.NotificationRecord{
+		RecipientID: 0, RecipientType: "admin",
+		Channel: "in_app", Title: "风控告警：" + ruleName,
+		Content: "触发内容：" + matchedText + "（类型：" + targetType + "，ID：" + strconv.FormatUint(targetID, 10) + "）",
+		RelatedType: targetType, RelatedID: targetID, Status: "pending",
+	})
+	if a.ChatHub != nil {
+		a.ChatHub.PushJSON(0, gin.H{
+			"type": "admin_alert",
+			"data": gin.H{"rule": ruleName, "target_type": targetType, "target_id": targetID},
+		})
+	}
+}
+
+// AdminGetRiskStats GET /admin/risk/stats
+// Returns risk hit trend data: hit rate, top rules, time series.
+func (a *API) AdminGetRiskStats(c *gin.Context) {
+	days := c.DefaultQuery("days", "7")
+
+	var totalHits int64
+	var uniqueRules int64
+	a.DB.Model(&model.RiskHitLog{}).Count(&totalHits)
+	a.DB.Raw(`SELECT COUNT(DISTINCT rule_name) FROM risk_hit_logs`).Scan(&uniqueRules)
+
+	// Top 10 triggered rules
+	var topRules []gin.H
+	rows, _ := a.DB.Raw(`
+		SELECT rule_name, action, COUNT(*) as hit_count, MAX(created_at) as last_hit
+		FROM risk_hit_logs
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		GROUP BY rule_name, action
+		ORDER BY hit_count DESC
+		LIMIT 10
+	`, days).Rows()
+	if rows != nil {
+		for rows.Next() {
+			var ruleName, action string
+			var hitCount int64
+			var lastHit time.Time
+			rows.Scan(&ruleName, &action, &hitCount, &lastHit)
+			topRules = append(topRules, gin.H{
+				"rule_name": ruleName, "action": action,
+				"hit_count": hitCount, "last_hit": lastHit,
+			})
+		}
+		rows.Close()
+	}
+
+	// Daily trend (hits per day)
+	var dailyTrend []gin.H
+	rows2, _ := a.DB.Raw(`
+		SELECT DATE(created_at) as date, COUNT(*) as count
+		FROM risk_hit_logs
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+		GROUP BY DATE(created_at)
+		ORDER BY date ASC
+	`, days).Rows()
+	if rows2 != nil {
+		for rows2.Next() {
+			var date string
+			var count int64
+			rows2.Scan(&date, &count)
+			dailyTrend = append(dailyTrend, gin.H{"date": date, "count": count})
+		}
+		rows2.Close()
+	}
+
+	resp.OK(c, gin.H{
+		"total_hits":   totalHits,
+		"unique_rules": uniqueRules,
+		"top_rules":    topRules,
+		"daily_trend":  dailyTrend,
+	})
+}
+
+func min(a, b int) int { if a < b { return a }; return b }

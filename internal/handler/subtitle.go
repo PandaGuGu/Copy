@@ -10,6 +10,7 @@ import (
 
 	e "minibili/internal/errcode"
 	"minibili/internal/model"
+	"minibili/internal/worker"
 )
 
 // ─── Subtitle Management (Module 3) ───
@@ -169,4 +170,59 @@ func (a *API) AdminDeleteSubtitle(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": e.CodeSuccess, "msg": e.GetMsg(e.CodeSuccess), "data": nil})
+}
+
+// ─── ASR (Automatic Speech Recognition) ───
+
+// RequestSubtitleASR creates a subtitle placeholder and queues it for ASR processing.
+// POST /api/v1/videos/:id/subtitles/asr
+func (a *API) RequestSubtitleASR(c *gin.Context) {
+	uid := c.MustGet("user_id").(uint64)
+	vid, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": e.GetMsg(e.CodeParamError), "data": nil})
+		return
+	}
+
+	// Verify uploader ownership
+	var v model.Video
+	if err := a.DB.First(&v, vid).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": e.CodeNotFound, "msg": e.GetMsg(e.CodeNotFound), "data": nil})
+		return
+	}
+	if v.UserID != uid {
+		c.JSON(http.StatusForbidden, gin.H{"code": e.CodeForbidden, "msg": e.GetMsg(e.CodeForbidden), "data": nil})
+		return
+	}
+
+	if v.Status != "published" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "视频尚未发布，无法发起自动转写", "data": nil})
+		return
+	}
+
+	var req worker.NewSubtitleASRRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "参数错误: " + err.Error(), "data": nil})
+		return
+	}
+	if req.Lang == "" {
+		req.Lang = "zh"
+	}
+	if req.Title == "" {
+		req.Title = "自动转写"
+	}
+
+	sub, err := worker.RequestASR(a.DB, vid, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": e.CodeInternalError, "msg": "创建转写任务失败", "data": nil})
+		return
+	}
+
+	a.Log.Info("ASR subtitle requested",
+		zap.Uint64("video_id", vid),
+		zap.Uint64("subtitle_id", sub.ID),
+		zap.String("lang", req.Lang),
+	)
+
+	c.JSON(http.StatusOK, gin.H{"code": e.CodeSuccess, "msg": "自动转写任务已创建，处理完成后字幕将自动出现", "data": sub})
 }
