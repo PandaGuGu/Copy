@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -198,6 +200,32 @@ func (a *API) AdminToggleFeatureFlag(c *gin.Context) {
 	resp.OK(c, gin.H{"id": id, "enabled": newEnabled})
 }
 
+// AdminDeleteFeatureFlag DELETE /admin/config/feature-flags/:id — delete feature flag
+func (a *API) AdminDeleteFeatureFlag(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var flag model.FeatureFlag
+	if err := a.DB.First(&flag, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	if err := a.DB.Delete(&flag).Error; err != nil {
+		a.Log.Error("delete feature flag", zap.Error(err), zap.Uint64("id", id))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	a.recordAudit(c, adminID, "delete_feature_flag", "feature_flag", id, `{"key":"`+flag.Key+`"}`)
+	resp.OK(c, gin.H{"id": id, "ok": true})
+}
+
 // AdminCheckFeatureFlag GET /config/feature-flags/:key — public check if a feature is enabled
 // Logic: enabled=true OR user_id in whitelist OR rollout_pct covers user → enabled=true
 func (a *API) AdminCheckFeatureFlag(c *gin.Context) {
@@ -207,7 +235,7 @@ func (a *API) AdminCheckFeatureFlag(c *gin.Context) {
 		return
 	}
 	var flag model.FeatureFlag
-	if err := a.DB.Where("key = ?", key).First(&flag).Error; err != nil {
+	if err := a.DB.Where("`key` = ?", key).First(&flag).Error; err != nil {
 		// Unknown flag defaults to disabled (fail-closed).
 		resp.OK(c, gin.H{"key": key, "enabled": false})
 		return
@@ -321,13 +349,20 @@ func (a *API) AdminListReleases(c *gin.Context) {
 	}
 	items := make([]gin.H, 0, len(rows))
 	for i := range rows {
+		hasSnapshot := len(rows[i].Snapshot) > 0
 		items = append(items, gin.H{
 			"id":            rows[i].ID,
 			"version":       rows[i].Version,
+			"title":         rows[i].Title,
+			"type":          rows[i].Type,
 			"description":   rows[i].Description,
+			"notes":         rows[i].Notes,
 			"status":        rows[i].Status,
 			"deployed_by":   rows[i].DeployedBy,
+			"pushed_by":     rows[i].PushedBy,
 			"rolled_back_by": rows[i].RolledBackBy,
+			"has_snapshot":  hasSnapshot,
+			"released_at":   rows[i].ReleasedAt,
 			"created_at":    rows[i].CreatedAt,
 		})
 	}
@@ -346,10 +381,13 @@ func (a *API) AdminListReleases(c *gin.Context) {
 
 type releaseReq struct {
 	Version     string `json:"version"`
+	Title       string `json:"title"`
+	Type        string `json:"type"`     // canary / full / hotfix
 	Description string `json:"description"`
+	Notes       string `json:"notes"`    // release notes / markdown
 }
 
-// AdminCreateRelease POST /admin/config/releases — record a new release
+// AdminCreateRelease POST /admin/config/releases — record a new release with auto-snapshot
 func (a *API) AdminCreateRelease(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {
@@ -365,13 +403,26 @@ func (a *API) AdminCreateRelease(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	// Mark previously active releases as rolled_back (only one active at a time).
-	_ = a.DB.Model(&model.ReleaseRecord{}).Where("status = ?", "active").Update("status", "rolled_back").Error
+	releaseType := strings.TrimSpace(req.Type)
+	if releaseType == "" {
+		releaseType = "canary"
+	}
+	if releaseType != "canary" && releaseType != "full" && releaseType != "hotfix" {
+		releaseType = "canary"
+	}
+
+	// Auto-snapshot all current feature flags
+	snapshot := a.buildConfigSnapshot(strings.TrimSpace(req.Version))
+	raw, _ := json.Marshal(snapshot)
 
 	rec := model.ReleaseRecord{
 		Version:     strings.TrimSpace(req.Version),
+		Title:       strings.TrimSpace(req.Title),
+		Type:        releaseType,
 		Description: req.Description,
-		Status:      "active",
+		Notes:       req.Notes,
+		Status:      "draft",
+		Snapshot:    string(raw),
 		DeployedBy:  adminID,
 	}
 	if err := a.DB.Create(&rec).Error; err != nil {
@@ -381,16 +432,20 @@ func (a *API) AdminCreateRelease(c *gin.Context) {
 	}
 	a.recordAudit(c, adminID, "create_release", "release", rec.ID, `{"version":"`+rec.Version+`"}`)
 	resp.OK(c, gin.H{
-		"id":          rec.ID,
-		"version":     rec.Version,
-		"description": rec.Description,
-		"status":      rec.Status,
-		"deployed_by": rec.DeployedBy,
-		"created_at":  rec.CreatedAt,
+		"id":           rec.ID,
+		"version":      rec.Version,
+		"title":        rec.Title,
+		"type":         rec.Type,
+		"description":  rec.Description,
+		"notes":        rec.Notes,
+		"has_snapshot": len(rec.Snapshot) > 0,
+		"status":       rec.Status,
+		"deployed_by":  rec.DeployedBy,
+		"created_at":   rec.CreatedAt,
 	})
 }
 
-// AdminRollbackRelease POST /admin/config/releases/:id/rollback — rollback to a previous release
+// AdminRollbackRelease POST /admin/config/releases/:id/rollback — deploy an older release
 func (a *API) AdminRollbackRelease(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {
@@ -412,21 +467,258 @@ func (a *API) AdminRollbackRelease(c *gin.Context) {
 		return
 	}
 
-	// Demote any currently-active release, then mark the target as active again.
+	// Re-deploy this release: mark current deployed as rolled_back, apply this one
+	applied, skipped := 0, 0
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.ReleaseRecord{}).Where("status = ? AND id != ?", "active", id).
+		// Demote currently deployed
+		if err := tx.Model(&model.ReleaseRecord{}).Where("status = ? AND id != ?", "deployed", id).
 			Update("status", "rolled_back").Error; err != nil {
 			return err
 		}
-		return tx.Model(&rec).Updates(map[string]interface{}{
-			"status":         "active",
+		now := time.Now()
+		if err := tx.Model(&rec).Updates(map[string]interface{}{
+			"status":         "deployed",
 			"rolled_back_by": adminID,
-		}).Error
+			"released_at":    now,
+		}).Error; err != nil {
+			return err
+		}
+		// Apply the snapshot configs to live DB
+		if rec.Snapshot != "" {
+			var snap struct {
+				FeatureFlags []struct {
+					Key         string `json:"key"`
+					Enabled     bool   `json:"enabled"`
+					RolloutPct  int    `json:"rollout_pct"`
+					Whitelist   string `json:"whitelist"`
+				} `json:"feature_flags"`
+			}
+			if err := json.Unmarshal([]byte(rec.Snapshot), &snap); err == nil {
+				for _, ff := range snap.FeatureFlags {
+					var existing model.FeatureFlag
+					if err := tx.Where("`key` = ?", ff.Key).First(&existing).Error; err != nil {
+						skipped++
+						continue
+					}
+					if err := tx.Model(&existing).Updates(map[string]interface{}{
+						"enabled":     ff.Enabled,
+						"rollout_pct": ff.RolloutPct,
+						"whitelist":   ff.Whitelist,
+					}).Error; err != nil {
+						skipped++
+						continue
+					}
+					applied++
+				}
+			}
+		}
+		return nil
 	}); err != nil {
 		a.Log.Error("rollback release", zap.Error(err), zap.Uint64("id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.recordAudit(c, adminID, "rollback_release", "release", id, `{"version":"`+rec.Version+`"}`)
-	resp.OK(c, gin.H{"id": id, "version": rec.Version, "status": "active", "rolled_back_by": adminID})
+	a.recordAudit(c, adminID, "rollback_release", "release", id,
+		fmt.Sprintf(`{"version":"%s","applied":%d,"skipped":%d}`, rec.Version, applied, skipped))
+	resp.OK(c, gin.H{
+		"id":      id,
+		"version": rec.Version,
+		"status":  "deployed",
+		"applied": applied,
+		"skipped": skipped,
+	})
+}
+
+// ──────────────────────────────────────────────
+// Config Snapshot, Export, and Publish
+// ──────────────────────────────────────────────
+
+// buildConfigSnapshot collects all feature flags + system settings into a JSON snapshot.
+func (a *API) buildConfigSnapshot(version string) gin.H {
+	// Feature flags
+	var flags []model.FeatureFlag
+	a.DB.Order("id ASC").Find(&flags)
+	ff := make([]gin.H, 0, len(flags))
+	for _, f := range flags {
+		ff = append(ff, gin.H{
+			"key":         f.Key,
+			"description": f.Description,
+			"enabled":     f.Enabled,
+			"rollout_pct": f.RolloutPct,
+			"whitelist":   f.Whitelist,
+		})
+	}
+
+	// System settings from runtime config
+	cfg := a.Cfg
+	settings := gin.H{
+		"video_upload_disabled":   cfg.VideoUploadDisabled,
+		"video_review_required":   cfg.VideoReviewRequired,
+		"article_review_required": cfg.ArticleReviewRequired,
+		"agent_enabled":           cfg.AgentEnabled,
+		"agent_daily_quota":       cfg.AgentDailyQuota,
+		"agent_max_history":       cfg.AgentMaxHistory,
+		"agent_history_ttl":       cfg.AgentHistoryTTL.String(),
+		"agent_request_timeout":   cfg.AgentRequestTimeout.String(),
+	}
+
+	return gin.H{
+		"version":       version,
+		"exported_at":   time.Now().UTC().Format(time.RFC3339),
+		"feature_flags": ff,
+		"settings":      settings,
+	}
+}
+
+// AdminExportRelease GET /admin/config/releases/:id/export — download the config snapshot for a release
+func (a *API) AdminExportRelease(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var rec model.ReleaseRecord
+	if err := a.DB.First(&rec, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// If no snapshot yet, build one on-the-fly.
+	snapshot := rec.Snapshot
+	if snapshot == "" {
+		raw, _ := json.Marshal(a.buildConfigSnapshot(rec.Version))
+		snapshot = string(raw)
+	}
+
+	filename := fmt.Sprintf("config-snapshot-v%s.json", rec.Version)
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.String(http.StatusOK, snapshot)
+}
+
+// AdminExportConfig GET /admin/config/export — quick export current configs (no release required)
+func (a *API) AdminExportConfig(c *gin.Context) {
+	snapshot := a.buildConfigSnapshot("current")
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	filename := fmt.Sprintf("config-snapshot-%s.json", time.Now().UTC().Format("20060102-150405"))
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.String(http.StatusOK, string(raw))
+}
+
+// AdminDeployRelease POST /admin/config/releases/:id/deploy — apply release config to live system
+func (a *API) AdminDeployRelease(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var rec model.ReleaseRecord
+	if err := a.DB.First(&rec, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// Parse snapshot
+	var snap struct {
+		FeatureFlags []struct {
+			Key         string `json:"key"`
+			Enabled     bool   `json:"enabled"`
+			RolloutPct  int    `json:"rollout_pct"`
+			Whitelist   string `json:"whitelist"`
+		} `json:"feature_flags"`
+	}
+	if err := json.Unmarshal([]byte(rec.Snapshot), &snap); err != nil {
+		a.Log.Error("parse release snapshot", zap.Error(err), zap.Uint64("id", id))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	// Apply each feature flag from snapshot to live DB
+	applied := 0
+	skipped := 0
+	for _, ff := range snap.FeatureFlags {
+		var existing model.FeatureFlag
+		err := a.DB.Where("`key` = ?", ff.Key).First(&existing).Error
+		if err != nil {
+			skipped++
+			continue
+		}
+		upd := map[string]interface{}{
+			"enabled":     ff.Enabled,
+			"rollout_pct": ff.RolloutPct,
+			"whitelist":   ff.Whitelist,
+		}
+		if err := a.DB.Model(&existing).Updates(upd).Error; err != nil {
+			a.Log.Warn("apply flag failed", zap.Error(err), zap.String("key", ff.Key))
+			skipped++
+			continue
+		}
+		applied++
+	}
+
+	// Mark previous deployed as rolled_back, set this one as deployed
+	now := time.Now()
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ReleaseRecord{}).Where("status = ?", "deployed").
+			Update("status", "rolled_back").Error; err != nil {
+			return err
+		}
+		return tx.Model(&rec).Updates(map[string]interface{}{
+			"status":      "deployed",
+			"pushed_by":   adminID,
+			"released_at": now,
+		}).Error
+	}); err != nil {
+		a.Log.Error("deploy release", zap.Error(err), zap.Uint64("id", id))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	a.recordAudit(c, adminID, "deploy_release", "release", id,
+		fmt.Sprintf(`{"version":"%s","applied":%d,"skipped":%d}`, rec.Version, applied, skipped))
+
+	resp.OK(c, gin.H{
+		"id":          rec.ID,
+		"version":     rec.Version,
+		"status":      "deployed",
+		"applied":     applied,
+		"skipped":     skipped,
+		"released_at": now,
+	})
+}
+
+// AdminGetReleaseSnapshot GET /admin/config/releases/:id/snapshot — view snapshot inline
+func (a *API) AdminGetReleaseSnapshot(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	var rec model.ReleaseRecord
+	if err := a.DB.First(&rec, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	if rec.Snapshot == "" {
+		// Build on-the-fly
+		raw, _ := json.Marshal(a.buildConfigSnapshot(rec.Version))
+		rec.Snapshot = string(raw)
+	}
+	var snap interface{}
+	if err := json.Unmarshal([]byte(rec.Snapshot), &snap); err != nil {
+		// Return as string
+		resp.OK(c, gin.H{"id": id, "snapshot": rec.Snapshot})
+		return
+	}
+	resp.OK(c, gin.H{"id": id, "version": rec.Version, "snapshot": snap})
 }

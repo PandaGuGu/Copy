@@ -161,6 +161,9 @@ func main() {
 	}
 	go asrWorker.Start(ctx)
 
+	// Scheduled background tasks (health_check / user_stats / cleanup_temp)
+	worker.StartScheduler(ctx, cfg, db, rdb, log)
+
 	pc := &service.PlayCounter{Rdb: rdb, DB: db}
 	go func() {
 		t := time.NewTicker(10 * time.Second)

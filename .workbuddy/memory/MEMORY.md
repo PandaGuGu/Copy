@@ -33,7 +33,7 @@
 | 16 | BI报表 | ✅ | ✅ | `admin_bi.go` / `BIReport.vue` |
 | 17 | 客服后台 | ✅ | ✅ | `admin_cs.go` / `CSManage.vue` |
 | 18-22 | 运维5合1 | ✅ | ✅ | `admin_ops.go` / `OpsMonitor.vue` |
-| 21 | 配置发布 | ✅ | ✅ | `admin_config.go` / `ConfigManage.vue` |
+| 21 | 配置发布 | ✅ | ✅ | `admin_config.go` / `ConfigManage.vue` — 模块注册(一键)、功能开关、版本发布三 tab |
 | 23 | RBAC审计 | ✅ | ✅ | `admin_rbac.go` / `RBACManage.vue` |
 
 新增模型文件：`internal/model/module_extend.go`（20+ 模型）
@@ -77,3 +77,11 @@
 - GitHub 推送：`git push https://TOKEN@github.com/PandaGuGu/Copy.git main`
 - 所有写操作 handler 自动记录 AuditLog（admin_rbac.go 共享 recordAudit）
 - Feature Flag 灰度：FNV-1a hash 分桶 + whitelist + rollout_pct
+- 配置发布流程：
+  - 模块注册 tab：一键填表 → 自动创建 Flag+发布+部署
+  - 功能开关 tab：管理 Flag → 版本发布 tab：新建发布（自动快照）→ 部署上线（apply 快照到 live DB）
+  - 状态流转: draft → deployed → rolled_back
+  - `POST /admin/config/releases/:id/deploy` → 解析快照 → 逐条 UPDATE feature_flags 表
+  - `GET /admin/config/releases/:id/export` → 下载 JSON 快照
+  - `GET /admin/config/releases/:id/snapshot` → 在线查看快照
+  - ReleaseRecord 新增 Title / Type(canary/full/hotfix) / Notes / Snapshot / ReleasedAt 字段

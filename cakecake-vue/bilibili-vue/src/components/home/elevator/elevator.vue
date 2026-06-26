@@ -27,6 +27,10 @@
         <div class="app-tips-icon" style="opacity: 1; display: none;"></div>
       </a>
     </div>
+    <!-- 小心心 -->
+    <div v-if="heartVisible" class="heart-btn" :class="{ liked: heartLiked }" @click="toggleHeart" title="点赞">
+      <span class="heart-icon">{{ heartLiked ? '❤️' : '🤍' }}</span>
+    </div>
   </div>
 </template>
 
@@ -42,6 +46,17 @@ export default {
       vm.setScrollTop(scrollTop);
     };
   },
+  mounted() {
+    // 检查功能开关：默认显示，接口说 disabled 才隐藏
+    fetch("/api/v1/config/feature-flags/heart_anim_enabled")
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.data && d.data.enabled === false) {
+          this.heartVisible = false;
+        }
+      })
+      .catch(() => {}); // 接口挂了不动，继续显示
+  },
   components: {},
   props: {},
   computed: {
@@ -56,7 +71,9 @@ export default {
   },
   data() {
     return {
-      scrollTop: 0
+      scrollTop: 0,
+      heartLiked: false,
+      heartVisible: true, // 默认显示，feature flag 关了才隐藏
     };
   },
   methods: {
@@ -77,7 +94,10 @@ export default {
     },
     goCustomerService() {
       this.$router.push("/customer-service");
-    }
+    },
+    toggleHeart() {
+      this.heartLiked = !this.heartLiked;
+    },
   }
 };
 </script>
@@ -90,6 +110,49 @@ export default {
   z-index: 299;
   top: 164px;
   right: 20px;
+
+  /* 小心心 */
+  .heart-btn {
+    width: 50px;
+    height: 42px;
+    background: #fff;
+    border: 1px solid #e5e9ef;
+    border-radius: 4px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.2s,
+                border-color 0.2s;
+    &:hover {
+      background: #fff0f3;
+      border-color: #ff6b81;
+    }
+    &.liked {
+      background: #fff0f3;
+      border-color: #ff6b81;
+      .heart-icon {
+        animation: heartBeat 0.6s ease-in-out;
+      }
+    }
+    .heart-icon {
+      font-size: 22px;
+      line-height: 1;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+  }
+
+  @keyframes heartBeat {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.3); }
+    50% { transform: scale(0.95); }
+    75% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
   /* 客服按钮 */
   .cs-btn-wrap {
     width: 50px;

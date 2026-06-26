@@ -5,6 +5,26 @@
 
       <!-- ==================== 任务队列 ==================== -->
       <el-tab-pane label="任务队列" name="tasks">
+        <!-- Queue stats -->
+        <div class="op-stats-row" v-if="queueStats">
+          <div class="op-stat-card">
+            <div class="op-stat-card__num">{{ queueStats.pending || 0 }}</div>
+            <div class="op-stat-card__label">待处理</div>
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-card__num" style="color:#409eff">{{ queueStats.running || 0 }}</div>
+            <div class="op-stat-card__label">运行中</div>
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-card__num" style="color:#f56c6c">{{ queueStats.failed || 0 }}</div>
+            <div class="op-stat-card__label">失败</div>
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-card__num" style="color:#e6a23c">{{ queueStats.retrying || 0 }}</div>
+            <div class="op-stat-card__label">重试中</div>
+          </div>
+        </div>
+
         <div class="op-panel">
           <div class="op-panel-head">
             <b class="op-panel-title">异步任务列表</b>
@@ -16,6 +36,7 @@
                 <el-option label="失败" value="failed" />
                 <el-option label="重试中" value="retrying" />
               </el-select>
+              <el-button size="small" @click="triggerSync" :loading="syncing">同步ES/播放量</el-button>
               <el-button size="small" @click="fetchTasks">刷新</el-button>
             </div>
           </div>
@@ -54,6 +75,16 @@
               </template>
             </el-table-column>
           </el-table>
+          <el-pagination
+            v-if="taskPage.total > taskPage.pageSize"
+            v-model:current-page="taskPage.page"
+            v-model:page-size="taskPage.pageSize"
+            :total="taskPage.total"
+            layout="total, prev, pager, next"
+            size="small"
+            @current-change="fetchTasks"
+            style="margin-top:12px; justify-content:flex-end"
+          />
           </div>
         </div>
       </el-tab-pane>
@@ -136,8 +167,18 @@
                     @click="ackAlert(row)"
                   >确认</el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+            </el-table-column>
+          </el-table>
+            <el-pagination
+              v-if="alertPage.total > alertPage.pageSize"
+              v-model:current-page="alertPage.page"
+              v-model:page-size="alertPage.pageSize"
+              :total="alertPage.total"
+              layout="total, prev, pager, next"
+              size="small"
+              @current-change="fetchAlerts"
+              style="margin-top:12px; justify-content:flex-end"
+            />
             </div>
           </div>
         </div>
@@ -152,11 +193,11 @@
               <el-input v-model="traceSearch.trace_id" placeholder="Trace ID" clearable size="small" style="width: 200px" @keyup.enter="searchTraces" />
               <el-input v-model="traceSearch.request_id" placeholder="Request ID" clearable size="small" style="width: 200px" @keyup.enter="searchTraces" />
               <el-input v-model="traceSearch.user_id" placeholder="User ID" clearable size="small" style="width: 140px" @keyup.enter="searchTraces" />
-              <el-button type="primary" size="small" @click="searchTraces">搜索</el-button>
+              <el-button type="primary" size="small" @click="tracePage.page=1;searchTraces()">搜索</el-button>
             </div>
           </div>
           <div class="op-panel-body">
-          <el-table :data="traces" stripe size="small" empty-text="输入条件后点击搜索" max-height="480">
+          <el-table :data="traces" stripe size="small" empty-text="暂无追踪记录" max-height="480">
             <el-table-column prop="trace_id" label="Trace ID" width="260" show-overflow-tooltip>
               <template #default="{ row }">
                 <code class="op-code">{{ row.trace_id }}</code>
@@ -183,6 +224,16 @@
               <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
             </el-table-column>
           </el-table>
+          <el-pagination
+            v-if="tracePage.total > tracePage.pageSize"
+            v-model:current-page="tracePage.page"
+            v-model:page-size="tracePage.pageSize"
+            :total="tracePage.total"
+            layout="total, prev, pager, next"
+            size="small"
+            @current-change="searchTraces"
+            style="margin-top:12px; justify-content:flex-end"
+          />
           </div>
         </div>
       </el-tab-pane>
@@ -192,7 +243,12 @@
         <div class="op-panel">
           <div class="op-panel-head">
             <b class="op-panel-title">组件健康状态</b>
-            <el-button size="small" @click="fetchHealth">刷新状态</el-button>
+            <div class="op-panel-actions">
+              <el-tag :type="healthOverall === 'healthy' ? 'success' : 'danger'" size="small" effect="dark" style="margin-right:8px">
+                {{ healthOverall === 'healthy' ? '正常' : '异常' }}
+              </el-tag>
+              <el-button size="small" @click="fetchHealth">刷新状态</el-button>
+            </div>
           </div>
           <div class="op-panel-body">
           <div class="op-health-grid">
@@ -335,7 +391,7 @@
             <el-option label="<=" value="<=" />
             <el-option label="==" value="==" />
           </el-select>
-          <el-input v-model="alertRuleForm.threshold" placeholder="阈值" style="width: 140px; margin-left: 8px" />
+          <el-input-number v-model="alertRuleForm.threshold" :min="0" :precision="2" placeholder="阈值" style="width: 140px; margin-left: 8px" />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="alertRuleForm.enabled" />
@@ -408,16 +464,21 @@ const activeTab = ref('tasks')
 // Tasks
 const tasks = ref([])
 const taskFilter = reactive({ status: '' })
+const taskPage = reactive({ page: 1, pageSize: 20, total: 0 })
+const queueStats = ref(null)
+const syncing = ref(false)
 
 // Alerts
 const alertRules = ref([])
 const alertRecords = ref([])
 const alertRuleDialogVisible = ref(false)
-const alertRuleForm = reactive({ id: null, name: '', metric: '', operator: '>', threshold: '', enabled: true })
+const alertRuleForm = reactive({ id: null, name: '', metric: '', operator: '>', threshold: 0, enabled: true })
+const alertPage = reactive({ page: 1, pageSize: 20, total: 0 })
 
 // Traces
 const traces = ref([])
 const traceSearch = reactive({ trace_id: '', request_id: '', user_id: '' })
+const tracePage = reactive({ page: 1, pageSize: 20, total: 0 })
 
 // CDN
 const cdnTasks = ref([])
@@ -431,6 +492,7 @@ const lifecycleForm = reactive({ id: null, name: '', bucket: '', prefix: '/', ia
 
 // Health
 const healthStatus = ref([])
+const healthOverall = ref('')
 const evaluating = ref(false)
 
 async function evaluateAlerts() {
@@ -451,8 +513,11 @@ async function fetchTasks() {
   try {
     const params = new URLSearchParams()
     if (taskFilter.status) params.set('status', taskFilter.status)
+    params.set('page', taskPage.page)
+    params.set('page_size', taskPage.pageSize)
     const d = await api(`/ops/tasks?${params}`)
     tasks.value = d.items || []
+    taskPage.total = d.total || 0
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -470,15 +535,37 @@ async function retryTask(row) {
   }
 }
 
+async function fetchQueueStats() {
+  try {
+    const d = await api('/ops/queue-stats')
+    queueStats.value = d
+  } catch { /* ignore */ }
+}
+
+async function triggerSync() {
+  syncing.value = true
+  try {
+    await api('/ops/sync/trigger', { method: 'POST', body: { sync_type: 'all' } })
+    ElMessage.success('同步已触发，请查看任务列表')
+    fetchTasks()
+    fetchQueueStats()
+  } catch (e) {
+    ElMessage.error(e.message || '触发失败')
+  } finally {
+    syncing.value = false
+  }
+}
+
 async function fetchAlerts() {
   loading.value = true
   try {
     const [rulesD, recordsD] = await Promise.all([
       api('/ops/alert-rules'),
-      api('/ops/alert-records'),
+      api(`/ops/alert-records?page=${alertPage.page}&page_size=${alertPage.pageSize}`),
     ])
     alertRules.value = rulesD.items || rulesD || []
     alertRecords.value = recordsD.items || recordsD || []
+    alertPage.total = recordsD.total || 0
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -500,7 +587,7 @@ function openAlertRuleDialog(row) {
   if (row) {
     Object.assign(alertRuleForm, { id: row.id, name: row.name, metric: row.metric, operator: row.operator, threshold: row.threshold, enabled: row.enabled })
   } else {
-    Object.assign(alertRuleForm, { id: null, name: '', metric: '', operator: '>', threshold: '', enabled: true })
+    Object.assign(alertRuleForm, { id: null, name: '', metric: '', operator: '>', threshold: 0, enabled: true })
   }
   alertRuleDialogVisible.value = true
 }
@@ -535,7 +622,7 @@ async function deleteAlertRule(row) {
 
 async function toggleAlertRule(row) {
   try {
-    await api(`/ops/alert-rules/${row.id}`, { method: 'PUT', body: { enabled: row.enabled } })
+    await api(`/ops/alert-rules/${row.id}/toggle`, { method: 'POST' })
   } catch (e) {
     row.enabled = !row.enabled
     ElMessage.error(e.message || '操作失败')
@@ -543,18 +630,17 @@ async function toggleAlertRule(row) {
 }
 
 async function searchTraces() {
-  if (!traceSearch.trace_id && !traceSearch.request_id && !traceSearch.user_id) {
-    ElMessage.warning('请输入搜索条件')
-    return
-  }
   loading.value = true
   try {
     const params = new URLSearchParams()
     if (traceSearch.trace_id) params.set('trace_id', traceSearch.trace_id)
     if (traceSearch.request_id) params.set('request_id', traceSearch.request_id)
     if (traceSearch.user_id) params.set('user_id', traceSearch.user_id)
+    params.set('page', tracePage.page)
+    params.set('page_size', tracePage.pageSize)
     const d = await api(`/ops/traces?${params}`)
     traces.value = d.items || d || []
+    tracePage.total = d.total || 0
   } catch (e) {
     ElMessage.error(e.message || '搜索失败')
   } finally {
@@ -659,6 +745,7 @@ async function fetchHealth() {
   try {
     const d = await api('/ops/health')
     healthStatus.value = d.items || []
+    healthOverall.value = d.overall || 'healthy'
   } catch (e) {
     ElMessage.error(e.message || '获取健康状态失败')
   } finally {
@@ -667,8 +754,9 @@ async function fetchHealth() {
 }
 
 function onTabChange(tab) {
-  if (tab === 'tasks' && tasks.value.length === 0) fetchTasks()
+  if (tab === 'tasks' && tasks.value.length === 0) { fetchTasks(); fetchQueueStats() }
   if (tab === 'alerts' && alertRules.value.length === 0) fetchAlerts()
+  if (tab === 'traces' && traces.value.length === 0) searchTraces()
   if (tab === 'cdn') {
     if (cdnTasks.value.length === 0) fetchCdnTasks()
     if (lifecycleRules.value.length === 0) fetchLifecycleRules()
@@ -689,11 +777,11 @@ function alertLevelTag(l) {
 }
 
 function cdnStatusLabel(s) {
-  return { pending: '处理中', done: '已完成', failed: '失败' }[s] || s
+  return { pending: '处理中', processing: '处理中', success: '已完成', failed: '失败' }[s] || s
 }
 
 function cdnStatusTag(s) {
-  return { pending: 'warning', done: 'success', failed: 'danger' }[s] || ''
+  return { pending: 'warning', processing: 'warning', success: 'success', failed: 'danger' }[s] || ''
 }
 
 function fmtTime(t) {
@@ -710,6 +798,32 @@ onMounted(() => fetchTasks())
 .op-page {
   padding: 0;
   max-width: 100%;
+}
+
+/* Stats row */
+.op-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.op-stat-card {
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 16px 20px;
+  text-align: center;
+}
+.op-stat-card__num {
+  font-size: 28px;
+  font-weight: 700;
+  color: #67c23a;
+  line-height: 1.2;
+}
+.op-stat-card__label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 /* Page title */
