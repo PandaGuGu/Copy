@@ -405,13 +405,19 @@ func (FeatureFlag) TableName() string { return "feature_flags" }
 
 // ReleaseRecord tracks a deployment release for rollback/audit.
 type ReleaseRecord struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Version     string    `gorm:"size:32;uniqueIndex;not null"`
-	Description string    `gorm:"size:500"`
-	Status      string    `gorm:"size:32;not null;default:deploying;index"` // deploying / active / rolled_back
-	DeployedBy  uint64    `gorm:"not null"`
-	RolledBackBy *uint64  `gorm:"index"`
-	CreatedAt   time.Time `gorm:"index"`
+	ID           uint64     `gorm:"primaryKey"`
+	Version      string     `gorm:"size:32;uniqueIndex;not null"`
+	Title        string     `gorm:"size:200"`                        // human-readable title
+	Type         string     `gorm:"size:16;default:canary"`          // canary / full / hotfix
+	Notes        string     `gorm:"type:text"`                       // release notes
+	Snapshot     string     `gorm:"type:longtext"`                   // JSON snapshot of all configs at release time
+	Status       string     `gorm:"size:32;not null;default:deploying;index"` // deploying / released / rolled_out / rolled_back
+	Description  string     `gorm:"size:500"`
+	DeployedBy   uint64     `gorm:"not null"`
+	PushedBy     *uint64    `gorm:"index"` // admin who triggered publish
+	RolledBackBy *uint64    `gorm:"index"`
+	ReleasedAt   *time.Time // when pushed to remote
+	CreatedAt    time.Time  `gorm:"index"`
 }
 
 func (ReleaseRecord) TableName() string { return "release_records" }

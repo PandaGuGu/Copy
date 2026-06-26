@@ -15,6 +15,9 @@ type TranscodePublisher interface {
 // Compile-time check.
 var _ TranscodePublisher = (*Client)(nil)
 
+// Compile-time check.
+var _ TranscodePublisher = (*Client)(nil)
+
 // TranscodeQueue is the durable queue name for video transcoding jobs.
 const TranscodeQueue = "mini_bili_transcode"
 
@@ -74,4 +77,12 @@ func (c *Client) ConsumeTranscode(consumerTag string) (<-chan amqp.Delivery, err
 // NewConsumerChannel opens a dedicated channel for consuming (separate from publish channel).
 func (c *Client) NewConsumerChannel() (*amqp.Channel, error) {
 	return c.conn.Channel()
+}
+
+// IsAlive checks whether the RabbitMQ connection and channel are still open.
+func (c *Client) IsAlive() bool {
+	if c == nil || c.conn == nil || c.ch == nil {
+		return false
+	}
+	return !c.conn.IsClosed() && !c.ch.IsClosed()
 }

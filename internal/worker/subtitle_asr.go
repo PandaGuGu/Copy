@@ -51,14 +51,28 @@ func (w *SubtitleASRWorker) processOne(ctx context.Context) {
 		return
 	}
 
+	// Create TaskLog entry for tracking
+	now := time.Now()
+	task := model.TaskLog{
+		TaskType:  "subtitle_asr",
+		TargetID:  sub.ID,
+		Status:    "running",
+		StartedAt: &now,
+	}
+	if err := w.DB.Create(&task).Error; err != nil {
+		w.Log.Error("create subtitle_asr task log failed", zap.Error(err))
+	}
+
 	// Get video info for audio extraction
 	var video model.Video
 	if err := w.DB.First(&video, sub.VideoID).Error; err != nil {
 		w.Log.Error("get video for ASR failed", zap.Uint64("video_id", sub.VideoID), zap.Error(err))
+		finishTaskLog(w.DB, task.ID, "failed", "video not found")
 		return
 	}
 
 	if video.Status != "published" {
+		finishTaskLog(w.DB, task.ID, "failed", "video not published")
 		return
 	}
 
@@ -71,6 +85,7 @@ func (w *SubtitleASRWorker) processOne(ctx context.Context) {
 	audioPath, err := w.extractAudio(ctx, video.VideoURL)
 	if err != nil {
 		w.Log.Error("extract audio failed", zap.Error(err))
+		finishTaskLog(w.DB, task.ID, "failed", err.Error())
 		return
 	}
 	defer os.Remove(audioPath)
@@ -78,6 +93,7 @@ func (w *SubtitleASRWorker) processOne(ctx context.Context) {
 	transcript, err := w.Transcribe(audioPath, sub.Lang)
 	if err != nil {
 		w.Log.Error("transcribe failed", zap.Error(err))
+		finishTaskLog(w.DB, task.ID, "failed", err.Error())
 		return
 	}
 
@@ -88,8 +104,11 @@ func (w *SubtitleASRWorker) processOne(ctx context.Context) {
 		"format":  "vtt",
 	}).Error; err != nil {
 		w.Log.Error("save ASR transcript failed", zap.Error(err))
+		finishTaskLog(w.DB, task.ID, "failed", err.Error())
 		return
 	}
+
+	finishTaskLog(w.DB, task.ID, "success", "")
 
 	w.Log.Info("ASR completed",
 		zap.Uint64("subtitle_id", sub.ID),

@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
@@ -79,4 +81,12 @@ func (o *OSS) DeleteObjects(objectKeys []string) error {
 		return err
 	}
 	return nil
+}
+
+// Ping verifies OSS connectivity by listing a single object (lightweight probe).
+func (o *OSS) Ping(ctx context.Context) (latencyMs int64, err error) {
+	start := time.Now()
+	_, listErr := o.bucket.ListObjects(oss.MaxKeys(1))
+	latencyMs = time.Since(start).Milliseconds()
+	return latencyMs, listErr
 }

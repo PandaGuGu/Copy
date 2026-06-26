@@ -444,14 +444,32 @@ func (a *API) AdminListAlertRecords(c *gin.Context) {
 		return
 	}
 	items := make([]gin.H, 0, len(rows))
+
+	// Batch preload alert rules to avoid N+1 queries
+	ruleIDSet := make(map[uint64]bool)
+	for _, r := range rows {
+		ruleIDSet[r.RuleID] = true
+	}
+	ruleIDs := make([]uint64, 0, len(ruleIDSet))
+	for rid := range ruleIDSet {
+		ruleIDs = append(ruleIDs, rid)
+	}
+	var rules []model.AlertRule
+	ruleMap := make(map[uint64]*model.AlertRule, len(ruleIDs))
+	if len(ruleIDs) > 0 {
+		if err := a.DB.Where("id IN ?", ruleIDs).Find(&rules).Error; err == nil {
+			for i := range rules {
+				ruleMap[rules[i].ID] = &rules[i]
+			}
+		}
+	}
+
 	for i := range rows {
 		// 根据阈值偏离程度计算告警级别
 		var level string
 		var ruleName string
-		var rule *model.AlertRule
-		if err := a.DB.First(&rule, rows[i].RuleID).Error; err == nil {
+		if rule, ok := ruleMap[rows[i].RuleID]; ok {
 			ruleName = rule.Name
-			// Calculate deviation ratio
 			if rule.Threshold != 0 {
 				deviation := rows[i].Value / rule.Threshold
 				switch {
@@ -607,22 +625,38 @@ func (a *API) AdminGetSystemHealth(c *gin.Context) {
 		}
 	}
 
-	// OSS check
+	// OSS check - real probe
 	ossStatus := "ok"
 	ossDetail := "Available"
+	var ossLatency int64
 	if a.OSS == nil {
 		ossStatus = "unavailable"
 		ossDetail = "not configured"
 		allOK = false
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if lat, err := a.OSS.Ping(ctx); err != nil {
+			ossStatus = "unavailable"
+			ossDetail = fmt.Sprintf("probe failed: %v", err)
+			allOK = false
+		} else {
+			ossLatency = lat
+			ossDetail = fmt.Sprintf("ok (%dms)", lat)
+		}
 	}
-	items = append(items, gin.H{"name": "Object Storage", "status": ossStatus, "detail": ossDetail, "latency": 0})
+	items = append(items, gin.H{"name": "Object Storage", "status": ossStatus, "detail": ossDetail, "latency": ossLatency})
 
-	// RabbitMQ check
+	// RabbitMQ check - real probe
 	mqStatus := "ok"
 	mqDetail := "Available"
 	if a.MQ == nil {
 		mqStatus = "unavailable"
 		mqDetail = "not configured"
+		allOK = false
+	} else if hc, ok := a.MQ.(interface{ IsAlive() bool }); ok && !hc.IsAlive() {
+		mqStatus = "unavailable"
+		mqDetail = "connection closed"
 		allOK = false
 	}
 	items = append(items, gin.H{"name": "Message Queue", "status": mqStatus, "detail": mqDetail, "latency": 0})
@@ -1061,11 +1095,16 @@ func (a *API) AdminTriggerSync(c *gin.Context) {
 		TargetID:  adminID,
 		Status:    "running",
 		StartedAt: &now,
-		ErrorMsg:  fmt.Sprintf("sync_type=%s", body.SyncType),
 	}
 	if err := a.DB.Create(&task).Error; err != nil {
 		a.Log.Warn("create sync tasklog failed", zap.Error(err))
 	}
+
+	a.Log.Info("sync triggered",
+		zap.Uint64("task_id", task.ID),
+		zap.String("sync_type", body.SyncType),
+		zap.Uint64("admin_id", adminID),
+	)
 
 	// Run sync in background
 	go func(taskID uint64, syncType string) {
