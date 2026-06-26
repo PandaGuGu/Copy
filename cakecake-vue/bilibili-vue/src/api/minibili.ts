@@ -3,6 +3,7 @@
  */
 import type { AxiosRequestConfig } from "axios";
 import http from "../utils/http";
+import adminHttp from "../utils/adminHttp";
 import {
   clearTokens,
   getAccessToken,
@@ -2389,13 +2390,29 @@ export async function mbDeleteSubtitle(videoId: number, subtitleId: number): Pro
 
 /** GET /admin/subtitles */
 export async function mbAdminListSubtitles(params?: { video_id?: string; lang?: string }): Promise<SubtitleItem[]> {
-  const r = await http.get("/api/v1/admin/subtitles", { params, ...authAxiosOpts });
+  const r = await adminHttp.get("/api/v1/admin/subtitles", { params, skipGlobalErrorToast: true });
   return unwrap<SubtitleItem[]>(r);
+}
+
+/** POST /admin/subtitles — admin creates subtitle for any video */
+export async function mbAdminCreateSubtitle(payload: {
+  video_id: number; lang: string; title: string; content: string; format?: string;
+}): Promise<SubtitleItem> {
+  const r = await adminHttp.post("/api/v1/admin/subtitles", payload);
+  return unwrap<SubtitleItem>(r);
+}
+
+/** PUT /admin/subtitles/:id — admin updates subtitle */
+export async function mbAdminUpdateSubtitle(id: number, payload: {
+  lang?: string; title?: string; content?: string; format?: string;
+}): Promise<SubtitleItem> {
+  const r = await adminHttp.put(`/api/v1/admin/subtitles/${id}`, payload);
+  return unwrap<SubtitleItem>(r);
 }
 
 /** DELETE /admin/subtitles/:id */
 export async function mbAdminDeleteSubtitle(id: number): Promise<void> {
-  await http.delete(`/api/v1/admin/subtitles/${id}`, authAxiosOpts);
+  await adminHttp.delete(`/api/v1/admin/subtitles/${id}`, { skipGlobalErrorToast: true });
 }
 
 // ══════════════════════════════════════════════

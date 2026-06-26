@@ -158,6 +158,98 @@ func (a *API) AdminListSubtitles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": e.CodeSuccess, "msg": e.GetMsg(e.CodeSuccess), "data": subs})
 }
 
+// AdminCreateSubtitle lets an admin create a subtitle for any video.
+func (a *API) AdminCreateSubtitle(c *gin.Context) {
+	var req struct {
+		VideoID uint64 `json:"video_id" binding:"required"`
+		Lang    string `json:"lang"`
+		Title   string `json:"title" binding:"required"`
+		Content string `json:"content" binding:"required"`
+		Format  string `json:"format"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "参数错误: " + err.Error(), "data": nil})
+		return
+	}
+	if req.Lang == "" {
+		req.Lang = "zh"
+	}
+	if req.Format == "" {
+		req.Format = "vtt"
+	}
+
+	sub := model.Subtitle{
+		VideoID: req.VideoID,
+		Lang:    req.Lang,
+		Title:   req.Title,
+		Content: req.Content,
+		Format:  req.Format,
+	}
+	if err := a.DB.Create(&sub).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": e.CodeInternalError, "msg": e.GetMsg(e.CodeInternalError), "data": nil})
+		return
+	}
+	a.Log.Info("admin created subtitle", zap.Uint64("subtitle_id", sub.ID), zap.Uint64("video_id", req.VideoID))
+	c.JSON(http.StatusOK, gin.H{"code": e.CodeSuccess, "msg": e.GetMsg(e.CodeSuccess), "data": sub})
+}
+
+// AdminUpdateSubtitle updates subtitle metadata/content.
+func (a *API) AdminUpdateSubtitle(c *gin.Context) {
+	sid, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": e.GetMsg(e.CodeParamError), "data": nil})
+		return
+	}
+	var sub model.Subtitle
+	if err := a.DB.First(&sub, sid).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": e.CodeNotFound, "msg": e.GetMsg(e.CodeNotFound), "data": nil})
+		return
+	}
+
+	var req struct {
+		Lang    *string `json:"lang"`
+		Title   *string `json:"title"`
+		Content *string `json:"content"`
+		Format  *string `json:"format"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "参数错误: " + err.Error(), "data": nil})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Lang != nil {
+		updates["lang"] = *req.Lang
+	}
+	if req.Title != nil {
+		updates["title"] = *req.Title
+	}
+	if req.Content != nil {
+		updates["content"] = *req.Content
+	}
+	if req.Format != nil {
+		if *req.Format == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "格式不能为空", "data": nil})
+			return
+		}
+		updates["format"] = *req.Format
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": e.CodeParamError, "msg": "无更新字段", "data": nil})
+		return
+	}
+
+	if err := a.DB.Model(&sub).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": e.CodeInternalError, "msg": e.GetMsg(e.CodeInternalError), "data": nil})
+		return
+	}
+	// Re-fetch to get updated record
+	a.DB.First(&sub, sid)
+	a.Log.Info("admin updated subtitle", zap.Uint64("subtitle_id", sid))
+	c.JSON(http.StatusOK, gin.H{"code": e.CodeSuccess, "msg": e.GetMsg(e.CodeSuccess), "data": sub})
+}
+
 // AdminDeleteSubtitle force-deletes a subtitle.
 func (a *API) AdminDeleteSubtitle(c *gin.Context) {
 	sid, err := strconv.ParseUint(c.Param("id"), 10, 64)
