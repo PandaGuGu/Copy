@@ -42,7 +42,7 @@
           <el-table-column label="更新时间" width="155">
             <template #default="{ row }">{{ fmtTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <el-button size="small" text type="primary" @click="openConversation(row)">查看</el-button>
               <el-popconfirm
@@ -51,7 +51,7 @@
                 @confirm="closeConversation(row)"
               >
                 <template #reference>
-                  <el-button size="small" text type="warning">关闭</el-button>
+                  <el-button size="small" type="danger" plain>关闭</el-button>
                 </template>
               </el-popconfirm>
             </template>
@@ -172,6 +172,14 @@
               size="small"
               @click="assignSelf"
             >指派给我</el-button>
+            <el-popconfirm
+              title="确认关闭此会话？用户将无法继续发送消息。"
+              @confirm="closeConversationFromDetail"
+            >
+              <template #reference>
+                <el-button size="small" type="danger">关闭会话</el-button>
+              </template>
+            </el-popconfirm>
           </div>
         </div>
       </template>
@@ -316,6 +324,18 @@ async function closeConversation(row) {
   try {
     await api(`/cs/conversations/${row.id}/close`, { method: 'POST' })
     ElMessage.success('会话已关闭')
+    fetchConversations()
+  } catch (e) {
+    ElMessage.error(e.message || '操作失败')
+  }
+}
+
+async function closeConversationFromDetail() {
+  if (!convDetail.value) return
+  try {
+    await api(`/cs/conversations/${convDetail.value.id}/close`, { method: 'POST' })
+    ElMessage.success('会话已关闭')
+    convDialogVisible.value = false
     fetchConversations()
   } catch (e) {
     ElMessage.error(e.message || '操作失败')

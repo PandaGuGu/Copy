@@ -33,6 +33,11 @@
               <i class="v-ico" />
               <span class="v-num">{{ stats.dm }}</span>
             </span>
+            <span class="v-stat v-stat--like">
+              <i class="v-ico" />
+              <span class="v-label">点赞</span>
+              <span class="v-num">{{ stats.like }}</span>
+            </span>
             <span class="v-stat v-stat--coin">
               <i class="v-ico" />
               <span class="v-label">硬币</span>
@@ -215,6 +220,31 @@
               </div>
 
               <div class="toolbar-ops">
+                <button
+                  type="button"
+                  class="toolbar-op like-op"
+                  :class="{ 'is-active': likeState.done }"
+                  @click="onLikeClick"
+                  @mouseenter="onLikeEnter"
+                  @mouseleave="onLikeLeave"
+                >
+                  <span class="op-icon-wrap is-like">
+                    <span
+                      class="op-icon like-sprite"
+                      :class="{
+                        animating: likeState.animating && !likeState.done,
+                        'is-done': likeState.done
+                      }"
+                    />
+                  </span>
+                  <span class="op-lines">
+                    <span class="op-title">{{
+                      likeState.done ? "已点赞" : "点赞"
+                    }}</span>
+                    <span class="op-num">{{ stats.like }}</span>
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   class="toolbar-op collect"
@@ -1111,6 +1141,7 @@ import {
   mbSetVideoFavoriteFolders,
   mbPostVideoCoin,
   mbToggleWatchLater,
+  mbToggleVideoLike,
   mbMarkWatchLaterWatched,
   mbToggleUserFollow,
   mbPostViewHistory,
@@ -1203,9 +1234,15 @@ export default {
       stats: {
         play: "29.4万",
         dm: "211",
+        like: "154",
         coin: "154",
         fav: "1212",
         share: "2"
+      },
+      likeState: {
+        animating: false,
+        done: false,
+        pending: false
       },
       fav: {
         animating: false,
@@ -1986,8 +2023,10 @@ export default {
           this.mbVideoUrl = url;
           this.stats.play = String(d.play_count ?? 0);
           this.stats.dm = String(d.danmaku_count ?? 0);
+          this.stats.like = String(d.like_count ?? 0);
           this.stats.fav = String(d.fav_count ?? 0);
           this.stats.coin = String(d.coin_count ?? 0);
+          this.likeState.done = !!d.liked_by_me;
           this.fav.done = !!d.favorited_by_me;
           this.applyCoinStateFromDetail(d);
           this.wait.done = !!d.in_watch_later;
@@ -2197,6 +2236,9 @@ export default {
       document.title = buildDocumentTitle(label);
     },
     resetEngagementUi() {
+      this.likeState.done = false;
+      this.likeState.animating = false;
+      this.likeState.pending = false;
       this.fav.done = false;
       this.fav.animating = false;
       this.fav.pending = false;
@@ -2208,6 +2250,58 @@ export default {
       this.wait.done = false;
       this.wait.animating = false;
       this.wait.pending = false;
+    },
+    onLikeEnter() {
+      if (this.likeState.done) return;
+      this.likeState.animating = false;
+      this.$nextTick(() => {
+        if (this.likeState.done) return;
+        this.likeState.animating = true;
+      });
+    },
+    onLikeLeave() {
+      this.likeState.animating = false;
+    },
+    onLikeClick() {
+      if (!getAccessToken()) {
+        this.openMbLoginModal();
+        return;
+      }
+      if (this.likeState.pending) return;
+      this.likeState.pending = true;
+      const idNum = this.mbNumericId;
+      if (idNum == null || idNum <= 0) {
+        this.likeState.pending = false;
+        return;
+      }
+      const wasDone = this.likeState.done;
+      // Optimistic UI
+      this.likeState.done = !wasDone;
+      this.likeState.animating = !wasDone;
+      const curLike = Number(this.stats.like ?? 0);
+      this.stats.like = String(Math.max(0, wasDone ? curLike - 1 : curLike + 1));
+
+      mbToggleVideoLike(idNum)
+        .then(res => {
+          this.likeState.done = !!res.liked;
+          this.stats.like = String(res.like_count ?? this.stats.like);
+          if (this.apiDetail) {
+            this.apiDetail = {
+              ...this.apiDetail,
+              like_count: res.like_count ?? this.apiDetail.like_count,
+              liked_by_me: !!res.liked
+            };
+          }
+        })
+        .catch(() => {
+          // Revert optimistic update
+          this.likeState.done = wasDone;
+          this.stats.like = String(curLike);
+        })
+        .finally(() => {
+          this.likeState.pending = false;
+          this.likeState.animating = false;
+        });
     },
     onFavEnter() {
       if (this.fav.done) return;

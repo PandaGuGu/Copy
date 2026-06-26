@@ -106,6 +106,19 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.GET("/dynamics", a.AdminListDynamics)
 		admin.GET("/dynamics/:id", a.AdminGetDynamic)
 
+		// BI read-only (all authenticated admins — no special permission needed)
+		admin.GET("/bi/summary", a.AdminGetBISummary)
+		admin.GET("/bi/article-stats", a.AdminGetArticleStats)
+		admin.GET("/bi/engagement-stats", a.AdminGetEngagementStats)
+		admin.GET("/bi/manuscript-stats", a.AdminGetManuscriptStats)
+		admin.GET("/bi/zone-stats", a.AdminGetZoneStats)
+		admin.GET("/bi/creator-stats", a.AdminGetCreatorStats)
+		admin.GET("/bi/time-series", a.AdminGetTimeSeries)
+		admin.GET("/bi/reports", a.AdminListSavedReports)
+		admin.POST("/bi/reports", a.AdminSaveReport)
+		admin.DELETE("/bi/reports/:id", a.AdminDeleteSavedReport)
+		admin.POST("/bi/export", a.AdminExportReport)
+
 		// Permission-protected: user.ban
 		userOps := admin.Group("", middleware.RequirePermission(a.DB, "user", "ban"))
 		userOps.POST("/users/:id/ban", a.AdminBanUser)
@@ -232,19 +245,6 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		crOps.POST("/copyright/complaints/:id/reject", a.AdminRejectCopyrightComplaint)
 		crOps.POST("/copyright/complaints/:id/takedown", a.AdminTakedownContent)
 		crOps.POST("/copyright/complaints/:id/restore", a.AdminRestoreContent)
-
-		// Permission-protected: dashboard.export (BI reports)
-		biOps := admin.Group("", middleware.RequirePermission(a.DB, "dashboard", "export"))
-		biOps.GET("/bi/summary", a.AdminGetBISummary)
-		biOps.GET("/bi/article-stats", a.AdminGetArticleStats)
-		biOps.GET("/bi/engagement-stats", a.AdminGetEngagementStats)
-		biOps.GET("/bi/zone-stats", a.AdminGetZoneStats)
-		biOps.GET("/bi/creator-stats", a.AdminGetCreatorStats)
-		biOps.GET("/bi/time-series", a.AdminGetTimeSeries)
-		biOps.POST("/bi/export", a.AdminExportReport)
-		biOps.GET("/bi/reports", a.AdminListSavedReports)
-		biOps.POST("/bi/reports", a.AdminSaveReport)
-		biOps.DELETE("/bi/reports/:id", a.AdminDeleteSavedReport)
 
 		// Permission-protected: cs.manage
 		cusOps := admin.Group("", middleware.RequirePermission(a.DB, "cs", "manage"))
