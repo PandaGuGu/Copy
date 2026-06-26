@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CakeCake ER 关系图 — Bento Grid</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap');
+
+  :root {
+    --bg: #0f0f0f;
+    --border: #1a1a1a;
+    --text-primary: #f5f5f5;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding: 32px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 36px;
+    position: relative;
+  }
+  .header h1 {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, #FB7299, #3b82f6, #f59e0b, #10b981, #8b5cf6);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 8s ease infinite;
+  }
+  .header .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .header .meta-row {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .header .meta-row span b { color: var(--text-primary); font-weight: 600; }
+
+  @keyframes gradient-shift {
+    0%,100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* ── Bento Grid Layout ── */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto;
+    gap: 14px;
+    max-width: 1480px;
+    margin: 0 auto;
+  }
+
+  /* ── Module Card ── */
+  .bento-card {
+    background: linear-gradient(160deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.005) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .bento-card:hover {
+    border-color: rgba(255,255,255,0.08);
+  }
+  .bento-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0.5;
+  }
+
+  /* Column sizes */
+  .span-col-2 { grid-column: span 2; }
+  .span-row-2 { grid-row: span 2; }
+
+  /* ── Module header ── */
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .card-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .card-title-area {}
+  .card-module-name {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .card-table-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Table rows inside card ── */
+  .table-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .table-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.015);
+    border: 1px solid transparent;
+    transition: background 0.2s, border 0.2s;
+  }
+  .table-row:hover {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.04);
+  }
+  .table-row.primary {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.06);
+  }
+  .table-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .table-name-en {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+  .table-name-en.lg { font-size: 13px; font-weight: 700; }
+  .table-name-zh {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.2;
+  }
+  .field-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.04);
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .field-count.lg {
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+
+  /* ── Relationship lines between cards ── */
+  .rel-connector {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Module color themes ── */
+  .theme-core::before   { background: linear-gradient(90deg, #FB7299, #e91e63); }
+  .theme-core .card-icon { background: linear-gradient(135deg, rgba(251,114,153,0.2), rgba(233,30,99,0.1)); border: 1px solid rgba(251,114,153,0.2); }
+  .theme-core .card-module-name { color: #FB7299; }
+  .theme-core .table-name-en { color: #fff; }
+  .theme-core .field-count { color: #FB7299; border: 1px solid rgba(251,114,153,0.15); }
+
+  .theme-video-interact::before   { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+  .theme-video-interact .card-icon { background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(29,78,216,0.1)); border: 1px solid rgba(59,130,246,0.2); }
+  .theme-video-interact .card-module-name { color: #3b82f6; }
+  .theme-video-interact .field-count { color: #3b82f6; border: 1px solid rgba(59,130,246,0.15); }
+
+  .theme-article-interact::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+  .theme-article-interact .card-icon { background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(217,119,6,0.1)); border: 1px solid rgba(245,158,11,0.2); }
+  .theme-article-interact .card-module-name { color: #f59e0b; }
+  .theme-article-interact .field-count { color: #f59e0b; border: 1px solid rgba(245,158,11,0.15); }
+
+  .theme-follow-social::before    { background: linear-gradient(90deg, #10b981, #047857); }
+  .theme-follow-social .card-icon { background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(4,120,87,0.1)); border: 1px solid rgba(16,185,129,0.2); }
+  .theme-follow-social .card-module-name { color: #10b981; }
+  .theme-follow-social .field-count { color: #10b981; border: 1px solid rgba(16,185,129,0.15); }
+
+  .theme-messaging::before        { background: linear-gradient(90deg, #8b5cf6, #6d28d9); }
+  .theme-messaging .card-icon { background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(109,40,217,0.1)); border: 1px solid rgba(139,92,246,0.2); }
+  .theme-messaging .card-module-name { color: #8b5cf6; }
+  .theme-messaging .field-count { color: #8b5cf6; border: 1px solid rgba(139,92,246,0.15); }
+
+  .theme-dynamic::before          { background: linear-gradient(90deg, #ec4899, #be185d); }
+  .theme-dynamic .card-icon { background: linear-gradient(135deg, rgba(236,72,153,0.2), rgba(190,24,93,0.1)); border: 1px solid rgba(236,72,153,0.2); }
+  .theme-dynamic .card-module-name { color: #ec4899; }
+  .theme-dynamic .field-count { color: #ec4899; border: 1px solid rgba(236,72,153,0.15); }
+
+  .theme-history::before          { background: linear-gradient(90deg, #64748b, #475569); }
+  .theme-history .card-icon { background: linear-gradient(135deg, rgba(100,116,139,0.2), rgba(71,85,105,0.1)); border: 1px solid rgba(100,116,139,0.2); }
+  .theme-history .card-module-name { color: #64748b; }
+  .theme-history .field-count { color: #64748b; border: 1px solid rgba(100,116,139,0.15); }
+
+  .theme-coin-op::before          { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+  .theme-coin-op .card-icon { background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(8,145,178,0.1)); border: 1px solid rgba(6,182,212,0.2); }
+  .theme-coin-op .card-module-name { color: #06b6d4; }
+  .theme-audit .card-module-name { color: #ef4444; }
+  .theme-ops .card-module-name { color: #14b8a6; }
+  .theme-config .card-module-name { color: #a855f7; }
+  .theme-ticket-risk .card-module-name { color: #f97316; }
+  .theme-cs-bi .card-module-name { color: #22c55e; }
+  .theme-coin-op .field-count { color: #06b6d4; border: 1px solid rgba(6,182,212,0.15); }
+
+  /* ── Admin Extension Themes ── */
+  .theme-ticket-risk .card-icon { background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(234,88,12,0.1)); border: 1px solid rgba(249,115,22,0.2); }
+  .theme-ticket-risk .table-name-en { color: #f97316; }
+  .theme-ticket-risk .field-count { color: #f97316; border: 1px solid rgba(249,115,22,0.15); }
+  .theme-config .card-icon { background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(147,51,234,0.1)); border: 1px solid rgba(168,85,247,0.2); }
+  .theme-config .table-name-en { color: #a855f7; }
+  .theme-config .field-count { color: #a855f7; border: 1px solid rgba(168,85,247,0.15); }
+  .theme-cs-bi .card-icon { background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(22,163,74,0.1)); border: 1px solid rgba(34,197,94,0.2); }
+  .theme-cs-bi .table-name-en { color: #22c55e; }
+  .theme-cs-bi .field-count { color: #22c55e; border: 1px solid rgba(34,197,94,0.15); }
+  .theme-ops .card-icon { background: linear-gradient(135deg, rgba(20,184,166,0.2), rgba(13,148,136,0.1)); border: 1px solid rgba(20,184,166,0.2); }
+  .theme-ops .table-name-en { color: #14b8a6; }
+  .theme-ops .field-count { color: #14b8a6; border: 1px solid rgba(20,184,166,0.15); }
+  .theme-audit .card-icon { background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.1)); border: 1px solid rgba(239,68,68,0.2); }
+  .theme-audit .table-name-en { color: #ef4444; }
+  .theme-audit .field-count { color: #ef4444; border: 1px solid rgba(239,68,68,0.15); }
+
+  /* ── Center diagram connector area ── */
+  .center-diagram {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 18px;
+    padding: 4px 0;
+  }
+  .center-diagram svg.connections-svg {
+    width: 100%;
+    height: 56px;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .bento-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .span-col-2 { grid-column: span 2; }
+    body { padding: 16px; }
+  }
+
+  /* ── SVG connectors overlay ── */
+  .connections-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .connections-layer svg {
+    width: 100%;
+    height: 100%;
+  }
+  .connections-layer line, .connections-layer path {
+    pointer-events: none;
+  }
+
+  /* ── Section labels ── */
+  .section-label {
+    grid-column: 1 / -1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 8px 0 0 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Stats strip ── */
+  .stats-strip {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 14px 0;
+  }
+  .stat-item {
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════ HEADER ════════ -->
+<div class="header">
+  <h1>CakeCake 数据库架构</h1>
+  <div class="subtitle">Entity Relationship — Bento Information Diagram</div>
+  <div class="meta-row">
+    <span><b>82</b> Tables (43 core)</span>
+    <span><b>14</b> Modules (8 core)</span>
+    <span><b>400+</b> Columns Total</span>
+    <span>v3.0 · 2026</span>
+  </div>
+</div>
+
+<!-- ════════ LEGEND ════════ -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#FB7299"></div>核心实体</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>视频互动</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>文章互动</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>关注社交</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>消息通知</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>动态系统</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#64748b"></div>历史记录</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>硬币+运营</div>
+</div>
+
+<!-- ════════ BENTO GRID ════════ -->
+<div class="bento-grid" style="position:relative;">
+
+  <!-- Stats Strip -->
+  <div class="stats-strip">
+    <div class="stat-item"><div class="stat-num" style="color:#FB7299">6</div><div class="stat-label">核心模块</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#3b82f6">10</div><div class="stat-label">视频互动</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#f59e0b">5</div><div class="stat-label">文章互动</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#10b981">4</div><div class="stat-label">关注社交</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#8b5cf6">5</div><div class="stat-label">消息通知</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#ec4899">5</div><div class="stat-label">动态系统</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#64748b">4</div><div class="stat-label">历史记录</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#06b6d4">4</div><div class="stat-label">硬币运营</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#f97316">6</div><div class="stat-label">工单风控</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#a855f7">2</div><div class="stat-label">版权管理</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#22c55e">5</div><div class="stat-label">报表客服</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#14b8a6">6</div><div class="stat-label">运维监控</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#ef4444">12</div><div class="stat-label">配置权限</div></div>
+  </div>
+
+  <!-- ═══════ ROW 1: Core + Video Interact ═══════ -->
+
+  <!-- SECTION LABEL -->
+  <div class="section-label">Module A — Core Entities &amp; Video Interaction</div>
+
+  <!-- [1,1] 核心实体 6表 — Large -->
+  <div class="bento-card span-col-2 theme-core" id="core">
+    <div class="card-header">
+      <div class="card-icon">&#9908;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">核心实体</div>
+        <div class="card-table-count">6 TABLES · 97 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row primary">
+        <div class="table-info">
+          <div class="table-name-en lg">users</div>
+          <div class="table-name-zh">用户主表</div>
+        </div>
+        <div class="field-count lg">23</div>
+      </div>
+      <div class="table-row primary">
+        <div class="table-info">
+          <div class="table-name-en lg">videos</div>
+          <div class="table-name-zh">视频主表</div>
+        </div>
+        <div class="field-count lg">29</div>
+      </div>
+      <div class="table-row primary">
+        <div class="table-info">
+          <div class="table-name-en lg">articles</div>
+          <div class="table-name-zh">文章主表</div>
+        </div>
+        <div class="field-count lg">20</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">admins</div>
+          <div class="table-name-zh">管理员表</div>
+        </div>
+        <div class="field-count">8</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">agent_profiles</div>
+          <div class="table-name-zh">主播档案表</div>
+        </div>
+        <div class="field-count">10</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">agent_settings</div>
+          <div class="table-name-zh">主播配置表</div>
+        </div>
+        <div class="field-count">7</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- [1,2] 视频互动 10表 — Large -->
+  <div class="bento-card span-col-2 theme-video-interact" id="video-interact">
+    <div class="card-header">
+      <div class="card-icon">&#9654;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">视频互动</div>
+        <div class="card-table-count">10 TABLES · 58 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">danmakus</div>
+          <div class="table-name-zh">弹幕表</div>
+        </div>
+        <div class="field-count">9</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">danmaku_likes</div>
+          <div class="table-name-zh">弹幕点赞表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">comments</div>
+          <div class="table-name-zh">评论表</div>
+        </div>
+        <div class="field-count">12</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">comment_likes</div>
+          <div class="table-name-zh">评论点赞表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">comment_dislikes</div>
+          <div class="table-name-zh">评论点踩表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">video_likes</div>
+          <div class="table-name-zh">视频点赞表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">favorite_folders</div>
+          <div class="table-name-zh">收藏夹文件夹</div>
+        </div>
+        <div class="field-count">7</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">video_favorites</div>
+          <div class="table-name-zh">视频收藏表</div>
+        </div>
+        <div class="field-count">4</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">video_coins</div>
+          <div class="table-name-zh">视频投币表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">watch_laters</div>
+          <div class="table-name-zh">稍后观看表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ROW 2: Article Interact + Follow Social ═══════ -->
+
+  <div class="section-label">Module B — Article Interaction &amp; Social Following</div>
+
+  <!-- [3,1] 文章互动 5表 -->
+  <div class="bento-card theme-article-interact" id="article-interact">
+    <div class="card-header">
+      <div class="card-icon">&#128221;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">文章互动</div>
+        <div class="card-table-count">5 TABLES · 21 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_favorites</div>
+          <div class="table-name-zh">文章收藏表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_coins</div>
+          <div class="table-name-zh">文章投币表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_comments</div>
+          <div class="table-name-zh">文章评论表</div>
+        </div>
+        <div class="field-count">12</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_comment_likes</div>
+          <div class="table-name-zh">文章评论点赞</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_comment_dislikes</div>
+          <div class="table-name-zh">文章评论点踩</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- [3,2] 关注社交 4表 -->
+  <div class="bento-card theme-follow-social" id="follow-social">
+    <div class="card-header">
+      <div class="card-icon">&#128075;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">关注社交</div>
+        <div class="card-table-count">4 TABLES · 12 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_follows</div>
+          <div class="table-name-zh">用户关注表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_blocks</div>
+          <div class="table-name-zh">用户拉黑表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_follow_groups</div>
+          <div class="table-name-zh">粉丝分组表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_follow_group_members</div>
+          <div class="table-name-zh">分组成员表</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- [3,3] 消息通知 5表 — Large -->
+  <div class="bento-card span-col-2 theme-messaging" id="messaging">
+    <div class="card-header">
+      <div class="card-icon">&#128276;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">消息通知</div>
+        <div class="card-table-count">5 TABLES · 27 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">notifications</div>
+          <div class="table-name-zh">通知表</div>
+        </div>
+        <div class="field-count">10</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">like_notif_mutes</div>
+          <div class="table-name-zh">点赞通知免打扰</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dm_conversations</div>
+          <div class="table-name-zh">私信会话表</div>
+        </div>
+        <div class="field-count">8</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dm_participants</div>
+          <div class="table-name-zh">私信参与者表</div>
+        </div>
+        <div class="field-count">7</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dm_messages</div>
+          <div class="table-name-zh">私信消息表</div>
+        </div>
+        <div class="field-count">4</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ROW 3: Dynamic + History + Coin+Op ═══════ -->
+
+  <div class="section-label">Module C — Dynamic System, History &amp; Operations</div>
+
+  <!-- [6,1] 动态系统 5表 -->
+  <div class="bento-card theme-dynamic" id="dynamic">
+    <div class="card-header">
+      <div class="card-icon">&#128246;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">动态系统</div>
+        <div class="card-table-count">5 TABLES · 22 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_dynamics</div>
+          <div class="table-name-zh">用户动态表</div>
+        </div>
+        <div class="field-count">8</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_dynamic_likes</div>
+          <div class="table-name-zh">动态点赞表</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dynamic_comments</div>
+          <div class="table-name-zh">动态评论表</div>
+        </div>
+        <div class="field-count">9</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dynamic_comment_likes</div>
+          <div class="table-name-zh">动态评论点赞</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">dynamic_comment_dislikes</div>
+          <div class="table-name-zh">动态评论点踩</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- [6,2] 历史记录 4表 -->
+  <div class="bento-card theme-history" id="history">
+    <div class="card-header">
+      <div class="card-icon">&#8982;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">历史记录</div>
+        <div class="card-table-count">4 TABLES · 18 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">video_view_histories</div>
+          <div class="table-name-zh">视频观看历史</div>
+        </div>
+        <div class="field-count">5</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">article_view_histories</div>
+          <div class="table-name-zh">文章阅读历史</div>
+        </div>
+        <div class="field-count">4</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_search_histories</div>
+          <div class="table-name-zh">用户搜索历史</div>
+        </div>
+        <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">user_daily_tasks</div>
+          <div class="table-name-zh">用户每日任务</div>
+        </div>
+        <div class="field-count">5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- [6,3] 硬币+运营 4表 -->
+  <div class="bento-card theme-coin-op" id="coin-op">
+    <div class="card-header">
+      <div class="card-icon">&#9830;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">硬币 + 运营</div>
+        <div class="card-table-count">4 TABLES · 29 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">coin_ledgers</div>
+          <div class="table-name-zh">硬币账本表</div>
+        </div>
+        <div class="field-count">4</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">home_banners</div>
+          <div class="table-name-zh">首页轮播表</div>
+        </div>
+        <div class="field-count">9</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">hot_search_ops</div>
+          <div class="table-name-zh">热搜运营表</div>
+        </div>
+        <div class="field-count">9</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">hot_search_display_layout</div>
+          <div class="table-name-zh">热搜展示布局</div>
+        </div>
+        <div class="field-count">2</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end bento-grid -->
+
+  <!-- ═══════ ADMIN EXTENSIONS ═══════ -->
+  <div class="section-label">Module C — Admin Extensions (v3.0, +39 Tables)</div>
+
+  <!-- 工单风控 6表 -->
+  <div class="bento-card theme-ticket-risk" id="ticket-risk">
+    <div class="card-header">
+      <div class="card-icon">&#9888;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">工单 + 风控</div>
+        <div class="card-table-count">6 TABLES</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">tickets</div><div class="table-name-zh">工单表</div></div><div class="field-count">10</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">ticket_messages</div><div class="table-name-zh">工单消息</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">risk_rules</div><div class="table-name-zh">风控规则</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">risk_hit_logs</div><div class="table-name-zh">命中日志</div></div><div class="field-count">6</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">black_white_lists</div><div class="table-name-zh">黑白名单</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">ticket_satisfactions</div><div class="table-name-zh">满意度</div></div><div class="field-count">4</div></div>
+    </div>
+  </div>
+
+  <!-- 版权管理 2表 -->
+  <div class="bento-card theme-config" id="copyright">
+    <div class="card-header">
+      <div class="card-icon">&#169;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">版权管理</div>
+        <div class="card-table-count">2 TABLES</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">copyright_complaints</div><div class="table-name-zh">版权投诉</div></div><div class="field-count">10</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">counter_notices</div><div class="table-name-zh">反通知</div></div><div class="field-count">8</div></div>
+    </div>
+  </div>
+
+  <!-- 客服BI 5表 -->
+  <div class="bento-card theme-cs-bi" id="cs-bi">
+    <div class="card-header">
+      <div class="card-icon">&#128202;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">报表 + 客服</div>
+        <div class="card-table-count">5 TABLES</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">cs_conversations</div><div class="table-name-zh">客服会话</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">cs_messages</div><div class="table-name-zh">客服消息</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">cs_templates</div><div class="table-name-zh">快捷模板</div></div><div class="field-count">6</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">saved_reports</div><div class="table-name-zh">BI报表</div></div><div class="field-count">6</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">video_daily_stats</div><div class="table-name-zh">日统计</div></div><div class="field-count">10</div></div>
+    </div>
+  </div>
+
+  <!-- 运维监控 6表 -->
+  <div class="bento-card span-col-2 theme-ops" id="ops-monitor">
+    <div class="card-header">
+      <div class="card-icon">&#9889;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">运维监控</div>
+        <div class="card-table-count">6 TABLES</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">task_logs</div><div class="table-name-zh">任务日志</div></div><div class="field-count">7</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">alert_rules</div><div class="table-name-zh">告警规则</div></div><div class="field-count">9</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">alert_records</div><div class="table-name-zh">告警记录</div></div><div class="field-count">7</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">trace_records</div><div class="table-name-zh">链路追踪</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">cdn_refresh_tasks</div><div class="table-name-zh">CDN刷新</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">oss_lifecycle_rules</div><div class="table-name-zh">OSS生命周期</div></div><div class="field-count">6</div></div>
+    </div>
+  </div>
+
+  <!-- 配置权限 12表 -->
+  <div class="bento-card span-col-2 theme-audit" id="config-rbac">
+    <div class="card-header">
+      <div class="card-icon">&#128274;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">配置 + 权限审计</div>
+        <div class="card-table-count">12 TABLES</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">feature_flags</div><div class="table-name-zh">功能开关</div></div><div class="field-count">7</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">release_records</div><div class="table-name-zh">发布记录</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">admin_roles</div><div class="table-name-zh">角色表</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">admin_permissions</div><div class="table-name-zh">权限点</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">role_permissions</div><div class="table-name-zh">角色-权限</div></div><div class="field-count">3</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">admin_role_assignments</div><div class="table-name-zh">角色分配</div></div><div class="field-count">3</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">audit_logs</div><div class="table-name-zh">审计日志</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">admin_login_logs</div><div class="table-name-zh">登录日志</div></div><div class="field-count">6</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">approval_flows</div><div class="table-name-zh">审批流</div></div><div class="field-count">5</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">approval_steps</div><div class="table-name-zh">审批步骤</div></div><div class="field-count">4</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">special_pages</div><div class="table-name-zh">专题页</div></div><div class="field-count">8</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">campaigns</div><div class="table-name-zh">活动表</div></div><div class="field-count">9</div></div>
+    </div>
+  </div>
+
+<!-- ════════ SVG CONNECTION LAYER ════════ -->
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;opacity:0.45;" id="svg-layer">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" style="overflow:visible;">
+  <defs>
+    <linearGradient id="g-core" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FB7299" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="g-vidart" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="g-artfol" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="g-messdyn" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ec4899" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="g-histop" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#64748b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Core → Video Interact (same row, horizontal) -->
+  <line x1="55%" y1="160" x2="61%" y2="160" stroke="url(#g-core)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Video Interact → Article Interact (across to row 2) -->
+  <path d="M 65% 360 L 72% 400 L 68% 440 L 15% 440" fill="none" stroke="url(#g-vidart)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Article → Follow Social (same row, horizontal) -->
+  <line x1="32%" y1="610" x2="38%" y2="610" stroke="url(#g-artfol)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Follow Social → Messaging -->
+  <path d="M 42% 730 L 45% 760 L 55% 760" fill="none" stroke="url(#g-artfol)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Core (bottom) → Dynamic (row 3) -->
+  <path d="M 30% 290 L 30% 310 L 15% 540 L 15% 560" fill="none" stroke="url(#g-messdyn)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Messaging → Dynamic -->
+  <line x1="50%" y1="720" x2="55%" y2="820" stroke="url(#g-messdyn)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Dynamic → History (same row) -->
+  <line x1="38%" y1="970" x2="42%" y2="970" stroke="url(#g-histop)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- History → Coin+Op (same row) -->
+  <line x1="62%" y1="970" x2="66%" y2="970" stroke="url(#g-histop)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- User(核心) ↔ Videos(核心) ↔ Articles(核心) — internal core links -->
+  <line x1="22%" y1="148" x2="32%" y2="148" stroke="#FB7299" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/>
+  <line x1="38%" y1="180" x2="50%" y2="180" stroke="#FB7299" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/>
+
+  <!-- Videos table → danmakus/comments/video_likes -->
+  <line x1="62%" y1="148" x2="60%" y2="310" stroke="#3b82f6" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.3"/>
+
+  <!-- Users → notifications -->
+  <line x1="45%" y1="340" x2="55%" y2="560" stroke="#8b5cf6" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.3"/>
+
+</svg>
+</div>
+
+<!-- ════════ FOOTER ════════ -->
+<div class="footer">
+  CAKECAKE DATABASE ARCHITECTURE · 82 TABLES · 14 MODULES · BENTO INFOGRAPHIC · v3.0
+</div>
+
+<script>
+(function(){
+  // Draw precise connector lines between modules based on actual positions
+  const svgLayer = document.getElementById('svg-layer');
+  const rects = {};
+  const moduleMap = {
+    'core': 'core',
+    'video-interact': 'video-interact',
+    'article-interact': 'article-interact',
+    'follow-social': 'follow-social',
+    'messaging': 'messaging',
+    'dynamic': 'dynamic',
+    'history': 'history',
+    'coin-op': 'coin-op'
+  };
+
+  for(const key of Object.keys(moduleMap)){
+    const el = document.getElementById(key);
+    if(el){
+      rects[key] = el.getBoundingClientRect();
+    }
+  }
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  function center(elRect){
+    return {
+      x: elRect.left + elRect.width/2,
+      y: elRect.top + elRect.height/2,
+      rx: elRect.right,
+      lx: elRect.left,
+      ty: elRect.top,
+      by: elRect.bottom
+    };
+  }
+
+  // Clear default paths
+  const defs = svgLayer.querySelector('defs');
+  svgLayer.querySelectorAll('line,path').forEach(e=>e.remove());
+
+  let html = '<defs>';
+  for(const [name,color] of [['g1','#FB7299'],['g2','#3b82f6'],['g3','#f59e0b'],['g4','#10b981'],['g5','#8b5cf6'],['g6','#ec4899'],['g7','#64748b'],['g8','#06b6d4']]){
+    html += `<marker id="ah${name}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="${color}" opacity="0.5"/>
+    </marker>`;
+  }
+
+  // Relationships to draw
+  const rels = [
+    // Core entities internal
+    ['core','core-videos','horizontal'],
+    // Core → Video Interact (videos table connects to danmakus/comments)
+    ['core','video-interact','right-left'],
+    // Video Interact → Article Interact (user action similarity)
+    ['video-interact','article-interact','below-above-below'],
+    // Article Interact → Follow Social (user relations)
+    ['article-interact','follow-social','horizontal'],
+    // Follow Social → Messaging (user relationships extend to DMs)
+    ['follow-social','messaging','below-right'],
+    // Messaging → Core (notifications link to users/videos/articles)
+    ['messaging','core','above-left'],
+    // Core → Dynamic (user activities)
+    ['core','dynamic','right-below'],
+    // Dynamic → History (activity trails)
+    ['dynamic','history','horizontal'],
+    // History → Coin-Op (spending history)
+    ['history','coin-op','horizontal'],
+  ];
+
+  // Actually let me compute proper bezier curves
+  const connections = [
+    // users ↔ videos ↔ articles (internal core)
+    {from:'core-lr', to:'core-lr', label:'', type:'internal'},
+    // videos ↔ danmakus/comments (cross-module)
+    {from:{id:'core',dir:'r'}, to:{id:'video-interact',dir:'tl'}, color:'#FB7299'},
+    // users ↔ notifications
+    {from:{id:'core',dir:'br'}, to:{id:'messaging',dir:'tl'}, color:'#e91e63'},
+    // videos ↔ comments/video_likes
+    {from:{id:'core',dir:'r'}, to:{id:'video-interact',dir:'tl'}, color:'#3b82f6'},
+    // articles ↔ article_comments/article_coins
+    {from:{id:'video-interact',dir:'b'}, to:{id:'article-interact',dir:'t'}, color:'#3b82f6'},
+    // user_follows ↔ dm_conversations
+    {from:{id:'article-interact',dir:'br'}, to:{id:'follow-social',dir:'tr'}, color:'#f59e0b'},
+    // follow ↔ messaging (DMs extend follow relationships)
+    {from:{id:'follow-social',dir:'br'}, to:{id:'messaging',dir:'t'}, color:'#10b981'},
+    // notifications ↔ user_dynamics
+    {from:{id:'messaging',dir:'b'}, to:{id:'dynamic',dir:'tl'}, color:'#8b5cf6'},
+    // dynamics ↔ histories
+    {from:{id:'dynamic',dir:'r'}, to:{id:'history',dir:'l'}, color:'#ec4899'},
+    // histories ↔ coin-ledgers
+    {from:{id:'history',dir:'r'}, to:{id:'coin-op',dir:'l'}, color:'#64748b'},
+    // core (users) ↔ follow
+    {from:{id:'core',dir:'br'}, to:{id:'follow-social',dir:'tl'}, color:'#FB7299'},
+    // article ↔ dynamic
+    {from:{id:'article-interact',dir:'br'}, to:{id:'dynamic',dir:'t'}, color:'#f59e0b'},
+  ];
+
+  const connDefs = [
+    // From Core to Video Interact
+    {fid:'core',fdr:'r', tid:'video-interact',tdr:'tl', col:'#FB7299'},
+    // From Core to Messaging (users→notifications)
+    {fid:'core',fdr:'br', tid:'messaging',tdr:'tl', col:'#e91e63'},
+    // Video Interact to Article Interact (videos→comments/coins)
+    {fid:'video-interact',fdr:'b', tid:'article-interact',tdr:'t', col:'#3b82f6'},
+    // Article Interact to Follow Social (articles→follow via user)
+    {fid:'article-interact',fdr:'br', tid:'follow-social',tdr:'l', col:'#f59e0b'},
+    // Follow Social to Messaging (follow→DMs)
+    {fid:'follow-social',fdr:'br', tid:'messaging',tdr:'t', col:'#10b981'},
+    // Messaging to Dynamic (notifications→user activities)
+    {fid:'messaging',fdr:'b', tid:'dynamic',tdr:'t', col:'#8b5cf6'},
+    // Dynamic to History (activities create history)
+    {fid:'dynamic',fdr:'r', tid:'history',tdr:'l', col:'#ec4899'},
+    // History to Coin+Op (spending histories)
+    {fid:'history',fdr:'r', tid:'coin-op',tdr:'l', col:'#64748b'},
+  ];
+
+  for(const c of connDefs){
+    const fr = rects[c.fid];
+    const tr = rects[c.tid];
+    if(!fr||!tr) continue;
+    const fc = center(fr);
+    const tc = center(tr);
+
+    let x1,y1,x2,y2;
+    if(c.fdr==='r'||c.tdr==='l'){
+      x1=c.fdr==='r'?fc.rx:fc.lx;
+      y1=fc.y;
+      x2=c.tdr==='l'?tc.lx:tc.rx;
+      y2=tc.y;
+    } else if(c.fdr==='b'||c.tdr==='t'){
+      x1=fc.x;
+      y1=c.fdr==='b'?fc.by:fc.ty;
+      x2=tc.x;
+      y2=c.tdr==='t'?tc.ty:tc.by;
+    } else {
+      x1=fc.x; y1=fc.by; x2=tc.x; y2=tc.ty;
+    }
+
+    const dx=Math.abs(x2-x1)*0.5;
+    const dy=Math.abs(y2-y1)*0.5;
+    const cp1x=x1+(x2-x1)*0.5;
+    const cp1y=y1;
+    const cp2x=x1+(x2-x1)*0.5;
+    const cp2y=y2;
+
+    html+=`<path d="M${x1.toFixed(1)},${y1.toFixed(1)} C${cp1x.toFixed(1)},${(y1+Math.sign(y2-y1)*dy).toFixed(1)},${cp2x.toFixed(1)},${(y2-Math.sign(y2-y1)*dy).toFixed(1)},${x2.toFixed(1)},${y2.toFixed(1)}" fill="none" stroke="${c.col}" stroke-width="1" stroke-dasharray="4,3" opacity="0.35"/>`;
+  }
+
+  html+='</defs>';
+  svgLayer.innerHTML = html;
+})();
+</script>
+
+</body>
+</html>
