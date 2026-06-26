@@ -47,7 +47,9 @@ func (a *API) ToggleVideoLike(c *gin.Context) {
 			return
 		}
 		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error
-		resp.OK(c, gin.H{"liked": true})
+		var lc int64
+		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).Select("like_count").Scan(&lc).Error
+		resp.OK(c, gin.H{"liked": true, "like_count": lc})
 		return
 	}
 	if err := a.DB.Delete(&like).Error; err != nil {
@@ -55,5 +57,7 @@ func (a *API) ToggleVideoLike(c *gin.Context) {
 		return
 	}
 	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
-	resp.OK(c, gin.H{"liked": false})
+	var lc2 int64
+	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).Select("like_count").Scan(&lc2).Error
+	resp.OK(c, gin.H{"liked": false, "like_count": lc2})
 }

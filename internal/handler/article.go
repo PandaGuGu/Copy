@@ -334,6 +334,7 @@ func (a *API) PostArticle(c *gin.Context) {
 		CoverURL:  strings.TrimSpace(req.CoverURL),
 		Status:    status,
 		TagsJSON:  tagsJSON,
+		Category:  firstTagCategory(req.Tags),
 		PublishedAt: publishedAt,
 	}
 	if err := a.DB.Create(&art).Error; err != nil {
@@ -400,6 +401,7 @@ func (a *API) PutMyArticle(c *gin.Context) {
 			return
 		}
 		updates["tags_json"] = tagsJSON
+		updates["category"] = firstTagCategory(req.Tags)
 	}
 	if publishNow {
 		if err := a.checkArticleSensitive(art.Title, art.BodyMD); err != nil {
@@ -784,4 +786,12 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		return
 	}
 	resp.OK(c, gin.H{"cover_url": url})
+}
+
+// firstTagCategory derives category from the first tag of an article.
+func firstTagCategory(tags []string) string {
+	if len(tags) > 0 {
+		return tags[0]
+	}
+	return ""
 }

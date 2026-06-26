@@ -277,6 +277,7 @@ type Article struct {
 	BodyMD        string `gorm:"type:longtext;not null"`
 	Status        string `gorm:"size:32;index:idx_article_status;not null;default:draft"`
 	TagsJSON      string `gorm:"type:text"`
+	Category      string `gorm:"size:32;default:''"`
 	ViewCount     uint64 `gorm:"default:0"`
 	CommentCount  uint64 `gorm:"default:0"`
 	// CommentsClosed：作者关闭评论区后禁止新发评论；列表对访客返回空。

@@ -25,7 +25,7 @@
         <div class="bi-zone-chart" v-if="zoneData.length > 0">
           <svg :viewBox="`0 0 ${chartW} ${zoneChartH}`" class="bi-zone-svg">
             <line v-for="i in 5" :key="'gl'+i" :x1="60" :y1="10 + (i-1)*zoneBarStep" :x2="chartW" :y2="10 + (i-1)*zoneBarStep" stroke="#e8e9eb" stroke-width="1" />
-            <g v-for="(z, idx) in zoneData" :key="z.zone_id" :transform="`translate(0, ${10 + idx * zoneBarStep})`">
+            <g v-for="(z, idx) in zoneData" :key="idx" :transform="`translate(0, ${10 + idx * zoneBarStep})`">
               <text :x="56" :y="zoneBarH/2 + 2" text-anchor="end" font-size="11" fill="#61666d">{{ z.zone_name }}</text>
               <rect :x="60" :y="4" :width="barWidth(z.video_count)" :height="zoneBarH - 4" :fill="zoneBarColor(idx)" rx="3" />
               <text :x="60 + barWidth(z.video_count) + 6" :y="zoneBarH/2 + 2" font-size="11" fill="#9499a0">{{ z.video_count }}</text>
@@ -50,7 +50,7 @@
       <!-- 创作者统计 -->
       <el-tab-pane label="创作者排行" name="creator">
         <div class="bi-toolbar">
-          <el-select v-model="creatorMetric" size="small" style="width: 140px" @change="fetchCreators">
+          <el-select v-model="creatorMetric" size="small" style="width: 140px">
             <el-option label="按总播放" value="total_plays" />
             <el-option label="按投币数" value="total_coins" />
             <el-option label="按粉丝数" value="fans_count" />
@@ -67,19 +67,19 @@
               <span class="bi-muted" style="margin-left: 4px">@{{ row.cake_id || row.username }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="总播放" width="110" sortable :prop="creatorMetric === 'total_plays' ? 'total_plays' : null">
+          <el-table-column label="总播放" width="110" sortable prop="total_plays">
             <template #default="{ row }">{{ fmtNum(row.total_plays) }}</template>
           </el-table-column>
-          <el-table-column label="总投币" width="100" sortable>
+          <el-table-column label="总投币" width="100" sortable prop="total_coins">
             <template #default="{ row }">{{ fmtNum(row.total_coins) }}</template>
           </el-table-column>
-          <el-table-column label="粉丝数" width="100" sortable>
+          <el-table-column label="粉丝数" width="100" sortable prop="fans_count">
             <template #default="{ row }">{{ fmtNum(row.fans_count) }}</template>
           </el-table-column>
-          <el-table-column label="视频数" width="90">
+          <el-table-column label="视频数" width="90" sortable prop="video_count">
             <template #default="{ row }">{{ row.video_count }}</template>
           </el-table-column>
-          <el-table-column label="文章数" width="90">
+          <el-table-column label="文章数" width="90" sortable prop="article_count">
             <template #default="{ row }">{{ row.article_count }}</template>
           </el-table-column>
         </el-table>
@@ -144,28 +144,59 @@
         </el-table>
       </el-tab-pane>
 
-      <!-- 文章统计 -->
-      <el-tab-pane label="文章统计" name="article">
+      <!-- 稿件统计 -->
+      <el-tab-pane label="稿件统计" name="manuscript">
         <div class="bi-toolbar">
-          <el-button type="primary" size="small" @click="exportCSV('article')">导出 CSV</el-button>
+          <el-button type="primary" size="small" @click="exportCSV('manuscript')">导出 CSV</el-button>
         </div>
-        <div style="display: flex; gap: 16px; flex-wrap: wrap">
-          <div style="flex: 1; min-width: 300px">
-            <h4 class="bi-subtitle">文章分类分布</h4>
-            <el-table :data="articleByCategory" stripe size="small" max-height="300">
-              <el-table-column prop="category" label="分类" />
-              <el-table-column prop="count" label="文章数" width="100" />
+
+        <!-- 视频稿件卡片 -->
+        <h4 class="bi-subtitle">视频稿件</h4>
+        <div class="bi-engage-cards">
+          <div class="bi-engage-card">📹 视频总量 <b>{{ fmtNum(msVideoSummary.total || 0) }}</b></div>
+          <div class="bi-engage-card">✅ 已发布 <b>{{ fmtNum(msVideoSummary.published || 0) }}</b></div>
+          <div class="bi-engage-card">▶ 总播放 <b>{{ fmtNum(msVideoSummary.total_plays || 0) }}</b></div>
+          <div class="bi-engage-card">🪙 总投币 <b>{{ fmtNum(msVideoSummary.total_coins || 0) }}</b></div>
+          <div class="bi-engage-card">⭐ 总收藏 <b>{{ fmtNum(msVideoSummary.total_favs || 0) }}</b></div>
+        </div>
+
+        <!-- 图文稿件卡片 -->
+        <h4 class="bi-subtitle">图文稿件</h4>
+        <div class="bi-engage-cards">
+          <div class="bi-engage-card">📝 图文总量 <b>{{ fmtNum(msArticleSummary.total || 0) }}</b></div>
+          <div class="bi-engage-card">✅ 已发布 <b>{{ fmtNum(msArticleSummary.published || 0) }}</b></div>
+          <div class="bi-engage-card">👁 总阅读 <b>{{ fmtNum(msArticleSummary.total_views || 0) }}</b></div>
+          <div class="bi-engage-card">🪙 总投币 <b>{{ fmtNum(msArticleSummary.total_coins || 0) }}</b></div>
+          <div class="bi-engage-card">⭐ 总收藏 <b>{{ fmtNum(msArticleSummary.total_favs || 0) }}</b></div>
+        </div>
+
+        <!-- 双栏 TOP 榜 -->
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px">
+          <div style="flex: 1; min-width: 340px">
+            <h4 class="bi-subtitle">热门视频 TOP10</h4>
+            <el-table :data="msTopVideos" stripe size="small" max-height="360">
+              <el-table-column label="排名" width="55">
+                <template #default="{ $index }">{{ $index + 1 }}</template>
+              </el-table-column>
+              <el-table-column prop="title" label="标题" show-overflow-tooltip min-width="140" />
+              <el-table-column label="播放" width="80">
+                <template #default="{ row }">{{ fmtNum(row.play_count) }}</template>
+              </el-table-column>
+              <el-table-column prop="zone" label="分区" width="70" />
             </el-table>
           </div>
-          <div style="flex: 1; min-width: 300px">
-            <h4 class="bi-subtitle">热门文章 TOP10</h4>
-            <el-table :data="topArticles?.slice(0, 10)" stripe size="small" max-height="300">
-              <el-table-column prop="title" label="标题" show-overflow-tooltip />
+          <div style="flex: 1; min-width: 340px">
+            <h4 class="bi-subtitle">热门图文 TOP10</h4>
+            <el-table :data="msTopArticles" stripe size="small" max-height="360">
+              <el-table-column label="排名" width="55">
+                <template #default="{ $index }">{{ $index + 1 }}</template>
+              </el-table-column>
+              <el-table-column prop="title" label="标题" show-overflow-tooltip min-width="140" />
               <el-table-column label="阅读" width="80">
                 <template #default="{ row }">{{ fmtNum(row.view_count) }}</template>
               </el-table-column>
-              <el-table-column label="评论" width="70">
-                <template #default="{ row }">{{ row.comment_count }}</template>
+              <el-table-column label="时间" width="90">
+                <template #default="{ row }">{{ fmtDate(row.created_at) }}</template>
               </el-table-column>
             </el-table>
           </div>
@@ -209,13 +240,14 @@
       <el-table :data="savedReports" stripe size="small" empty-text="暂无已保存报表">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="name" label="名称" min-width="160" />
-        <el-table-column prop="type" label="类型" width="100" />
+        <el-table-column prop="chart_type" label="图表类型" width="100" />
         <el-table-column label="创建时间" width="160">
           <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="170">
           <template #default="{ row }">
             <el-button size="small" text type="primary" @click="loadReport(row)">加载</el-button>
+            <el-button size="small" text type="success" @click="exportReport(row)">导出</el-button>
             <el-popconfirm title="确认删除？" @confirm="deleteReport(row)">
               <template #reference>
                 <el-button size="small" text type="danger">删除</el-button>
@@ -273,9 +305,11 @@ const newReportName = ref('')
 const summaryCards = ref([])
 const summaryUpdated = ref('')
 
-// Article stats
-const articleByCategory = ref([])
-const topArticles = ref([])
+// Manuscript stats
+const msVideoSummary = ref({})
+const msArticleSummary = ref({})
+const msTopVideos = ref([])
+const msTopArticles = ref([])
 
 // Engagement stats
 const engagementTS = ref([])
@@ -346,19 +380,17 @@ async function fetchZones() {
 async function fetchCreators() {
   loading.value = true
   try {
-    // Map frontend metric to backend dimension
-    const dimMap = { total_plays: 'play_count', total_coins: 'coin_count', fans_count: 'fan_count' }
-    const dimension = dimMap[creatorMetric.value] || 'play_count'
-    const d = await api(`/bi/creator-stats?dimension=${dimension}`)
-    // Backend returns { creators: [{ user_id, username, play_count/coin_count/fan_count }], dimension }
+    const d = await api(`/bi/creator-stats?limit=20`)
+    // Backend returns all dimensions at once: { creators: [{ user_id, username, total_plays, total_coins, fans_count, video_count, article_count }] }
     const raw = d.creators || d.items || d || []
     creatorData.value = raw.map(c => ({
       user_id: c.user_id,
       nickname: c.username || c.nickname,
       username: c.username || c.nickname,
-      total_plays: dimension === 'play_count' ? (c.play_count || 0) : 0,
-      total_coins: dimension === 'coin_count' ? (c.coin_count || 0) : 0,
-      fans_count: dimension === 'fan_count' ? (c.fan_count || 0) : 0,
+      cake_id: c.username,
+      total_plays: c.total_plays || 0,
+      total_coins: c.total_coins || 0,
+      fans_count: c.fans_count || 0,
       video_count: c.video_count || 0,
       article_count: c.article_count || 0,
     }))
@@ -405,7 +437,7 @@ async function fetchTimeSeries() {
 async function fetchSavedReports() {
   try {
     const d = await api('/bi/reports')
-    savedReports.value = d.items || d || []
+    savedReports.value = d.reports || d.items || d || []
   } catch { /* ignore */ }
 }
 
@@ -419,14 +451,16 @@ async function fetchSummary() {
   }
 }
 
-async function fetchArticleStats() {
+async function fetchManuscriptStats() {
   loading.value = true
   try {
-    const d = await api('/bi/article-stats?days=30')
-    articleByCategory.value = d.by_category || []
-    topArticles.value = d.top_articles || []
+    const d = await api('/bi/manuscript-stats?days=30')
+    msVideoSummary.value = d.video_summary || {}
+    msArticleSummary.value = d.article_summary || {}
+    msTopVideos.value = d.top_videos || []
+    msTopArticles.value = d.top_articles || []
   } catch (e) {
-    ElMessage.error(e.message || '加载文章统计失败')
+    ElMessage.error(e.message || '加载稿件统计失败')
   } finally {
     loading.value = false
   }
@@ -478,7 +512,7 @@ function onTabChange(tab) {
   if (tab === 'zone' && zoneData.value.length === 0) fetchZones()
   if (tab === 'creator' && creatorData.value.length === 0) fetchCreators()
   if (tab === 'timeseries' && tsData.value.length === 0) fetchTimeSeries()
-  if (tab === 'article' && articleByCategory.value.length === 0) fetchArticleStats()
+  if (tab === 'manuscript' && msTopVideos.value.length === 0) fetchManuscriptStats()
   if (tab === 'engagement' && engagementTS.value.length === 0) fetchEngagementStats()
 }
 
@@ -492,8 +526,9 @@ async function saveReport() {
       method: 'POST',
       body: {
         name: newReportName.value.trim(),
-        type: activeTab.value,
-        config: { tab: activeTab.value, metric: activeTab.value === 'creator' ? creatorMetric.value : tsMetric.value },
+        description: '',
+        query_config: JSON.stringify({ tab: activeTab.value, metric: activeTab.value === 'creator' ? creatorMetric.value : tsMetric.value }),
+        chart_type: (activeTab.value === 'zone' || activeTab.value === 'creator') ? 'table' : 'line',
       },
     })
     newReportName.value = ''
@@ -515,14 +550,29 @@ async function deleteReport(row) {
 }
 
 function loadReport(row) {
-  if (row.config?.tab) {
-    activeTab.value = row.config.tab
-    if (row.config.metric) {
-      if (row.config.tab === 'creator') creatorMetric.value = row.config.metric
-      if (row.config.tab === 'timeseries') tsMetric.value = row.config.metric
+  let cfg = {}
+  try { cfg = typeof row.query_config === 'string' ? JSON.parse(row.query_config) : (row.query_config || {}) } catch { /* ignore */ }
+  if (cfg.tab) {
+    activeTab.value = cfg.tab
+    if (cfg.metric) {
+      if (cfg.tab === 'creator') creatorMetric.value = cfg.metric
+      if (cfg.tab === 'timeseries') tsMetric.value = cfg.metric
     }
-    onTabChange(row.config.tab)
+    onTabChange(cfg.tab)
   }
+}
+
+function exportReport(row) {
+  let cfg = {}
+  try { cfg = typeof row.query_config === 'string' ? JSON.parse(row.query_config) : (row.query_config || {}) } catch { /* ignore */ }
+  let metric = 'plays'
+  if (cfg.tab === 'creator') {
+    const dimMap = { total_plays: 'play_count', total_coins: 'coin_count', fans_count: 'fan_count' }
+    metric = dimMap[cfg.metric] || 'play_count'
+  } else if (cfg.tab === 'timeseries' && cfg.metric) {
+    metric = cfg.metric
+  }
+  serverExport(metric)
 }
 
 function exportCSV(type) {
@@ -543,11 +593,11 @@ function exportCSV(type) {
       日期: t.date, 播放量: t.daily_plays, 新用户: t.daily_users, 新视频: t.daily_videos,
     }))
     filename = 'timeseries.csv'
-  } else if (type === 'article') {
-    rows = topArticles.value.map(a => ({
-      标题: a.title, 阅读量: a.view_count, 评论数: a.comment_count, 发布时间: a.created_at,
+  } else if (type === 'manuscript') {
+    rows = msTopVideos.value.map(v => ({
+      排名: msTopVideos.value.indexOf(v) + 1, 标题: v.title, 播放量: v.play_count, 分区: v.zone,
     }))
-    filename = 'article_stats.csv'
+    filename = 'top_videos.csv'
   } else if (type === 'engagement') {
     if (engagementTS.value.length === 0) { ElMessage.warning('暂无互动数据'); return }
     const first = engagementTS.value[0]
@@ -579,16 +629,28 @@ function exportCSV(type) {
 // Server-side export (with TaskLog tracking)
 async function serverExport(metric) {
   try {
-    await api('/bi/export', { method: 'POST', body: { metric, days: 30 } })
-    ElMessage.success(`已触发服务端导出 (${metric})，可在任务队列查看`)
+    const res = await http.post(ADMIN_API + '/bi/export', { metric, days: 30 }, { responseType: 'blob' })
+    // responseType: 'blob' 时 res 是完整的 axios response（经过拦截器返回 body，即 Blob）
+    const blob = res instanceof Blob ? res : new Blob([res], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `report_${metric}_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success(`已导出报表 (${metric})`)
   } catch (e) {
-    ElMessage.error(e.message || '导出失败')
+    ElMessage.error((e && e.message) || '导出失败')
   }
 }
 
 function fmtNum(n) {
   if (n == null) return '0'
   if (n >= 10000) return (n / 10000).toFixed(1) + '万'
+  // Floats: round to 1 decimal; integers: keep as-is
+  if (typeof n === 'number' && !Number.isInteger(n)) return n.toFixed(1)
   return String(n)
 }
 
@@ -599,8 +661,20 @@ function fmtTime(t) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function fmtDate(t) {
+  if (!t) return ''
+  const d = new Date(t)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 onMounted(() => {
   fetchZones()
+  fetchSummary()
+  fetchCreators()
+  fetchTimeSeries()
+  fetchManuscriptStats()
+  fetchEngagementStats()
   fetchSavedReports()
 })
 </script>

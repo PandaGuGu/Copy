@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/csv"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ func (a *API) AdminGetZoneStats(c *gin.Context) {
 	var rows []row
 	if err := a.DB.Model(&model.Video{}).
 		Select("zone, COUNT(*) as count, COALESCE(SUM(play_count), 0) as play_count").
-		Where("zone != ''").
+		Where("zone != '' AND status != 'deleted'").
 		Group("zone").
 		Order("play_count DESC").
 		Find(&rows).Error; err != nil {
@@ -44,7 +45,7 @@ func (a *API) AdminGetZoneStats(c *gin.Context) {
 	for i := range rows {
 		avg := float64(0)
 		if rows[i].Count > 0 {
-			avg = float64(rows[i].PlayCount) / float64(rows[i].Count)
+			avg = math.Round(float64(rows[i].PlayCount)/float64(rows[i].Count)*10) / 10
 		}
 		items = append(items, gin.H{
 			"zone":               rows[i].Zone,
@@ -58,66 +59,71 @@ func (a *API) AdminGetZoneStats(c *gin.Context) {
 
 // AdminGetCreatorStats GET /admin/bi/creator-stats
 func (a *API) AdminGetCreatorStats(c *gin.Context) {
-	dimension := strings.TrimSpace(c.DefaultQuery("dimension", "play_count"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}
 
-	type agg struct {
-		UserID uint64
-		Val    int64
+	// Aggregate video stats per user (plays, coins, video_count)
+	type videoAgg struct {
+		UserID     uint64
+		PlayCount  int64
+		CoinCount  int64
+		VideoCount int64
 	}
-	var rows []agg
+	var videoRows []videoAgg
+	a.DB.Model(&model.Video{}).
+		Select("user_id, COALESCE(SUM(play_count), 0) as play_count, COALESCE(SUM(coin_count), 0) as coin_count, COUNT(*) as video_count").
+		Where("status != 'deleted'").
+		Group("user_id").
+		Order("play_count DESC").
+		Limit(limit).
+		Find(&videoRows)
 
-	switch dimension {
-	case "coin_count":
-		if err := a.DB.Model(&model.Video{}).
-			Select("user_id, COALESCE(SUM(coin_count), 0) as val").
-			Group("user_id").
-			Order("val DESC").
-			Limit(limit).
-			Find(&rows).Error; err != nil {
-			a.Log.Error("creator coin stats failed", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	case "fan_count":
-		if err := a.DB.Model(&model.UserFollow{}).
-			Select("followee_id as user_id, COUNT(*) as val").
-			Group("followee_id").
-			Order("val DESC").
-			Limit(limit).
-			Find(&rows).Error; err != nil {
-			a.Log.Error("creator fan stats failed", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	case "play_count":
-		fallthrough
-	default:
-		if err := a.DB.Model(&model.Video{}).
-			Select("user_id, COALESCE(SUM(play_count), 0) as val").
-			Group("user_id").
-			Order("val DESC").
-			Limit(limit).
-			Find(&rows).Error; err != nil {
-			a.Log.Error("creator play stats failed", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
+	// Aggregate fan count per user
+	type fanAgg struct {
+		UserID   uint64
+		FanCount int64
+	}
+	var fanRows []fanAgg
+	a.DB.Model(&model.UserFollow{}).
+		Select("followee_id as user_id, COUNT(*) as fan_count").
+		Group("followee_id").
+		Find(&fanRows)
+
+	// Aggregate article count per user
+	type artAgg struct {
+		UserID      uint64
+		ArticleCount int64
+	}
+	var artRows []artAgg
+	a.DB.Model(&model.Article{}).
+		Select("user_id, COUNT(*) as article_count").
+		Where("status != 'deleted'").
+		Group("user_id").
+		Find(&artRows)
+
+	// Build lookup maps
+	fanMap := make(map[uint64]int64, len(fanRows))
+	for i := range fanRows {
+		fanMap[fanRows[i].UserID] = fanRows[i].FanCount
+	}
+	artMap := make(map[uint64]int64, len(artRows))
+	for i := range artRows {
+		artMap[artRows[i].UserID] = artRows[i].ArticleCount
 	}
 
-	if len(rows) == 0 {
-		resp.OK(c, gin.H{"creators": []gin.H{}})
+	// If no video data, return empty
+	if len(videoRows) == 0 {
+		resp.OK(c, gin.H{"creators": []gin.H{}, "dimension": "play_count"})
 		return
 	}
 
-	uids := make([]uint64, 0, len(rows))
-	for i := range rows {
-		uids = append(uids, rows[i].UserID)
+	// Resolve usernames
+	uids := make([]uint64, 0, len(videoRows))
+	for i := range videoRows {
+		uids = append(uids, videoRows[i].UserID)
 	}
-
 	var users []model.User
 	_ = a.DB.Where("id IN ?", uids).Find(&users).Error
 	userName := make(map[uint64]string, len(users))
@@ -125,15 +131,19 @@ func (a *API) AdminGetCreatorStats(c *gin.Context) {
 		userName[users[i].ID] = model.DisplayUsername(&users[i])
 	}
 
-	items := make([]gin.H, 0, len(rows))
-	for i := range rows {
+	items := make([]gin.H, 0, len(videoRows))
+	for i := range videoRows {
 		items = append(items, gin.H{
-			"user_id":      rows[i].UserID,
-			"username":     userName[rows[i].UserID],
-			dimension:      rows[i].Val,
+			"user_id":       videoRows[i].UserID,
+			"username":      userName[videoRows[i].UserID],
+			"total_plays":   videoRows[i].PlayCount,
+			"total_coins":   videoRows[i].CoinCount,
+			"fans_count":    fanMap[videoRows[i].UserID],
+			"video_count":   videoRows[i].VideoCount,
+			"article_count": artMap[videoRows[i].UserID],
 		})
 	}
-	resp.OK(c, gin.H{"creators": items, "dimension": dimension})
+	resp.OK(c, gin.H{"creators": items, "dimension": "play_count"})
 }
 
 // AdminGetTimeSeries GET /admin/bi/time-series
@@ -171,7 +181,7 @@ func (a *API) AdminGetTimeSeries(c *gin.Context) {
 	case "new_videos":
 		if err := a.DB.Model(&model.Video{}).
 			Select(trunc+" as date, COUNT(*) as value").
-			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND status != 'deleted'", days).
 			Group("date").
 			Order("date ASC").
 			Find(&points).Error; err != nil {
@@ -184,7 +194,7 @@ func (a *API) AdminGetTimeSeries(c *gin.Context) {
 	default:
 		if err := a.DB.Model(&model.Video{}).
 			Select(trunc+" as date, COALESCE(SUM(play_count), 0) as value").
-			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND status != 'deleted'", days).
 			Group("date").
 			Order("date ASC").
 			Find(&points).Error; err != nil {
@@ -245,14 +255,14 @@ func (a *API) AdminExportReport(c *gin.Context) {
 	case "new_videos":
 		queryErr = a.DB.Model(&model.Video{}).
 			Select("DATE(created_at) as date, COUNT(*) as value").
-			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", body.Days).
+			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND status != 'deleted'", body.Days).
 			Group("date").Order("date ASC").Find(&points).Error
 	case "plays":
 		fallthrough
 	default:
 		queryErr = a.DB.Model(&model.Video{}).
 			Select("DATE(created_at) as date, COALESCE(SUM(play_count), 0) as value").
-			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", body.Days).
+			Where("created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND status != 'deleted'", body.Days).
 			Group("date").Order("date ASC").Find(&points).Error
 	}
 
@@ -436,7 +446,7 @@ func (a *API) AdminGetBISummary(c *gin.Context) {
 
 	// Total video plays (all time)
 	var totalPlays int64
-	totalPlaysRow := a.DB.Model(&model.Video{}).Select("COALESCE(SUM(play_count), 0)").Row()
+	totalPlaysRow := a.DB.Model(&model.Video{}).Where("status != ?", "deleted").Select("COALESCE(SUM(play_count), 0)").Row()
 	_ = totalPlaysRow.Scan(&totalPlays)
 	summary.Cards = append(summary.Cards, card{Key: "total_plays", Label: "累计播放", Value: totalPlays})
 
@@ -467,7 +477,7 @@ func (a *API) AdminGetArticleStats(c *gin.Context) {
 		Category string `json:"category"`
 		Count    int64  `json:"count"`
 	}
-	var byCategory []catRow
+	byCategory := make([]catRow, 0)
 	a.DB.Model(&model.Article{}).
 		Select("category, COUNT(*) as count").
 		Where("category != '' AND status != 'deleted'").
@@ -605,5 +615,121 @@ func (a *API) AdminGetEngagementStats(c *gin.Context) {
 		"total_favs":        totalFavs,
 		"total_video_coins": totalVideoCoins,
 		"total_article_coins": totalCoins,
+	})
+}
+
+// ──────────────────────────────────────────────
+// Manuscript (video + article) stats
+// ──────────────────────────────────────────────
+
+// AdminGetManuscriptStats GET /admin/bi/manuscript-stats
+func (a *API) AdminGetManuscriptStats(c *gin.Context) {
+	// Video aggregate stats — count published + active as "published"
+	var videoPublished, videoDraft, videoPending, videoRejected int64
+	a.DB.Model(&model.Video{}).Where("status IN ('published','active')").Count(&videoPublished)
+	a.DB.Model(&model.Video{}).Where("status IN ('draft','pending')").Count(&videoDraft)
+	a.DB.Model(&model.Video{}).Where("status IN ('processing','pending_review')").Count(&videoPending)
+	a.DB.Model(&model.Video{}).Where("status IN ('rejected','failed')").Count(&videoRejected)
+
+	var videoTotalPlay, videoTotalCoin, videoTotalFav int64
+	row := a.DB.Model(&model.Video{}).Where("status IN ('published','active')").Select("COALESCE(SUM(play_count),0), COALESCE(SUM(coin_count),0), COALESCE(SUM(fav_count),0)").Row()
+	_ = row.Scan(&videoTotalPlay, &videoTotalCoin, &videoTotalFav)
+	totalVideos := videoPublished + videoDraft + videoPending + videoRejected
+
+	// Article aggregate stats
+	var articlePublished, articleDraft, articlePending, articleRejected int64
+	a.DB.Model(&model.Article{}).Where("status = 'published'").Count(&articlePublished)
+	a.DB.Model(&model.Article{}).Where("status = 'draft'").Count(&articleDraft)
+	a.DB.Model(&model.Article{}).Where("status = 'pending_review'").Count(&articlePending)
+	a.DB.Model(&model.Article{}).Where("status = 'rejected'").Count(&articleRejected)
+
+	var articleTotalView, articleTotalCoin, articleTotalFav int64
+	row2 := a.DB.Model(&model.Article{}).Select("COALESCE(SUM(view_count),0), COALESCE(SUM(coin_count),0), COALESCE(SUM(fav_count),0)").Row()
+	_ = row2.Scan(&articleTotalView, &articleTotalCoin, &articleTotalFav)
+	totalArticles := articlePublished + articleDraft + articlePending + articleRejected
+
+	// Dynamic count
+	var totalDynamics int64
+	a.DB.Model(&model.UserDynamic{}).Count(&totalDynamics)
+
+	// Top videos by plays
+	type topVid struct {
+		ID        uint64    `json:"id"`
+		Title     string    `json:"title"`
+		PlayCount int64     `json:"play_count"`
+		Zone      string    `json:"zone"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	var topVideos []topVid
+	a.DB.Model(&model.Video{}).
+		Select("id, title, play_count, zone, created_at").
+		Where("status IN ('published','active')").
+		Order("play_count DESC").Limit(10).
+		Find(&topVideos)
+
+	// Top articles by views
+	type topArt struct {
+		ID        uint64    `json:"id"`
+		Title     string    `json:"title"`
+		ViewCount int64     `json:"view_count"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	var topArticles []topArt
+	a.DB.Model(&model.Article{}).
+		Select("id, title, view_count, created_at").
+		Where("status = 'published'").
+		Order("view_count DESC").Limit(10).
+		Find(&topArticles)
+
+	// Video play time series (last 30 days)
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days < 1 || days > 365 {
+		days = 30
+	}
+	type point struct {
+		Date  string `json:"date"`
+		Value int64  `json:"value"`
+	}
+	var videoTs []point
+	a.DB.Model(&model.VideoViewHistory{}).
+		Select("DATE(viewed_at) as date, COUNT(*) as value").
+		Where("viewed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&videoTs)
+
+	// Article view time series
+	var articleTs []point
+	a.DB.Model(&model.ArticleViewHistory{}).
+		Select("DATE(viewed_at) as date, COUNT(*) as value").
+		Where("viewed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)", days).
+		Group("date").Order("date ASC").
+		Find(&articleTs)
+
+	resp.OK(c, gin.H{
+		"video_summary": gin.H{
+			"total":        totalVideos,
+			"published":    videoPublished,
+			"draft":        videoDraft,
+			"pending":      videoPending,
+			"rejected":     videoRejected,
+			"total_plays":  videoTotalPlay,
+			"total_coins":  videoTotalCoin,
+			"total_favs":   videoTotalFav,
+		},
+		"article_summary": gin.H{
+			"total":        totalArticles,
+			"published":    articlePublished,
+			"draft":        articleDraft,
+			"pending":      articlePending,
+			"rejected":     articleRejected,
+			"total_views":  articleTotalView,
+			"total_coins":  articleTotalCoin,
+			"total_favs":   articleTotalFav,
+		},
+		"total_dynamics": totalDynamics,
+		"top_videos":     topVideos,
+		"top_articles":   topArticles,
+		"video_plays_ts": videoTs,
+		"article_views_ts": articleTs,
 	})
 }
