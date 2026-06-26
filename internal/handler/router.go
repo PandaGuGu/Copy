@@ -194,6 +194,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		// Permission-protected: subtitle.manage
 		subOps := admin.Group("", middleware.RequirePermission(a.DB, "subtitle", "manage"))
 		subOps.GET("/subtitles", a.AdminListSubtitles)
+		subOps.POST("/subtitles", a.AdminCreateSubtitle)
+		subOps.PUT("/subtitles/:id", a.AdminUpdateSubtitle)
 		subOps.DELETE("/subtitles/:id", a.AdminDeleteSubtitle)
 
 		// Permission-protected: ticket.handle
