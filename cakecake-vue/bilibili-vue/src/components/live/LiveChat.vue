@@ -124,6 +124,10 @@ export default {
             addMessage({ username: data.username || "匿名", content: data.content });
           } else if (data.type === "system") {
             addMessage({ type: "system", content: data.msg || data.content });
+          } else if (data.type === "admin_warning") {
+            addMessage({ type: "system", content: "🔴 " + (data.msg || data.reason || "管理员警告") });
+          } else if (data.type === "admin_ban") {
+            addMessage({ type: "system", content: "⛔ " + (data.msg || "直播间已被封禁") });
           }
         } catch (e) {}
       };

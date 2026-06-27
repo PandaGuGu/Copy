@@ -59,6 +59,7 @@ const GROUPS = [
   ]},
   { key:"audit", title:"审核", items:[
     { name:"adminVideoReview", label:"视频审核",      perm:"video:approve" },
+    { name:"adminLiveManage", label:"直播管理",         perm:"live:manage" },
     { name:"adminArticleReview", label:"专栏审核",     perm:"article:approve" },
     { name:"adminComments", label:"评论管理",          perm:"comment:delete" },
     { name:"adminReports", label:"举报处理",           perm:"report:handle" },

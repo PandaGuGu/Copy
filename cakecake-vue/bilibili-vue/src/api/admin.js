@@ -112,6 +112,10 @@ export function adminDeleteVideo(id) {
   return adminHttp.post(`/api/v1/admin/videos/${id}/delete`);
 }
 
+export function adminBatchApproveVideos() {
+  return adminHttp.post("/api/v1/admin/videos/batch-approve");
+}
+
 export function adminListArticles(params = {}) {
   return adminHttp.get("/api/v1/admin/articles", { params });
 }

@@ -32,6 +32,15 @@
       </button>
     </div>
 
+    <div v-if="statusFilter === 'pending_review'" class="adm-review-actions">
+      <el-button type="primary" @click="openManualReview">
+        人工审核
+      </el-button>
+      <el-button type="success" @click="openAutoReview">
+        自动审核
+      </el-button>
+    </div>
+
     <div class="adm-table-wrap">
     <el-table v-loading="loading" :data="rows" border stripe class="adm-video-table">
       <el-table-column prop="id" label="ID" width="64" />
@@ -142,6 +151,60 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="reviewDialogVisible"
+      :title="reviewVideos.length ? `人工审核 (${reviewIndex + 1}/${reviewVideos.length})` : '人工审核'"
+      width="800px"
+      destroy-on-close
+      @closed="reviewDialogClosed"
+    >
+      <template v-if="currentReviewVideo">
+        <div class="adm-review">
+          <div class="adm-review__media">
+            <video
+              v-if="currentReviewVideo.video_url"
+              :src="currentReviewVideo.video_url"
+              :poster="currentReviewVideo.cover_url"
+              controls
+              playsinline
+              class="adm-review__video"
+            />
+            <img v-else-if="currentReviewVideo.cover_url" :src="currentReviewVideo.cover_url" class="adm-review__cover" alt="" />
+          </div>
+          <div class="adm-review__meta">
+            <h3>{{ currentReviewVideo.title }}</h3>
+            <p><strong>UP主：</strong>{{ currentReviewVideo.uploader_name || currentReviewVideo.user_id }}</p>
+            <p><strong>分区：</strong>{{ currentReviewVideo.zone || "—" }}</p>
+            <p><strong>时长：</strong>{{ formatDuration(currentReviewVideo.duration_sec) }}</p>
+            <p><strong>ID：</strong>{{ currentReviewVideo.id }}</p>
+            <p class="adm-review__desc"><strong>简介：</strong>{{ currentReviewVideo.description || "（无）" }}</p>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <el-empty description="没有待审核视频" />
+      </template>
+      <template #footer>
+        <el-button @click="reviewDialogVisible = false">关闭</el-button>
+        <template v-if="currentReviewVideo">
+          <el-button type="danger" :loading="reviewActing" @click="manualReject">
+            驳回
+          </el-button>
+          <el-button
+            v-if="reviewIndex < reviewVideos.length - 1"
+            :loading="reviewActing"
+            @click="manualSkip"
+          >
+            跳过
+          </el-button>
+          <el-button type="primary" :loading="reviewActing" @click="manualApprove">
+            通过
+            <template v-if="reviewIndex < reviewVideos.length - 1">并下一个</template>
+          </el-button>
+        </template>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="rejectVisible" title="驳回视频" width="480px" destroy-on-close>
       <el-form label-width="72px">
         <el-form-item label="驳回理由" required>
@@ -166,6 +229,7 @@
 <script>
 import {
   adminApproveVideo,
+  adminBatchApproveVideos,
   adminDeleteVideo,
   adminGetVideo,
   adminListVideos,
@@ -196,7 +260,11 @@ export default {
       detail: null,
       rejectVisible: false,
       rejectTarget: null,
-      rejectReason: ""
+      rejectReason: "",
+      reviewDialogVisible: false,
+      reviewVideos: [],
+      reviewIndex: 0,
+      reviewActing: false
     };
   },
   computed: {
@@ -204,6 +272,10 @@ export default {
       const wide =
         this.statusFilter === "pending_review" || this.statusFilter === "all";
       return wide ? 148 : 108;
+    },
+    currentReviewVideo() {
+      if (!this.reviewVideos.length) return null;
+      return this.reviewVideos[this.reviewIndex] || null;
     }
   },
   created() {
@@ -322,10 +394,82 @@ export default {
         ElMessage.success("已驳回");
         this.rejectVisible = false;
         this.detailVisible = false;
+        // 如果是人工审核弹窗里的驳回，同步移除
+        if (this.reviewDialogVisible) {
+          this.reviewVideos.splice(this.reviewIndex, 1);
+          if (this.reviewVideos.length === 0) {
+            this.reviewDialogVisible = false;
+          } else if (this.reviewIndex >= this.reviewVideos.length) {
+            this.reviewIndex = this.reviewVideos.length - 1;
+          }
+        }
         await this.load();
       } finally {
         this.acting = false;
       }
+    },
+    // ─── 自动审核 ───
+    openAutoReview() {
+      ElMessageBox.confirm(
+        `确定自动通过所有待审核视频？将直接发布所有 ${this.pendingCount} 个视频。`,
+        "自动审核",
+        { type: "warning", confirmButtonText: "确认通过", cancelButtonText: "取消" }
+      ).then(async () => {
+        this.acting = true;
+        try {
+          const res = await adminBatchApproveVideos();
+          const d = res.data || res;
+          ElMessage.success(`自动审核完成：通过 ${d.approved} 个，失败 ${d.failed} 个`);
+          await this.load();
+        } catch (e) {
+          ElMessage.error("自动审核失败");
+        } finally {
+          this.acting = false;
+        }
+      }).catch(() => {});
+    },
+    // ─── 人工审核 ───
+    async openManualReview() {
+      this.reviewVideos = [...this.rows];
+      this.reviewIndex = 0;
+      this.reviewDialogVisible = true;
+    },
+    async manualApprove() {
+      const row = this.currentReviewVideo;
+      if (!row) return;
+      this.reviewActing = true;
+      try {
+        await adminApproveVideo(row.id);
+        ElMessage.success(`已通过「${row.title}」`);
+        this.reviewVideos.splice(this.reviewIndex, 1);
+        if (this.reviewVideos.length === 0) {
+          this.reviewDialogVisible = false;
+        } else if (this.reviewIndex >= this.reviewVideos.length) {
+          this.reviewIndex = this.reviewVideos.length - 1;
+        }
+        await this.load();
+      } catch {
+        ElMessage.error("操作失败");
+      } finally {
+        this.reviewActing = false;
+      }
+    },
+    manualReject() {
+      const row = this.currentReviewVideo;
+      if (!row) return;
+      this.rejectTarget = row;
+      this.rejectReason = "";
+      this.rejectVisible = true;
+    },
+    manualSkip() {
+      if (this.reviewIndex < this.reviewVideos.length - 1) {
+        this.reviewIndex++;
+      }
+    },
+    reviewDialogClosed() {
+      this.reviewVideos = [];
+      this.reviewIndex = 0;
+      this.load();
     },
     async onDelete(row) {
       await ElMessageBox.confirm(
@@ -399,6 +543,11 @@ export default {
   background: #e3f3ff;
   border-color: $blue;
   font-weight: 600;
+}
+.adm-review-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 .adm-table-wrap {
   width: 100%;

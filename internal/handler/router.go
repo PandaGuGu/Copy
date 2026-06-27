@@ -135,6 +135,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		vOps.POST("/videos/:id/reject", a.AdminRejectVideo)
 		vOps.POST("/videos/:id/delete", a.AdminDeleteVideo)
 		vOps.DELETE("/videos/:id", a.AdminDeleteVideo)
+		vOps.POST("/videos/batch-approve", a.AdminBatchApproveVideos)
 
 		// Permission-protected: comment.delete
 		cOps := admin.Group("", middleware.RequirePermission(a.DB, "comment", "delete"))
@@ -344,8 +345,14 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		// Live: manage permission
 		liveOps := admin.Group("", middleware.RequirePermission(a.DB, "live", "manage"))
 		liveOps.GET("/live/rooms", a.AdminListLiveRooms)
+		liveOps.GET("/live/room/:id", a.AdminGetLiveRoomDetail)
 		liveOps.POST("/live/room/:id/ban", a.AdminBanLiveRoom)
 		liveOps.POST("/live/room/:id/unban", a.AdminUnbanLiveRoom)
+		liveOps.POST("/live/room/:id/warn", a.AdminWarnLiveRoom)
+		liveOps.GET("/live/warn-templates", a.AdminListLiveWarnTemplates)
+		liveOps.POST("/live/warn-templates", a.AdminCreateLiveWarnTemplate)
+		liveOps.PUT("/live/warn-templates/:id", a.AdminUpdateLiveWarnTemplate)
+		liveOps.DELETE("/live/warn-templates/:id", a.AdminDeleteLiveWarnTemplate)
 		liveOps.DELETE("/live/room/:id", a.AdminDeleteLiveRoom)
 	}
 
