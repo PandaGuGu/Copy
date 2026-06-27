@@ -5,26 +5,21 @@
       <p class="sub-page__desc">管理全站视频字幕，支持新增、编辑、查看和删除</p>
     </header>
 
-    <div class="sub-toolbar">
-      <el-input
-        v-model="filterVideoId"
-        placeholder="视频 ID"
-        clearable
-        style="width: 180px"
-        @clear="fetchList"
-        @keydown.enter="fetchList"
-      />
-      <el-select v-model="filterLang" placeholder="语言" clearable style="width: 130px" @change="fetchList">
-        <el-option label="中文" value="zh" />
-        <el-option label="英文" value="en" />
-        <el-option label="日文" value="ja" />
-        <el-option label="韩文" value="ko" />
-      </el-select>
-      <el-button type="primary" @click="fetchList">查询</el-button>
-      <el-button type="success" @click="openCreate">新增字幕</el-button>
-    </div>
+    <AdminDataTable :data="list" :loading="loading" :show-pagination="false">
+      <template #search-bar>
+        <el-input v-model="filterVideoId" placeholder="视频 ID" clearable style="width: 180px" @clear="fetchList" @keydown.enter="fetchList" />
+        <el-select v-model="filterLang" placeholder="语言" clearable style="width: 130px" @change="fetchList">
+          <el-option label="中文" value="zh" />
+          <el-option label="英文" value="en" />
+          <el-option label="日文" value="ja" />
+          <el-option label="韩文" value="ko" />
+        </el-select>
+        <el-button type="primary" @click="fetchList">查询</el-button>
+      </template>
+      <template #toolbar>
+        <el-button type="success" @click="openCreate">新增字幕</el-button>
+      </template>
 
-    <el-table :data="list" stripe size="default" empty-text="暂无字幕">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="video_id" label="视频 ID" width="90" />
       <el-table-column label="语言" width="80">
@@ -57,7 +52,7 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+    </AdminDataTable>
 
     <!-- 新增 / 编辑 弹框 -->
     <el-dialog
@@ -124,11 +119,13 @@ import {
   mbAdminDeleteSubtitle
 } from "@/api/minibili";
 import { ElMessage } from "element-plus";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 const LANG_MAP = { zh: "中文", en: "English", ja: "日本語", ko: "한국어" };
 
 export default {
   name: "SubtitleManage",
+  components: { AdminDataTable },
   data() {
     return {
       loading: false,

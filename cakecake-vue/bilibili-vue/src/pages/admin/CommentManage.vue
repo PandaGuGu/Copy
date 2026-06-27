@@ -5,9 +5,15 @@
       <p class="cm-page__desc">全局查看和管理所有评论内容</p>
     </header>
 
-    <!-- 筛选栏 -->
-    <div class="cm-toolbar">
-      <div class="cm-toolbar__filters">
+    <AdminDataTable
+      :data="items"
+      :loading="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @update:page="onPage"
+    >
+      <template #search-bar>
         <el-select v-model="filterType" placeholder="评论类型" clearable size="default" style="width:130px" @change="search">
           <el-option label="全部类型" value="" />
           <el-option label="视频评论" value="video" />
@@ -23,16 +29,11 @@
           @keyup.enter="search"
           @clear="search"
         >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
+          <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button type="primary" size="default" @click="search">搜索</el-button>
-      </div>
-    </div>
+      </template>
 
-    <!-- 表格 -->
-    <el-table :data="items" stripe size="default" style="width:100%" empty-text="暂无评论数据">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column label="类型" width="80">
         <template #default="{ row }">
@@ -72,18 +73,7 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
-
-    <!-- 分页 -->
-    <div class="cm-pager" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next, total"
-        @current-change="fetch"
-      />
-    </div>
+    </AdminDataTable>
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="detailVisible" title="评论详情" width="520px" destroy-on-close>
@@ -116,10 +106,11 @@
 import { ElMessage } from "element-plus";
 import { Search } from "@element-plus/icons-vue";
 import { adminListComments, adminGetComment, adminDeleteComment } from "@/api/admin";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 export default {
   name: "CommentManage",
-  components: { Search },
+  components: { Search, AdminDataTable },
   data() {
     return {
       loading: false,
@@ -157,6 +148,10 @@ export default {
     },
     search() {
       this.page = 1;
+      this.fetch();
+    },
+    onPage(p) {
+      this.page = p;
       this.fetch();
     },
     async openDetail(row) {
@@ -208,9 +203,6 @@ export default {
 .cm-page__head { margin-bottom: 16px; }
 .cm-page__title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #18191c; }
 .cm-page__desc { margin: 0; font-size: 13px; color: #9499a0; }
-.cm-toolbar { margin-bottom: 14px; }
-.cm-toolbar__filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.cm-pager { margin-top: 16px; display: flex; justify-content: flex-end; }
 .cm-muted { color: #9499a0; }
 .cm-target { color: #18191c; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 .cm-detail-content { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }

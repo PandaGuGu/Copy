@@ -8,14 +8,14 @@
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 会话列表 -->
       <el-tab-pane label="会话" name="conversations">
-        <div class="cs-toolbar">
-          <el-select v-model="filterStatus" placeholder="状态" clearable size="default" style="width: 120px" @change="fetchConversations">
-            <el-option label="全部" value="" />
-            <el-option label="进行中" value="active" />
-            <el-option label="已关闭" value="closed" />
-          </el-select>
-        </div>
-        <el-table :data="conversations" stripe size="default" empty-text="暂无会话">
+        <AdminDataTable :data="conversations" :loading="loading" :show-pagination="false">
+          <template #search-bar>
+            <el-select v-model="filterStatus" placeholder="状态" clearable size="default" style="width: 120px" @change="fetchConversations">
+              <el-option label="全部" value="" />
+              <el-option label="进行中" value="active" />
+              <el-option label="已关闭" value="closed" />
+            </el-select>
+          </template>
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column label="用户" width="140">
             <template #default="{ row }">
@@ -56,7 +56,7 @@
               </el-popconfirm>
             </template>
           </el-table-column>
-        </el-table>
+        </AdminDataTable>
       </el-tab-pane>
 
       <!-- 回复模板 -->
@@ -214,22 +214,19 @@
 
 <script setup>
 import { ref, reactive, onMounted, nextTick } from 'vue'
-import http from '@/utils/adminHttp'
 import { ElMessage } from 'element-plus'
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
-const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
-
-async function api(path, opts = {}) {
-  const m = (opts.method || 'GET').toLowerCase();
-  let r;
-  if (m === 'get') r = await http.get(ADMIN_API + path);
-  else if (m === 'post') r = await http.post(ADMIN_API + path, opts.body || {});
-  else if (m === 'put') r = await http.put(ADMIN_API + path, opts.body || {});
-  else if (m === 'delete') r = await http.delete(ADMIN_API + path);
-  else r = await http.get(ADMIN_API + path);
-  return r.data;
-}
+import AdminDataTable from '@/components/admin/AdminDataTable.vue'
+import {
+  adminListConversations,
+  adminGetConversation,
+  adminSendConversationMessage,
+  adminCloseConversation,
+  adminAssignConversation,
+  adminListCsTemplates,
+  adminCreateCsTemplate,
+  adminUpdateCsTemplate,
+  adminDeleteCsTemplate,
+} from '@/api/admin'
 
 
 
@@ -256,10 +253,10 @@ const templateForm = reactive({
 async function fetchConversations() {
   loading.value = true
   try {
-    const params = new URLSearchParams()
-    if (filterStatus.value) params.set('status', filterStatus.value)
-    const d = await api(`/cs/conversations?${params}`)
-    conversations.value = d.items || []
+    const params = {}
+    if (filterStatus.value) params.status = filterStatus.value
+    const d = await adminListConversations(params)
+    conversations.value = d.data.items || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -270,8 +267,8 @@ async function fetchConversations() {
 async function fetchTemplates() {
   loading.value = true
   try {
-    const d = await api('/cs/templates')
-    templates.value = d.templates || d || []
+    const d = await adminListCsTemplates()
+    templates.value = d.data.templates || d.data || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -286,12 +283,11 @@ function onTabChange(tab) {
 
 async function openConversation(row) {
   try {
-    const d = await api(`/cs/conversations/${row.id}`)
-    convDetail.value = d
+    const d = await adminGetConversation(row.id)
+    convDetail.value = d.data
     convDialogVisible.value = true
     replyContent.value = ''
     selectedTemplate.value = null
-    // load templates if not loaded
     if (templates.value.length === 0) {
       try { await fetchTemplates() } catch { /* ignore */ }
     }
@@ -306,10 +302,7 @@ async function openConversation(row) {
 async function sendMessage() {
   if (!convDetail.value || !replyContent.value.trim()) return
   try {
-    await api(`/cs/conversations/${convDetail.value.id}/messages`, {
-      method: 'POST',
-      body: { content: replyContent.value.trim() },
-    })
+    await adminSendConversationMessage(convDetail.value.id, replyContent.value.trim())
     replyContent.value = ''
     selectedTemplate.value = null
     ElMessage.success('已发送')
@@ -322,7 +315,7 @@ async function sendMessage() {
 
 async function closeConversation(row) {
   try {
-    await api(`/cs/conversations/${row.id}/close`, { method: 'POST' })
+    await adminCloseConversation(row.id)
     ElMessage.success('会话已关闭')
     fetchConversations()
   } catch (e) {
@@ -333,7 +326,7 @@ async function closeConversation(row) {
 async function closeConversationFromDetail() {
   if (!convDetail.value) return
   try {
-    await api(`/cs/conversations/${convDetail.value.id}/close`, { method: 'POST' })
+    await adminCloseConversation(convDetail.value.id)
     ElMessage.success('会话已关闭')
     convDialogVisible.value = false
     fetchConversations()
@@ -345,7 +338,7 @@ async function closeConversationFromDetail() {
 async function assignSelf() {
   if (!convDetail.value) return
   try {
-    await api(`/cs/conversations/${convDetail.value.id}/assign`, { method: 'POST' })
+    await adminAssignConversation(convDetail.value.id)
     ElMessage.success('已指派')
     await openConversation(convDetail.value)
   } catch (e) {
@@ -379,9 +372,9 @@ async function saveTemplate() {
   saving.value = true
   try {
     if (templateForm.id) {
-      await api(`/cs/templates/${templateForm.id}`, { method: 'PUT', body: { ...templateForm } })
+      await adminUpdateCsTemplate(templateForm.id, { ...templateForm })
     } else {
-      await api('/cs/templates', { method: 'POST', body: { ...templateForm } })
+      await adminCreateCsTemplate({ ...templateForm })
     }
     ElMessage.success('已保存')
     templateDialogVisible.value = false
@@ -395,7 +388,7 @@ async function saveTemplate() {
 
 async function deleteTemplate(row) {
   try {
-    await api(`/cs/templates/${row.id}`, { method: 'DELETE' })
+    await adminDeleteCsTemplate(row.id)
     ElMessage.success('已删除')
     fetchTemplates()
   } catch (e) {
