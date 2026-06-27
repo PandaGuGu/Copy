@@ -78,6 +78,16 @@ func (a *API) GetLiveRoom(c *gin.Context) {
 		}
 	}
 
+	// Record live view history when a logged-in user opens the live room page.
+	// This is the primary entry point (more reliable than the WebSocket path).
+	authHeader := c.GetHeader("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if uid, _, err := a.JWT.ParseAccess(token); err == nil && uid > 0 {
+			a.RecordLiveViewHistory(uid, id, "web")
+		}
+	}
+
 	resp.OK(c, room)
 }
 

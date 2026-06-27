@@ -359,6 +359,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.DELETE("/users/me/view-history", a.ClearMyViewHistory)
 		authd.DELETE("/users/me/view-history/:videoId", a.DeleteMyViewHistoryEntry)
 		authd.DELETE("/users/me/view-history/articles/:articleId", a.DeleteMyArticleViewHistoryEntry)
+		authd.DELETE("/users/me/view-history/live/:liveRoomId", a.DeleteMyLiveViewHistoryEntry)
 		authd.GET("/users/me/view-history/settings", a.GetMyViewHistorySettings)
 		authd.PUT("/users/me/view-history/settings", a.PutMyViewHistorySettings)
 		authd.POST("/videos/:id/view-history", a.PostVideoViewHistory)

@@ -688,6 +688,9 @@ import {
   minibiliViewHistoryRoute,
   minibiliUserSpaceCollectRoute,
   minibiliUserSpaceRoute,
+  minibiliLiveRoomRoute,
+  minibiliArticleReadRoute,
+  minibiliVideoPlayRoute,
   shouldShowMinibiliCompactHeader
 } from "@/utils/minibiliRoutes";
 import { formatCoinBalance, coinBalanceNumber } from "@/utils/coinBalance";
@@ -972,16 +975,28 @@ export default {
       void this.$route.fullPath;
       return resolveMinibiliUploadNavTo();
     },
+    // 按当前 tab 筛选历史记录
+    historyFiltered() {
+      if (!this.historyRawItems.length) return [];
+      if (this.historyActiveTab === "视频") {
+        return this.historyRawItems.filter(item => !item.live_room_id && !item.article_id);
+      } else if (this.historyActiveTab === "直播") {
+        return this.historyRawItems.filter(item => item.media_type === "live" || item.live_room_id > 0);
+      } else if (this.historyActiveTab === "专栏") {
+        return this.historyRawItems.filter(item => item.media_type === "article" || item.article_id > 0);
+      }
+      return this.historyRawItems;
+    },
     // 按时间分组的历史记录（计算属性，模板可直接引用）
     historyGrouped() {
-      if (!this.historyRawItems.length) return [];
+      if (!this.historyFiltered.length) return [];
       const groups = {};
       const now = new Date();
       const todayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
       const yesterday = new Date(now - 86400000);
       const yesterdayStr = yesterday.getFullYear() + "-" + String(yesterday.getMonth()+1).padStart(2,"0") + "-" + String(yesterday.getDate()).padStart(2,"0");
 
-      this.historyRawItems.forEach(item => {
+      this.historyFiltered.forEach(item => {
         const ts = item.viewed_at || item.ctime || item.created_at || "";
         let label = "";
         if (ts) {
@@ -1214,8 +1229,10 @@ export default {
           const rawItems = data.items || [];
           if (rawItems.length > 0) {
             this.historyRawItems = rawItems.map(item => ({
-              id: item.video_id || item.article_id || 0,
+              id: item.live_room_id || item.video_id || item.article_id || 0,
               video_id: item.video_id || 0,
+              article_id: item.article_id || 0,
+              live_room_id: item.live_room_id || 0,
               title: item.title || "",
               cover: item.cover_url || "",
               duration_sec: item.duration_sec || 0,
@@ -1256,9 +1273,21 @@ export default {
     },
     // 跳转历史记录
     goHistoryItem(item) {
-      const id = item.id || item.aid || item.video_id;
-      if (id && this.$router) {
-        this.$router.push("/video/BV" + id);
+      if (!this.$router) return;
+      // 直播
+      if (item.live_room_id) {
+        const route = minibiliLiveRoomRoute(item.live_room_id);
+        if (route) this.$router.push(route);
+      }
+      // 专栏
+      else if (item.article_id) {
+        const route = minibiliArticleReadRoute(item.article_id);
+        if (route) this.$router.push(route);
+      }
+      // 视频
+      else if (item.video_id) {
+        const route = minibiliVideoPlayRoute(item.video_id);
+        if (route) this.$router.push(route);
       }
       this.historyShow = false;
     },

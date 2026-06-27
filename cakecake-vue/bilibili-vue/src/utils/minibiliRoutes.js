@@ -115,6 +115,15 @@ export function minibiliDynamicReadRoute(dynamicId, query) {
   return { name: "minibiliDynamicRead", params: { id: String(n) }, query: q };
 }
 
+/** 直播房间页 */
+export function minibiliLiveRoomRoute(roomId) {
+  const n = parseInt(String(roomId ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    return null;
+  }
+  return { name: "minibiliLiveRoom", params: { roomId: String(n) } };
+}
+
 /**
  * 个人空间 · 收藏 tab（顶栏「收藏夹」等）
  * @param {string|number|null|undefined} userId
