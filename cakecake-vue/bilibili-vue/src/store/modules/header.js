@@ -33,7 +33,7 @@ const state = {
     {
       name: "直播",
       class: "live",
-      href: "https://live.bilibili.com"
+      href: "/#/minibili/live"
     },
     {
       name: "会员购",
@@ -132,44 +132,16 @@ const state = {
       name: "直播",
       class: "",
       icon: "live",
-      href: "https://live.bilibili.com",
+      href: "/#/minibili/live",
       fieldClass: "nav-live",
       fields: [
         {
-          name: "推荐主播",
-          href: "https://live.bilibili.com"
+          name: "全部直播",
+          href: "/#/minibili/live"
         },
         {
-          name: "生活娱乐",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=1"
-        },
-        {
-          name: "绘画专区",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=2"
-        },
-        {
-          name: "唱见舞见",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=3"
-        },
-        {
-          name: "御宅文化",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=4"
-        },
-        {
-          name: "单机联机",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=5"
-        },
-        {
-          name: "网络游戏",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=6"
-        },
-        {
-          name: "电子竞技",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=7"
-        },
-        {
-          name: "手游直播",
-          href: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=8"
+          name: "开播设置",
+          href: "/#/minibili/live/create"
         }
       ],
       fieldImgClass: "live-field",

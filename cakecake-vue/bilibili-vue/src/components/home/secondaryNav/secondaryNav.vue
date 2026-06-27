@@ -46,7 +46,7 @@
           <a href="https://www.bilibili.com/v/column" target="_blank" class="sn-right-link">专栏</a>
           <a href="https://www.bilibili.com/blackboard/activity" target="_blank" class="sn-right-link">活动</a>
           <a href="https://www.bilibili.com/blackboard/community" target="_blank" class="sn-right-link">社区中心</a>
-          <a href="https://live.bilibili.com" target="_blank" class="sn-right-link">直播</a>
+          <a href="/#/minibili/live" class="sn-right-link">直播</a>
           <a href="https://www.bilibili.com/v/classroom" target="_blank" class="sn-right-link">课堂</a>
           <a href="https://www.bilibili.com/v/music" target="_blank" class="sn-right-link sn-right-highlight">新歌热榜</a>
         </div>
