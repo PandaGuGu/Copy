@@ -50,6 +50,7 @@ func SeedRBAC(db *gorm.DB, lg *zap.Logger) {
 		{Code: "config:manage",    Resource: "config",    Action: "manage"},
 		{Code: "ops:manage",       Resource: "ops",       Action: "manage"},
 		{Code: "rbac:manage",      Resource: "rbac",      Action: "manage"},
+		{Code: "live:manage",      Resource: "live",      Action: "manage"},
 	}
 
 	permIDMap := make(map[string]uint64, len(perms))

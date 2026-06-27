@@ -594,3 +594,26 @@ type VideoDailyStat struct {
 }
 
 func (VideoDailyStat) TableName() string { return "video_daily_stats" }
+
+// ──────────────────────────────────────────────
+// Module: Live Streaming
+// ──────────────────────────────────────────────
+
+// LiveRoom represents a streaming room.
+type LiveRoom struct {
+	ID          uint64     `gorm:"primaryKey" json:"id"`
+	UserID      uint64     `gorm:"index:idx_liveroom_user;not null" json:"user_id"`
+	Title       string     `gorm:"size:60;not null" json:"title"`
+	CoverURL    string     `gorm:"size:1024" json:"cover_url"`
+	StreamKey   string     `gorm:"size:64;uniqueIndex;not null" json:"stream_key"`
+	Status      string     `gorm:"size:16;not null;default:idle" json:"status"` // idle / live / ended / banned
+	ViewerCount int64      `gorm:"not null;default:0" json:"viewer_count"`
+	HostName    string     `gorm:"size:40" json:"host_name"`
+	AvatarURL   string     `gorm:"size:1024" json:"avatar_url"`
+	StartedAt   *time.Time `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+func (LiveRoom) TableName() string { return "live_rooms" }
