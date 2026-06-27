@@ -79,12 +79,23 @@ func main() {
 		log.Warn("sensitive words initial load", zap.Error(err))
 	}
 
-	var ossc *storage.OSS
+	var ossc storage.FileStorager
 	if o, err := storage.NewOSS(cfg.OSSEndpoint, cfg.OSSAccessKeyID, cfg.OSSAccessKeySecret, cfg.OSSBucket); err == nil {
 		ossc = o
 		log.Info("oss client initialized")
 	} else {
-		log.Warn("oss client disabled", zap.Error(err))
+		log.Warn("oss client disabled — using local filesystem storage", zap.Error(err))
+		localDir := "data/uploads"
+		if l, err := storage.NewLocal(localDir); err == nil {
+			ossc = l
+			// Override public URL prefix so generated object URLs are local paths
+			if cfg.OSSPublicURLPrefix == "" {
+				cfg.OSSPublicURLPrefix = "/uploads"
+			}
+			log.Info("local storage initialized", zap.String("dir", localDir))
+		} else {
+			log.Warn("local storage init failed — uploads will return 500", zap.Error(err))
+		}
 	}
 
 	if err := os.MkdirAll(cfg.TempUploadDir, 0o755); err != nil {

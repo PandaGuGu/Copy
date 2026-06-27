@@ -1,8 +1,35 @@
 const NodeMediaServer = require("node-media-server");
 const http = require("http");
+const path = require("path");
 
-const HLS_DIR = "C:/Users/Administrator/Desktop/cakecake-project/data/live";
+// Auto-detect project root from this script's location (two levels up from scripts/)
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+const HLS_DIR = path.join(PROJECT_ROOT, "data", "live");
 const GO_API = "http://127.0.0.1:8080/api/v1/live/callback";
+
+// Try to find ffmpeg from common locations, fall back to PATH
+const { execSync } = require("child_process");
+let ffmpegPath = "ffmpeg";
+try {
+  const out = execSync("ffmpeg -version 2>&1", { encoding: "utf8", timeout: 5000 });
+  if (out) ffmpegPath = "ffmpeg";
+} catch (e) {
+  // ffmpeg not on PATH — try Windows common locations
+  const cmn = require("os").platform() === "win32" ? [
+    "C:\\ffmpeg\\bin\\ffmpeg.exe",
+    process.env.FFMPEG_PATH
+  ] : [
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    process.env.FFMPEG_PATH
+  ];
+  for (const p of cmn) {
+    if (p) {
+      try { execSync(`"${p}" -version`, { timeout: 3000 }); ffmpegPath = p; break; } catch (_) {}
+    }
+  }
+}
+console.log(`[Live] ffmpeg: ${ffmpegPath}`);
 
 const config = {
   rtmp: {
@@ -18,7 +45,7 @@ const config = {
     allow_origin: "*"
   },
   trans: {
-    ffmpeg: "C:/Users/Administrator/AppData/Local/Microsoft/WinGet/Links/ffmpeg",
+    ffmpeg: ffmpegPath,
     tasks: [
       {
         app: "live",

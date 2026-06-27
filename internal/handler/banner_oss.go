@@ -36,7 +36,7 @@ func bannerOSSObjectKeys(cfg *config.C, b model.HomeBanner) []string {
 	return out
 }
 
-func purgeBannerOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, b model.HomeBanner) {
+func purgeBannerOSSObjects(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, b model.HomeBanner) {
 	if ossClient == nil {
 		return
 	}
@@ -62,7 +62,7 @@ func purgeBannerOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logge
 	}
 }
 
-func purgeBannerImageURL(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, imageURL string) {
+func purgeBannerImageURL(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, imageURL string) {
 	if cfg == nil || ossClient == nil {
 		return
 	}

@@ -217,6 +217,86 @@ npm run dev                   # http://localhost:8888
 
 前端细节、环境变量说明见 **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md)**。
 
+## Docker 一键部署（推荐给他人试用）
+
+如果你想让别人快速跑起来这个项目，Docker Compose 是最省心的方式——无需逐个安装 MySQL/Redis/RabbitMQ/SRS/FFmpeg，**也无需配置任何云存储（OSS）**，一条命令全搞定。
+
+### 前置条件
+
+- **Docker** + **Docker Compose** v2
+- **Node.js 18+**（仅用于构建前端，一次性）
+
+### 3 步启动
+
+```bash
+# 1. 构建前端（本机执行）
+cd cakecake-vue/bilibili-vue
+npm install
+npm run build
+
+# 2. 配置环境变量（回到仓库根目录）
+cd ../..
+cp .env.example .env
+# 编辑 .env：只需设置 JWT_SECRET（任意长随机串），其余全部留空即可
+
+# 3. 启动全部服务
+docker compose up -d
+```
+
+访问 `http://localhost` 即见首页。首次启动后端自动建表，管理员默认账号 `admin / change-me-admin`。
+
+### 包含的服务
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| 前端 Nginx | `80` | SPA 静态文件 + API 反代 + WebSocket 代理 + 文件服务 |
+| Go 后端 | `8080` | REST API + WebSocket |
+| MySQL 8.0 | `3306` | 数据库（首次启动自动建表） |
+| Redis 7 | `6379` | 缓存 / Token 存储 |
+| RabbitMQ | `5672` (15672 管理后台) | 视频转码队列 |
+| SRS | `1935` (RTMP) / `8000` (FLV) | 直播推流/播放 |
+
+### 文件存储说明
+
+本项目**无需任何云存储**即可完整运行。后端会自动使用**本地文件系统**存储所有上传内容（头像/封面/视频/动态图片等），文件保存在 Docker 卷 `uploads_data` 中，由 Nginx 直接对外服务。
+
+如需对接生产环境 OSS，在 `.env` 中填写 `OSS_*` 变量即可自动切换。
+
+### 自定义端口
+
+在 `.env` 中设置对应变量即可覆盖默认端口：
+
+```env
+FRONTEND_PORT=8888     # 默认 80
+BACKEND_PORT=9090      # 默认 8080
+MYSQL_PORT=3307        # 默认 3306
+```
+
+### 注意事项
+
+- **直播功能**：主播通过 OBS 推流地址为 `rtmp://<你的IP>:1935/live/<stream_key>`（stream_key 在"我要开播"页面获取）
+- **搜索功能**：Elasticsearch 默认不启动（可选），配置 `ELASTICSEARCH_URL` 后生效
+- **视频转码**：依赖 FFmpeg（已内置在 Docker 镜像中），转码后视频自动存到本地 uploads 目录
+- **数据持久化**：所有数据保存在 Docker 卷中，`docker compose down` 不会丢失
+
+完整生产部署指南见 **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**。
+
+## 原生一键启动（开发模式）
+
+如果你已经装好了 Go / Node.js / MySQL / Redis / RabbitMQ，也可以不用 Docker 直接跑：
+
+```bash
+# Windows PowerShell
+.\scripts\start.ps1
+
+# Linux / macOS
+./scripts/start.sh
+```
+
+脚本会自动检测端口、跳过已运行的服务、尝试启动缺失的服务。加 `--docker` 参数则走 Docker Compose。
+
+> 未装完整依赖时，推荐直接用 [Docker 一键部署](#docker-一键部署推荐给他人试用)，省去逐个安装的麻烦。
+
 ---
 
 ## 环境依赖

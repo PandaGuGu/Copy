@@ -36,7 +36,7 @@ func favoriteFolderOSSObjectKeys(cfg *config.C, f model.FavoriteFolder) []string
 	return out
 }
 
-func purgeFavoriteFolderOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, f model.FavoriteFolder) {
+func purgeFavoriteFolderOSSObjects(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, f model.FavoriteFolder) {
 	if ossClient == nil {
 		return
 	}
@@ -64,7 +64,7 @@ func purgeFavoriteFolderOSSObjects(cfg *config.C, ossClient *storage.OSS, log *z
 	}
 }
 
-func purgeFavoriteFolderCoverURL(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, coverURL string, uid, folderID uint64) {
+func purgeFavoriteFolderCoverURL(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, coverURL string, uid, folderID uint64) {
 	if cfg == nil || ossClient == nil {
 		return
 	}

@@ -1,0 +1,32 @@
+# Ignore everything by default
+**/*
+
+# Allow Go source
+!go.mod
+!go.sum
+!go.work
+!cmd/
+!internal/
+!configs/
+
+# Exclude unnecessary files
+**/.git
+**/*_test.go
+**/node_modules
+**/.env
+**/*.exe
+**/*.bak
+**/logs/
+**/data/
+**/docs/
+**/deploy/
+**/bmad-output/
+**/.workbuddy/
+**/cakecake-vue/
+**/scripts/
+**/nul
+**/snapshot.txt
+**/compiled-index.txt
+**/erl_crash.dump
+**/*.env.*
+!configs/sensitive_words.txt
