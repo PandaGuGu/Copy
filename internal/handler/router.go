@@ -81,6 +81,10 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		// Module 9: Special pages (public)
 		pub.GET("/specials", a.ListPublicSpecialPages)
 		pub.GET("/specials/:slug", a.GetPublicSpecialPage)
+		// Live: public
+		pub.GET("/live/rooms", a.ListLiveRooms)
+		pub.GET("/live/room/my", middleware.OptionalJWT(jwtm), a.GetOrCreateMyLiveRoom)
+		pub.GET("/live/room/:id", a.GetLiveRoom)
 
 		pub.POST("/admin/auth/login", a.AdminLogin)
 		pub.POST("/admin/auth/refresh", a.AdminRefresh)
@@ -337,6 +341,12 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		speOps.POST("/campaigns", a.AdminCreateCampaign)
 		speOps.PUT("/campaigns/:id", a.AdminUpdateCampaign)
 		speOps.DELETE("/campaigns/:id", a.AdminDeleteCampaign)
+		// Live: manage permission
+		liveOps := admin.Group("", middleware.RequirePermission(a.DB, "live", "manage"))
+		liveOps.GET("/live/rooms", a.AdminListLiveRooms)
+		liveOps.POST("/live/room/:id/ban", a.AdminBanLiveRoom)
+		liveOps.POST("/live/room/:id/unban", a.AdminUnbanLiveRoom)
+		liveOps.DELETE("/live/room/:id", a.AdminDeleteLiveRoom)
 	}
 
 	authd := r.Group("/api/v1")
@@ -503,10 +513,25 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.GET("/users/me/cs/conversations", a.ListMyCSConversations)
 		authd.GET("/users/me/cs/conversations/:id", a.GetMyCSConversation)
 		authd.POST("/users/me/cs/conversations/:id/messages", a.SendCSMessageByUser)
+		// Live: auth
+		authd.POST("/live/room/create", a.CreateLiveRoom)
+		authd.PUT("/live/room/:id", a.UpdateLiveRoom)
+		authd.POST("/live/room/:id/regenerate-key", a.RegenerateStreamKey)
+		authd.POST("/live/room/:id/start", a.StartLiveRoom)
+		authd.POST("/live/room/:id/end", a.EndLiveRoom)
+		authd.POST("/live/room/:id/cover", a.UploadLiveCover)
 	}
 
 	r.GET("/api/v1/ws/danmaku", a.ServeDanmaku)
 	r.GET("/api/v1/ws/chat", a.ServeChat)
+	r.GET("/api/v1/ws/live", a.ServeLiveChat)
+
+	// SRS/node-media-server live streaming callbacks (open)
+	r.POST("/api/v1/live/callback/on_publish", a.SRSOnPublish)
+	r.POST("/api/v1/live/callback/on_done", a.SRSOnDone)
+
+	// Serve HLS live streaming files (node-media-server outputs to data/live/)
+	r.Static("/live-hls", "./data/live")
 }
 
 func corsMiddleware(c *gin.Context) {

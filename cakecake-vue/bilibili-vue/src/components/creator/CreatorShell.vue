@@ -220,6 +220,18 @@
           </div>
 
           <router-link
+            :to="{ name: 'minibiliLiveCreate' }"
+            class="creator-nav-item"
+            active-class="is-active"
+            exact-active-class="is-active"
+          >
+            <span class="creator-nav-leading">
+              <img class="creator-nav-icon" src="@/assets/contentManagement.png" alt="" />
+              直播中心
+            </span>
+          </router-link>
+
+          <router-link
             :to="{ name: 'creatorDashboard' }"
             class="creator-nav-item"
             active-class="is-active"

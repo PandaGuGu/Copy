@@ -16,6 +16,12 @@
 | ADR-007 | 统一错误码体系 | 已接受 | NFR-PERF-3 |
 | ADR-008 | Feature Flag FNV-1a 灰度策略 | 已接受 | NFR-CONFIG-3 |
 | ADR-009 | 审批流多级审核 | 已接受 | NFR-AUTH-5 |
+| ADR-010 | 多清晰度转码 Pipeline | 提议 | FR-029, NFR-TRANSCODE-1/2 |
+| ADR-011 | 推荐系统混合架构 | 提议 | FR-036, NFR-REC-1/2 |
+| ADR-012 | 视频水印 FFmpeg overlay | 提议 | FR-042 |
+| ADR-013 | 移动端渐进式适配 | 提议 | FR-043, NFR-MOBILE-1/2 |
+| ADR-014 | 统一支付网关抽象 | 提议 | FR-045/046/047/052, NFR-PAY-1/2 |
+| ADR-015 | 直播技术选型 SRS | 提议 | FR-050, NFR-LIVE-1/2 |
 
 ---
 
@@ -423,3 +429,234 @@
 | JWT 管理 | `internal/pkg/jwttoken/` |
 | 数据模型 | `internal/model/module_extend.go` + 基础模型 |
 | 前端管理布局 | `cakecake-vue/bilibili-vue/src/pages/admin/AdminLayout.vue` |
+
+---
+
+## ADR-010: 多清晰度转码 Pipeline — FFmpeg 单输入多路输出
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-029 (多清晰度转码), FR-030 (清晰度切换 UI), NFR-TRANSCODE-1/2
+
+### Context
+
+当前系统仅转码单一 H.264 码率输出。真实 B站支持 360P~4K 多档清晰度，用户按网络状况切换。需要在不显著增加转码时长的前提下产出多档清晰度。
+
+### Decision
+
+- **转码策略**: FFmpeg 单次输入，多路输出（`-map` 多 output）。一次读取原始文件，同时编码 1080P/720P/480P 三路。
+- **码率配置**: 1080P@6Mbps / 720P@3Mbps / 480P@1Mbps（H.264 High Profile, CRF=23）
+- **存储路径**: `videos/{video_id}/1080p.mp4` / `720p.mp4` / `480p.mp4`
+- **数据模型**: 已有 `VideoBitrate` 表（video_id, bitrate, url, size），复用。
+- **Worker 改造**: `worker/transcode.go` 在现有转码完成后，并行编码多路清晰度。
+- **清晰度切换**: 前端记录 `currentTime`，切换清晰度后 `seek` 到相同位置继续播放。
+- **默认清晰度**: 根据用户网络状况自动选择（`navigator.connection.effectiveType`），默认 720P。
+
+### Consequences
+
+- 变得容易: 无需更换转码方案；`VideoBitrate` 表已有，前后端对齐成本低
+- 接受代价: 转码时间增加约 60%（多路编码）；OSS 存储增加约 4x（3档 vs 1档）
+- 锁定规则: OSS 路径 `videos/{id}/{quality}.mp4`；VideoBitrate 表的 quality 字段枚举 `1080p/720p/480p`
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| 按需转码（Just-in-Time） | 首播延迟不可接受；需要转码集群 |
+| H.265/AV1 编码 | 浏览器兼容性差（Safari 不支持 AV1）；编码时间长 3-5x |
+
+### 重新审视条件
+
+H.265 浏览器支持率 > 90% 时重新评估；引入 GPU 加速转码（NVENC）时重评 Pipeline。
+
+---
+
+## ADR-011: 推荐系统使用混合架构 — 协同过滤召回 + CTR 排序
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-036 (推荐升级), FR-044 (相关推荐), NFR-REC-1/2
+
+### Context
+
+当前推荐仅为热度规则排序（播放量>时间>弹幕数）。B站核心体验依赖个性化推荐提升用户留存。团队 1 人，不能引入大规模 ML 基础设施。
+
+### Decision
+
+- **架构**: 召回层 + 排序层 + 重排层 三段式
+- **召回层**:
+  - **协同过滤 (ItemCF)**: 离线计算视频相似度矩阵（Jaccard/余弦），存入 Redis `rec:sim:{video_id}` ZSET
+  - **内容召回**: 同标签/同分区/同UP主，MySQL 直接查询
+  - **热度兜底**: 全站热门 TOP 200
+- **排序层**: 轻量 CTR 预估 — 特征：用户历史互动率 + 视频 CTR + 发布时间衰减 → 加权打分
+- **重排层**: 打散（同UP主间隔 ≥ 3）、去重、多样性提升
+- **离线计算**: 每日凌晨 Cron 重算 ItemCF 矩阵（Go goroutine）；增量每小时更新
+- **在线服务**: `GET /api/v1/feed/recommendation` → Redis 取召回集 → 排序 → 返回 Top 20
+- **AB 实验**: Feature Flag `rec_algo_v2`（ADR-008）控制新老算法分流
+
+### Consequences
+
+- 变得容易: 纯 Go 实现无需 Python/Spark 依赖；Redis 天然适合存储相似度矩阵
+- 接受代价: ItemCF 冷启动问题（新视频无交互数据 → 依赖内容召回+热度兜底）；无深度语义理解
+- 锁定规则: 推荐接口延迟 ≤ 100ms；召回候选集 ≥ 500
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| 深度学习（DNN/Transformer） | 需 GPU + 训练 Pipeline + 特征平台，1 人团队不可维护 |
+| 纯内容推荐 | 冷启动好但缺乏个性化，CTR 远低于协同过滤 |
+| 第三方推荐服务 | 成本 + 数据外泄风险 |
+
+### 重新审视条件
+
+用户量 > 10 万或团队 > 3 人时，引入向量召回（Milvus/Faiss）+ Two-Tower 模型。
+
+---
+
+## ADR-012: 视频水印使用 FFmpeg overlay 转码时叠加
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-042
+
+### Context
+
+B站视频在右下角有用户ID水印，防止盗搬。需要在转码阶段叠加，而非前端 CSS 覆盖（前端水印可被 F12 去除）。
+
+### Decision
+
+- **实现方式**: FFmpeg `drawtext` 滤镜，在转码输出时叠加文字水印。
+- **水印内容**: `@{username}` + 上传时间戳（半透明白色，右下角，字号为视频高度的 3%）
+- **控制开关**: Feature Flag `video_watermark_enabled`（ADR-008），管理员可关闭
+- **性能影响**: `drawtext` 滤镜增加约 5% 转码时间，可接受
+- **字体**: 使用系统默认无衬线字体（Linux: DejaVu Sans, Windows: Arial）
+
+### Consequences
+
+- 变得容易: FFmpeg 原生支持，无需额外依赖
+- 接受代价: 转码时间微增；水印无法在已转码视频上追加（需重新转码）
+- 锁定规则: 水印仅加在转码阶段；Feature Flag 控制全局开关
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| 前端 CSS 水印 | F12 即可去除，无防盗意义 |
+| DRM 加密 | 实现复杂度极高，需 Widevine/FairPlay 许可 |
+
+---
+
+## ADR-013: 移动端渐进式适配 — CSS 响应式优先
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-043, NFR-MOBILE-1/2
+
+### Context
+
+当前 Vue SPA 以 PC 端（1920px）设计为主，未做移动端适配。B站移动端流量占比 > 70%。1 人团队无法同时维护两套前端。
+
+### Decision
+
+- **策略**: 渐进式适配，非一次重构。
+- **阶段 1（P0）**: 核心页面 CSS 响应式 — 首页视频网格、播放页布局、导航栏汉堡菜单（Tailwind `sm/md/lg` 断点）
+- **阶段 2（P1）**: 播放器移动端组件 — 手势控制（双击暂停、左右滑动快进、上下滑动音量/亮度）；全屏横屏适配
+- **阶段 3（P2）**: 管理后台最小可用 — 表格横向滚动、表单堆叠布局
+- **不自建移动端 App**: 优先 PWA（`manifest.json` + Service Worker），后期评估 React Native/Flutter
+- **测试**: Chrome DevTools 设备模拟 + 真机测试（iPhone + Android 各一）
+
+### Consequences
+
+- 变得容易: 复用现有 Vue 组件，不引入新框架
+- 接受代价: CSS 响应式无法达到原生 App 体验；复杂管理后台页面在手机上体验较差
+- 锁定规则: 新组件必须同时考虑 PC + Mobile 布局；使用 Tailwind 响应式前缀
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| React Native / Flutter 独立 App | 1 人无法维护 3 套代码（PC + iOS + Android） |
+| 独立移动端 SPA | 代码分叉，维护成本翻倍 |
+
+---
+
+## ADR-014: 统一支付网关抽象 — 支付宝/微信双通道
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-045 (大会员), FR-046 (充电), FR-047 (激励提现), FR-052 (付费课程), NFR-PAY-1/2
+
+### Context
+
+P2 阶段引入多个支付场景（大会员订阅、充电打赏、课程购买、收益提现），需要统一的支付抽象避免每个场景对接一次。
+
+### Decision
+
+- **支付网关接口**: Go interface `PaymentGateway` 定义 `CreateOrder()` / `QueryOrder()` / `Refund()` / `VerifyCallback()`
+- **双通道实现**: `AlipayGateway` + `WechatPayGateway`，通过配置切换
+- **回调处理**: 统一回调端点 `POST /api/v1/payment/callback/{channel}` — 验签 → 幂等（order_id 去重）→ 更新订单状态 → 触发业务回调
+- **订单模型**: `PaymentOrder` 表（id, user_id, order_no, channel, amount_cent, subject, status, paid_at）
+- **对账**: 每日凌晨 Cron Job 拉取支付宝/微信账单 → 比对 `PaymentOrder` → 差异告警（`alert_rules` 复用 ADR 告警系统）
+- **安全**: HTTPS 强制；回调签名验证；金额以 `int64` 分(cent) 存储避免浮点精度
+
+### Consequences
+
+- 变得容易: 新增支付场景只需调用 `gateway.CreateOrder()`；对账自动发现异常
+- 接受代价: 支付宝/微信 SDK 依赖；需要商户账号和审核
+- 锁定规则: 金额统一用分存储；支付回调必须幂等
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| 仅支持一种支付方式 | 用户覆盖不全 |
+| Stripe | 主要面向海外，支付宝/微信国内更普适 |
+
+---
+
+## ADR-015: 直播技术选型 — SRS + RTMP/HLS/WebRTC
+
+**状态:** 提议  
+**日期:** 2026-06-27  
+**决策者:** 架构师 Winston  
+**驱动:** FR-050, NFR-LIVE-1/2
+
+### Context
+
+P3 阶段引入直播功能。需要流媒体服务器支持推流、转码、分发。需要与现有 WebSocket 弹幕系统无缝集成。
+
+### Decision
+
+- **流媒体服务器**: **SRS**（Simple Realtime Server）— 国产开源，社区活跃，支持 RTMP/WebRTC/HLS/FLV
+- **推流协议**: RTMP（OBS 兼容）→ SRS 接收
+- **播放协议**: 
+  - 低延迟场景: WebRTC（延迟 ≤ 1s）
+  - 兼容性场景: HLS（延迟 3-5s，iOS Safari 原生支持）
+  - 回退: HTTP-FLV
+- **转码**: SRS FFmpeg 集成 → 多码率输出（同 ADR-010 策略）
+- **录制**: SRS DVR → 自动转点播视频（复用现有转码 Pipeline）
+- **弹幕集成**: 直播间 WebSocket 端点 `/ws/live/{room_id}`，复用现有 danmaku WebSocket 架构
+- **数据模型**: `LiveRoom` 表（id, user_id, title, cover, status: idle/live/ended, stream_key, viewer_count）
+
+### Consequences
+
+- 变得容易: SRS 单二进制部署；与 Nginx 同机部署；HTTP Callback 对接业务系统
+- 接受代价: 新增基础设施（SRS 进程）；WebRTC 需 TURN/STUN 服务器（复杂网络环境）
+- 锁定规则: 推流密钥 `stream_key` 每个用户唯一；SRS HTTP Callback `on_publish`/`on_play` 对接认证+计数
+
+### 替代方案
+
+| 方案 | 为何拒绝 |
+|------|---------|
+| ZLMediaKit | 功能更强但配置复杂；C++ 生态不如 SRS 对 Go 友好 |
+| 云直播服务（阿里云/腾讯云） | 成本高（按流量计费）；无法自控 |
+
+### 重新审视条件
+
+并发直播间 > 100 或单房间 > 10000 人时，评估 SRS 集群 + Edge 节点分发。

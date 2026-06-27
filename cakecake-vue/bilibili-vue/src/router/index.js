@@ -292,6 +292,31 @@ const routes = [
     component: () => import("@/pages/minibili/SpecialPage.vue"),
     meta: { title: "专题 - cakecake" }
   },
+  // === 直播模块 ===
+  {
+    name: "minibiliLiveList",
+    path: "/minibili/live",
+    component: () => import("@/pages/minibili/LiveRoomList.vue"),
+    meta: { title: "直播 - cakecake" }
+  },
+  {
+    name: "minibiliLiveRoom",
+    path: "/minibili/live/:roomId",
+    component: () => import("@/pages/minibili/LiveRoom.vue"),
+    meta: { title: "直播间 - cakecake" }
+  },
+  {
+    name: "minibiliLiveCreate",
+    path: "/minibili/live/create",
+    component: () => import("@/pages/minibili/LiveCreate.vue"),
+    meta: { title: "开播设置 - cakecake", requireMinibiliAuth: true }
+  },
+  {
+    name: "minibiliLiveSettings",
+    path: "/minibili/live/:roomId/settings",
+    component: () => import("@/pages/minibili/LiveSettings.vue"),
+    meta: { title: "直播间设置 - cakecake", requireMinibiliAuth: true }
+  },
   {
     path: "/admin/login",
     name: "adminLogin",
@@ -430,6 +455,12 @@ const routes = [
         name: "adminSpecialManage",
         component: () => import("@/pages/admin/SpecialManage.vue"),
         meta: { title: "专题活动 - 运营后台", perm: "special:manage" }
+      },
+      {
+        path: "live",
+        name: "adminLiveManage",
+        component: () => import("@/pages/admin/LiveManage.vue"),
+        meta: { title: "直播管理 - 运营后台", perm: "live:manage" }
       }
     ]
   },

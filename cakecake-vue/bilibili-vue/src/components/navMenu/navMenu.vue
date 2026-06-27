@@ -311,14 +311,13 @@
                       </a>
                     </li>
                     <li>
-                      <a
-                        href="https://link.bilibili.com/p/center/index#/user-center/my-info/operation"
-                        target="_blank"
+                      <router-link
+                        to="/minibili/live/create"
                         class="live"
                       >
                         <i class="bili-icon b-icon-p-live"></i>
                         直播中心
-                      </a>
+                      </router-link>
                     </li>
                     <li>
                       <a
