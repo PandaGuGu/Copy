@@ -110,6 +110,44 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 	resp.OK(c, gin.H{"recorded": true})
 }
 
+// RecordLiveViewHistory upserts watch history for a live room (直播).
+func (a *API) RecordLiveViewHistory(uid, roomID uint64, device string) {
+	if uid == 0 || roomID == 0 {
+		return
+	}
+	var u model.User
+	if err := a.DB.Select("id", "view_history_paused").First(&u, uid).Error; err != nil {
+		return
+	}
+	if u.ViewHistoryPaused {
+		return
+	}
+	if device != "mobile" {
+		device = "web"
+	}
+	now := time.Now()
+	var row model.LiveViewHistory
+	err := a.DB.Where("user_id = ? AND live_room_id = ?", uid, roomID).Limit(1).Find(&row).Error
+	if err != nil {
+		return
+	}
+	if row.ID == 0 {
+		row = model.LiveViewHistory{
+			UserID:     uid,
+			LiveRoomID: roomID,
+			Device:     device,
+			ViewedAt:   now,
+		}
+		_ = a.DB.Create(&row).Error
+	} else {
+		_ = a.DB.Model(&row).Updates(map[string]interface{}{
+			"device":    device,
+			"viewed_at": now,
+		}).Error
+	}
+	a.trimViewHistoryCombined(uid)
+}
+
 // RecordArticleViewHistory upserts read history for a published article (专栏).
 func (a *API) RecordArticleViewHistory(uid, articleID uint64, device string) {
 	if uid == 0 || articleID == 0 {
@@ -165,6 +203,11 @@ func (a *API) trimViewHistoryCombined(uid uint64) {
 	for i := range arows {
 		recs = append(recs, dropRec{"article", arows[i].ID, arows[i].ViewedAt})
 	}
+	var lrows []model.LiveViewHistory
+	_ = a.DB.Where("user_id = ?", uid).Find(&lrows).Error
+	for i := range lrows {
+		recs = append(recs, dropRec{"live", lrows[i].ID, lrows[i].ViewedAt})
+	}
 	if len(recs) <= viewHistoryMaxItems {
 		return
 	}
@@ -181,6 +224,8 @@ func (a *API) trimViewHistoryCombined(uid uint64) {
 			_ = a.DB.Delete(&model.VideoViewHistory{}, recs[i].id).Error
 		case "article":
 			_ = a.DB.Delete(&model.ArticleViewHistory{}, recs[i].id).Error
+		case "live":
+			_ = a.DB.Delete(&model.LiveViewHistory{}, recs[i].id).Error
 		}
 	}
 }
@@ -224,7 +269,14 @@ func (a *API) ListMyViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	var lRows []model.LiveViewHistory
+	if err := a.DB.Where("user_id = ?", uid).
+		Order("viewed_at DESC, id DESC").Limit(viewHistoryMaxItems).Find(&lRows).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
 	items := append(a.buildViewHistoryItems(vRows), a.buildArticleViewHistoryItems(aRows)...)
+	items = append(items, a.buildLiveViewHistoryItems(lRows)...)
 	sort.Slice(items, func(i, j int) bool {
 		ti, _ := items[i]["viewed_at"].(string)
 		tj, _ := items[j]["viewed_at"].(string)
@@ -351,6 +403,59 @@ func (a *API) buildArticleViewHistoryItems(rows []model.ArticleViewHistory) []gi
 	return items
 }
 
+func (a *API) buildLiveViewHistoryItems(rows []model.LiveViewHistory) []gin.H {
+	if len(rows) == 0 {
+		return []gin.H{}
+	}
+	rids := make([]uint64, 0, len(rows))
+	for i := range rows {
+		rids = append(rids, rows[i].LiveRoomID)
+	}
+	var rooms []model.LiveRoom
+	_ = a.DB.Where("id IN ?", rids).Find(&rooms).Error
+	byID := map[uint64]model.LiveRoom{}
+	uids := make([]uint64, 0, len(rooms))
+	for i := range rooms {
+		byID[rooms[i].ID] = rooms[i]
+		uids = append(uids, rooms[i].UserID)
+	}
+	var users []model.User
+	if len(uids) > 0 {
+		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
+	}
+	userByID := map[uint64]model.User{}
+	for i := range users {
+		userByID[users[i].ID] = users[i]
+	}
+	items := make([]gin.H, 0, len(rows))
+	for i := range rows {
+		h := rows[i]
+		room, ok := byID[h.LiveRoomID]
+		if !ok {
+			continue
+		}
+		u := userByID[room.UserID]
+		items = append(items, gin.H{
+			"media_type":          "live",
+			"video_id":            0,
+			"article_id":          0,
+			"live_room_id":        room.ID,
+			"title":               room.Title,
+			"cover_url":           room.CoverURL,
+			"duration_sec":        0,
+			"progress_sec":        0,
+			"device":              h.Device,
+			"viewed_at":           h.ViewedAt.Format("2006-01-02 15:04:05"),
+			"viewed_time":         h.ViewedAt.Format("15:04"),
+			"uploader_id":         room.UserID,
+			"uploader_name":       model.DisplayUsername(&u),
+			"uploader_avatar_url": uploaderAvatarForAPI(&u),
+			"category":            "直播",
+		})
+	}
+	return items
+}
+
 // DeleteMyViewHistoryEntry removes one video history row.
 func (a *API) DeleteMyViewHistoryEntry(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
@@ -391,6 +496,26 @@ func (a *API) DeleteMyArticleViewHistoryEntry(c *gin.Context) {
 	resp.OK(c, gin.H{"deleted": true})
 }
 
+// DeleteMyLiveViewHistoryEntry removes one live history row.
+func (a *API) DeleteMyLiveViewHistoryEntry(c *gin.Context) {
+	uid, ok := middleware.UserID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+	rid, err := strconv.ParseUint(c.Param("liveRoomId"), 10, 64)
+	if err != nil || rid == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	if err := a.DB.Where("user_id = ? AND live_room_id = ?", uid, rid).
+		Delete(&model.LiveViewHistory{}).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	resp.OK(c, gin.H{"deleted": true})
+}
+
 // ClearMyViewHistory removes all history for the user.
 func (a *API) ClearMyViewHistory(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
@@ -403,6 +528,10 @@ func (a *API) ClearMyViewHistory(c *gin.Context) {
 		return
 	}
 	if err := a.DB.Where("user_id = ?", uid).Delete(&model.ArticleViewHistory{}).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	if err := a.DB.Where("user_id = ?", uid).Delete(&model.LiveViewHistory{}).Error; err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

@@ -1,37 +1,132 @@
 <template>
   <div class="mb-pc-history">
+    <!-- ===== Row 1: Title + Controls ===== -->
     <header class="mb-pc-history__hd">
-      <div class="mb-pc-history__title-row">
-        <i class="mb-pc-history__title-ico" aria-hidden="true" />
-        <h1 class="mb-pc-history__title-text">历史记录</h1>
+      <div class="mb-pc-history__row1">
+        <div class="mb-pc-history__title-row">
+          <svg class="mb-pc-history__title-ico" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="#18191c" stroke-width="2"/>
+            <polyline points="12,6 12,12 16,14" fill="none" stroke="#18191c" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <h1 class="mb-pc-history__title-text">历史记录</h1>
+        </div>
+        <div class="mb-pc-history__row1-actions">
+          <label class="mb-pc-history__toggle-wrap">
+            <span class="mb-pc-history__toggle-label">记录浏览历史</span>
+            <input
+              type="checkbox"
+              class="mb-pc-history__toggle-input"
+              :checked="!paused"
+              :disabled="!isMinibiliMode || settingsLoading"
+              @change="onTogglePause"
+            />
+            <span class="mb-pc-history__toggle-track" aria-hidden="true">
+              <span class="mb-pc-history__toggle-thumb" />
+            </span>
+          </label>
+          <button
+            type="button"
+            class="mb-pc-history__qr-btn"
+            title="扫码分享"
+            aria-label="扫码分享"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="14" y="14" width="3" height="3" fill="currentColor"/>
+              <rect x="18" y="14" width="3" height="7" rx="1" fill="currentColor"/>
+              <rect x="14" y="18" width="7" height="3" rx="1" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="mb-pc-history__actions">
+
+      <!-- ===== Row 2: Filters + Search + Actions ===== -->
+      <div class="mb-pc-history__row2">
+        <nav class="mb-pc-history__tabs">
+          <button
+            v-for="tab in filterTabs"
+            :key="tab.key"
+            type="button"
+            class="mb-pc-history__tab"
+            :class="{ 'mb-pc-history__tab--active': activeTab === tab.key }"
+            @click="activeTab = tab.key"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+        <div class="mb-pc-history__filter-drop" ref="filterDrop">
+          <button
+            type="button"
+            class="mb-pc-history__filter-btn"
+            @click="filterMenuOpen = !filterMenuOpen"
+          >
+            <span>更多筛选</span>
+            <svg
+              class="mb-pc-history__filter-arrow"
+              :class="{ 'mb-pc-history__filter-arrow--up': filterMenuOpen }"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path fill="currentColor" d="M7 10l5 5 5-5z"/>
+            </svg>
+          </button>
+          <div v-show="filterMenuOpen" class="mb-pc-history__filter-menu">
+            <button
+              v-for="opt in filterOptions"
+              :key="opt.key"
+              type="button"
+              class="mb-pc-history__filter-item"
+              :class="{ 'mb-pc-history__filter-item--sel': filterMenuVal === opt.key }"
+              @click="filterMenuVal = opt.key; filterMenuOpen = false"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
         <label class="mb-pc-history__search">
           <input
             v-model.trim="keyword"
             type="search"
             class="mb-pc-history__search-input"
-            placeholder="搜索历史记录"
+            placeholder="搜索标题 / up主昵称"
             autocomplete="off"
             @input="onSearchInput"
           />
-          <i class="mb-pc-history__search-ico" aria-hidden="true" />
+          <svg class="mb-pc-history__search-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
         </label>
         <button
           type="button"
-          class="mb-pc-history__btn"
-          :disabled="!isMinibiliMode || settingsLoading"
-          @click="onTogglePause"
-        >
-          {{ paused ? "继续记录历史" : "暂停记录历史" }}
-        </button>
-        <button
-          type="button"
-          class="mb-pc-history__btn"
+          class="mb-pc-history__action-btn mb-pc-history__action-btn--danger"
           :disabled="!isMinibiliMode || !items.length || clearing"
           @click="onClearAll"
         >
-          清空历史
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+          </svg>
+          <span>清空历史</span>
+        </button>
+        <button
+          type="button"
+          class="mb-pc-history__action-btn"
+          :class="{ 'mb-pc-history__action-btn--active': batchMode }"
+          @click="batchMode = !batchMode"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="8" y1="8" x2="8" y2="8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <line x1="8" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <line x1="8" y1="16" x2="8" y2="16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <line x1="12" y1="8" x2="16" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="16" x2="16" y2="16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>批量管理</span>
         </button>
       </div>
     </header>
@@ -79,7 +174,10 @@
             v-for="row in group.rows"
             :key="entryKey(row)"
             class="mb-pc-history__entry"
-            :class="{ 'mb-pc-history__entry--article': isArticleRow(row) }"
+            :class="{
+              'mb-pc-history__entry--article': isArticleRow(row),
+              'mb-pc-history__entry--live': isLiveRow(row)
+            }"
           >
             <i
               v-if="row.showDate"
@@ -108,17 +206,22 @@
                   @error="onCoverError($event)"
                 />
                 <span
-                  v-if="!isArticleRow(row)"
+                  v-if="!isArticleRow(row) && !isLiveRow(row)"
                   class="mb-pc-history__thumb-track"
                   aria-hidden="true"
                 />
                 <span
-                  v-if="!isArticleRow(row)"
+                  v-if="!isArticleRow(row) && !isLiveRow(row)"
                   class="mb-pc-history__thumb-bar"
                   :style="{ width: progressBarPct(row) + '%' }"
                 />
                 <span
-                  v-else
+                  v-if="isLiveRow(row)"
+                  class="mb-pc-history__thumb-badge"
+                  aria-hidden="true"
+                >直播</span>
+                <span
+                  v-else-if="isArticleRow(row)"
                   class="mb-pc-history__thumb-badge"
                   aria-hidden="true"
                 >专栏</span>
@@ -216,12 +319,14 @@ import { ElMessageBox } from "element-plus";
 import {
   mbClearMeViewHistory,
   mbDeleteMeArticleViewHistoryEntry,
+  mbDeleteMeLiveViewHistoryEntry,
   mbDeleteMeViewHistoryEntry,
   mbGetMeViewHistory,
   mbPutMeViewHistorySettings
 } from "@/api/minibili";
 import {
   minibiliArticleReadRoute,
+  minibiliLiveRoomRoute,
   minibiliUserSpaceRoute,
   minibiliVideoPlayRoute
 } from "@/utils/minibiliRoutes";
@@ -294,6 +399,21 @@ export default {
       searchTimer: null,
       deletingKey: "",
       showTop: false,
+      activeTab: "all",
+      filterMenuOpen: false,
+      filterMenuVal: "",
+      batchMode: false,
+      filterTabs: [
+        { key: "all", label: "综合" },
+        { key: "video", label: "视频" },
+        { key: "live", label: "直播" },
+        { key: "article", label: "专栏" }
+      ],
+      filterOptions: [
+        { key: "all", label: "全部" },
+        { key: "watched", label: "已看完" },
+        { key: "watching", label: "未看完" }
+      ],
       defaultCover:
         "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect fill='%23e3e5e7' width='100%25' height='100%25'/%3E%3C/svg%3E",
       defaultAvatar:
@@ -301,11 +421,39 @@ export default {
     };
   },
   computed: {
+    filteredItems() {
+      let list = this.items;
+      if (this.activeTab === "video") {
+        list = list.filter(
+          r => !this.isArticleRow(r) && !this.isLiveRow(r)
+        );
+      } else if (this.activeTab === "live") {
+        list = list.filter(r => this.isLiveRow(r));
+      } else if (this.activeTab === "article") {
+        list = list.filter(r => this.isArticleRow(r));
+      }
+      if (this.filterMenuVal === "watched") {
+        list = list.filter(r => {
+          if (this.isLiveRow(r) || this.isArticleRow(r)) return false;
+          const dur = Number(r.duration_sec);
+          const prog = Number(r.progress_sec);
+          return Number.isFinite(dur) && dur > 0 && Number.isFinite(prog) && prog >= dur * 0.95;
+        });
+      } else if (this.filterMenuVal === "watching") {
+        list = list.filter(r => {
+          if (this.isLiveRow(r) || this.isArticleRow(r)) return true;
+          const dur = Number(r.duration_sec);
+          const prog = Number(r.progress_sec);
+          return !(Number.isFinite(dur) && dur > 0 && Number.isFinite(prog) && prog >= dur * 0.95);
+        });
+      }
+      return list;
+    },
     displayGroups() {
       const now = new Date();
       const groups = [];
       const map = new Map();
-      for (const item of this.items) {
+      for (const item of this.filteredItems) {
         const d = parseViewedAt(item.viewed_at);
         if (!d) {
           continue;
@@ -352,6 +500,13 @@ export default {
     if (typeof window !== "undefined") {
       window.addEventListener("scroll", onScroll, { passive: true });
     }
+    this._onClickDoc = (e) => {
+      const drop = this.$refs.filterDrop;
+      if (drop && !drop.contains(e.target)) {
+        this.filterMenuOpen = false;
+      }
+    };
+    document.addEventListener("click", this._onClickDoc);
   },
   beforeUnmount() {
     if (this.searchTimer) {
@@ -360,16 +515,28 @@ export default {
     if (typeof window !== "undefined" && this._onScroll) {
       window.removeEventListener("scroll", this._onScroll);
     }
+    if (this._onClickDoc) {
+      document.removeEventListener("click", this._onClickDoc);
+    }
   },
   methods: {
     isArticleRow(row) {
       return (
         row &&
         (row.media_type === "article" ||
-          (Number(row.article_id) > 0 && !Number(row.video_id)))
+          (Number(row.article_id) > 0 && !Number(row.video_id) && !Number(row.live_room_id)))
+      );
+    },
+    isLiveRow(row) {
+      return (
+        row &&
+        (row.media_type === "live" || Number(row.live_room_id) > 0)
       );
     },
     entryKey(row) {
+      if (this.isLiveRow(row)) {
+        return `l-${Number(row.live_room_id)}-${row.viewed_at}`;
+      }
       const kind = this.isArticleRow(row) ? "a" : "v";
       const id = this.isArticleRow(row)
         ? Number(row.article_id)
@@ -377,6 +544,14 @@ export default {
       return `${kind}-${id}-${row.viewed_at}`;
     },
     contentRoute(row) {
+      if (this.isLiveRow(row)) {
+        return (
+          minibiliLiveRoomRoute(row.live_room_id) || {
+            name: "minibiliLiveRoom",
+            params: { roomId: "0" }
+          }
+        );
+      }
       if (this.isArticleRow(row)) {
         return (
           minibiliArticleReadRoute(row.article_id) || {
@@ -407,6 +582,9 @@ export default {
       return parts.length ? parts[parts.length - 1] : String(raw).trim();
     },
     progressBarPct(row) {
+      if (this.isLiveRow(row)) {
+        return 0;
+      }
       const dur = Number(row.duration_sec);
       const prog = Number(row.progress_sec);
       if (!Number.isFinite(dur) || dur <= 0 || !Number.isFinite(prog)) {
@@ -415,6 +593,9 @@ export default {
       return Math.min(100, Math.max(0, (prog / dur) * 100));
     },
     progressLabel(row) {
+      if (this.isLiveRow(row)) {
+        return "已观看";
+      }
       if (this.isArticleRow(row)) {
         return "已阅读";
       }
@@ -499,11 +680,13 @@ export default {
         return false;
       }
     },
-    async onTogglePause() {
+    async onTogglePause(e) {
       if (!this.isMinibiliMode || this.settingsLoading) {
         return;
       }
-      if (!this.paused) {
+      const wantedChecked = e && e.target ? e.target.checked : !this.paused;
+      const wantPaused = !wantedChecked;
+      if (wantPaused) {
         const ok = await this.confirmHistAction(
           "啊叻？你要暂停历史记录功能吗？",
           "确定暂停"
@@ -514,8 +697,7 @@ export default {
       }
       this.settingsLoading = true;
       try {
-        const next = !this.paused;
-        const res = await mbPutMeViewHistorySettings(next);
+        const res = await mbPutMeViewHistorySettings(wantPaused);
         this.paused = !!res.paused;
       } catch {
         /* ignore */
@@ -551,7 +733,16 @@ export default {
       const key = this.entryKey(row);
       this.deletingKey = key;
       try {
-        if (this.isArticleRow(row)) {
+        if (this.isLiveRow(row)) {
+          await mbDeleteMeLiveViewHistoryEntry(Number(row.live_room_id));
+          this.items = this.items.filter(
+            (r) =>
+              !(
+                this.isLiveRow(r) &&
+                Number(r.live_room_id) === Number(row.live_room_id)
+              )
+          );
+        } else if (this.isArticleRow(row)) {
           await mbDeleteMeArticleViewHistoryEntry(Number(row.article_id));
           this.items = this.items.filter(
             (r) =>
@@ -566,6 +757,7 @@ export default {
             (r) =>
               !(
                 !this.isArticleRow(r) &&
+                !this.isLiveRow(r) &&
                 Number(r.video_id) === Number(row.video_id)
               )
           );

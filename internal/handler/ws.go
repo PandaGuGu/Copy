@@ -209,6 +209,11 @@ func (a *API) ServeLiveChat(c *gin.Context) {
 	a.Hub.Join(roomID, conn)
 	globalAudience.join(roomID, username)
 
+	// Record live view history when a logged-in user enters the live room
+	if userID > 0 {
+		a.RecordLiveViewHistory(userID, roomID, "web")
+	}
+
 	// Send current audience list and user info
 	conn.WriteJSON(gin.H{
 		"type":         "user_info",

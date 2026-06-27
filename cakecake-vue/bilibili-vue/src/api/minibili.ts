@@ -662,9 +662,10 @@ export async function mbGetMeCoinLedger(params?: {
 }
 
 export interface ViewHistoryItem {
-  media_type?: "video" | "article";
+  media_type?: "video" | "article" | "live";
   video_id: number;
   article_id?: number;
+  live_room_id?: number;
   title: string;
   cover_url: string;
   duration_sec: number;
@@ -701,6 +702,15 @@ export async function mbDeleteMeArticleViewHistoryEntry(
 ): Promise<void> {
   await http.delete(
     `/api/v1/users/me/view-history/articles/${articleId}`,
+    authAxiosOpts
+  );
+}
+
+export async function mbDeleteMeLiveViewHistoryEntry(
+  liveRoomId: number
+): Promise<void> {
+  await http.delete(
+    `/api/v1/users/me/view-history/live/${liveRoomId}`,
     authAxiosOpts
   );
 }

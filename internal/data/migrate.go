@@ -38,6 +38,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.CoinLedger{},
 		&model.VideoViewHistory{},
 		&model.ArticleViewHistory{},
+		&model.LiveViewHistory{},
 		&model.DmConversation{},
 		&model.DmParticipant{},
 		&model.DmMessage{},
