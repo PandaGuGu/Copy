@@ -72,3 +72,21 @@ export function adminUnbanLiveRoom(roomId) {
 export function adminDeleteLiveRoom(roomId) {
   return adminHttp.delete(`/api/v1/admin/live/room/${roomId}`);
 }
+
+export function adminWarnLiveRoom(roomId, reason) {
+  return adminHttp.post(`/api/v1/admin/live/room/${roomId}/warn`, { reason });
+}
+
+// 警告模板管理
+export function listWarnTemplates() {
+  return adminHttp.get("/api/v1/admin/live/warn-templates");
+}
+export function createWarnTemplate(data) {
+  return adminHttp.post("/api/v1/admin/live/warn-templates", data);
+}
+export function updateWarnTemplate(id, data) {
+  return adminHttp.put(`/api/v1/admin/live/warn-templates/${id}`, data);
+}
+export function deleteWarnTemplate(id) {
+  return adminHttp.delete(`/api/v1/admin/live/warn-templates/${id}`);
+}

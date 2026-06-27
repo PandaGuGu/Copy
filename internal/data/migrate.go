@@ -74,6 +74,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.CopyrightComplaint{},
 		&model.SavedReport{},
 		&model.CSTemplate{},
+		&model.LiveWarnTemplate{},
 		&model.CSConversation{},
 		&model.CSMessage{},
 		&model.TaskLog{},

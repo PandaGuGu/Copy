@@ -239,6 +239,55 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 	resp.OK(c, adminVideoToJSON(&v, model.DisplayUsername(&u)))
 }
 
+// AdminBatchApproveVideos POST /api/v1/admin/videos/batch-approve
+// Auto-approve all pending_review videos.
+func (a *API) AdminBatchApproveVideos(c *gin.Context) {
+	adminID, ok := middleware.AdminID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
+	}
+
+	var pending []model.Video
+	if err := a.DB.Where("status = ?", "pending_review").Find(&pending).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	if len(pending) == 0 {
+		resp.OK(c, gin.H{"approved": 0, "failed": 0, "total": 0})
+		return
+	}
+
+	approved := 0
+	failed := 0
+	for _, v := range pending {
+		if strings.TrimSpace(v.VideoURL) == "" {
+			failed++
+			continue
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+		aid := adminID
+		if err := service.PublishVideo(ctx, a.DB, a.ES, a.Log, v.ID, &aid); err != nil {
+			a.Log.Error("batch approve video failed", zap.Error(err), zap.Uint64("video_id", v.ID))
+			failed++
+		} else {
+			approved++
+		}
+		cancel()
+	}
+
+	a.Log.Info("batch approve videos completed",
+		zap.Int("approved", approved),
+		zap.Int("failed", failed),
+		zap.Uint64("admin_id", adminID),
+	)
+	resp.OK(c, gin.H{
+		"approved": approved,
+		"failed":   failed,
+		"total":    len(pending),
+	})
+}
+
 // AdminDeleteVideo POST /api/v1/admin/videos/:id/delete 或 DELETE /api/v1/admin/videos/:id
 // Removes published or rejected videos from DB and OSS (same cascade as uploader delete).
 func (a *API) AdminDeleteVideo(c *gin.Context) {
