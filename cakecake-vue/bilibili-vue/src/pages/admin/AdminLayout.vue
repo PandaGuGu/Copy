@@ -41,9 +41,8 @@
 </template>
 
 <script>
-import { adminMe } from "@/api/admin";
+import { adminMe, adminGetMyPermissions } from "@/api/admin";
 import { clearAdminTokens, setAdminPerms } from "@/utils/adminAuth";
-import adminHttp from "@/utils/adminHttp";
 
 const GROUPS = [
   { key:"data",  title:"数据", items:[
@@ -133,8 +132,8 @@ export default {
     },
     async fetchPerms() {
       try {
-        const r = await adminHttp.get("/api/v1/admin/rbac/me/permissions");
-        this.perms = (r.data && r.data.permissions) || [];
+        const d = await adminGetMyPermissions();
+        this.perms = (d.data && d.data.permissions) || [];
         setAdminPerms(this.perms); // sync to localStorage for route guards
       } catch {
         this.perms = [];

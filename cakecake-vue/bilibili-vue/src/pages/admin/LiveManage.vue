@@ -10,7 +10,14 @@
       <el-tab-pane label="已结束" name="ended" />
     </el-tabs>
 
-    <el-table :data="rooms" stripe size="default" empty-text="暂无直播间">
+    <AdminDataTable
+      :data="rooms"
+      :loading="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @update:page="page = $event; fetchRooms()"
+    >
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
       <el-table-column label="主播" width="120">
@@ -45,18 +52,7 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
-
-    <div v-if="total > pageSize" class="lm-pagination">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :total="total"
-        :page-size="pageSize"
-        v-model:current-page="page"
-        @current-change="fetchRooms"
-      />
-    </div>
+    </AdminDataTable>
 
     <!-- 详情弹窗 -->
     <el-dialog
@@ -213,6 +209,7 @@ import { ref, nextTick, reactive } from "vue";
 import { ElMessage } from "element-plus";
 import flvjs from "flv.js";
 import LiveChat from "@/components/live/LiveChat.vue";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 import {
   adminListLiveRooms, adminBanLiveRoom, adminUnbanLiveRoom, adminDeleteLiveRoom,
   adminWarnLiveRoom, adminGetLiveRoom,

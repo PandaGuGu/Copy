@@ -33,7 +33,15 @@
     </div>
 
     <div class="adm-table-wrap">
-      <el-table v-loading="loading" :data="rows" border stripe class="adm-article-table">
+      <AdminDataTable
+        :data="rows"
+        :loading="loading"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        class="adm-article-table"
+        @update:page="page = $event; load()"
+      >
         <el-table-column prop="id" label="ID" width="64" />
         <el-table-column label="封面" width="108">
           <template #default="{ row }">
@@ -80,13 +88,7 @@
             </div>
           </template>
         </el-table-column>
-      </el-table>
-    </div>
-
-    <div v-if="totalPages > 1" class="adm-pager">
-      <el-button :disabled="page <= 1" @click="goPage(page - 1)">上一页</el-button>
-      <span>{{ page }} / {{ totalPages }}（共 {{ total }} 条）</span>
-      <el-button :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</el-button>
+      </AdminDataTable>
     </div>
 
     <el-dialog
@@ -166,8 +168,10 @@ import {
   adminRejectArticle
 } from "@/api/admin";
 import { ElMessage, ElMessageBox } from "element-plus";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 export default {
+  components: { AdminDataTable },
   data() {
     return {
       loading: false,
@@ -176,7 +180,6 @@ export default {
       page: 1,
       pageSize: 20,
       total: 0,
-      totalPages: 1,
       pendingCount: 0,
       statusFilter: "pending_review",
       keyword: "",
@@ -217,7 +220,6 @@ export default {
         this.rows = d.items || [];
         this.page = d.page || 1;
         this.total = d.total || 0;
-        this.totalPages = d.total_pages || 1;
         this.pendingCount = d.pending_count || 0;
       } finally {
         this.loading = false;
@@ -231,11 +233,6 @@ export default {
     },
     onSearch() {
       this.page = 1;
-      void this.load();
-    },
-    goPage(p) {
-      if (p < 1 || p > this.totalPages || p === this.page) return;
-      this.page = p;
       void this.load();
     },
     statusLabel(st) {

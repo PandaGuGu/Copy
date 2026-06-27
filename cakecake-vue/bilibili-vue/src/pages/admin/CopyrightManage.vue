@@ -165,11 +165,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import http from '@/utils/adminHttp'
 import { ElMessage, ElMessageBox } from 'element-plus'
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
-const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
+import {
+  adminListCopyrightComplaints,
+  adminGetCopyrightComplaint,
+  adminAcceptCopyrightComplaint,
+  adminRejectCopyrightComplaint,
+  adminTakedownCopyright,
+  adminRestoreCopyright,
+} from '@/api/admin'
 
 const loading = ref(false)
 const items = ref([])
@@ -186,10 +190,10 @@ const handlerComment = ref('')
 async function fetch() {
   loading.value = true
   try {
-    const params = new URLSearchParams({ page: page.value, page_size: pageSize })
-    if (filterStatus.value) params.set('status', filterStatus.value)
-    if (filterQ.value) params.set('q', filterQ.value)
-    const d = await http.get(ADMIN_API + `/copyright/complaints?${params}`)
+    const params = { page: page.value, page_size: pageSize }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterQ.value) params.q = filterQ.value
+    const d = await adminListCopyrightComplaints(params)
     items.value = d.data?.items || []
     total.value = d.data?.total || 0
   } catch (e) {
@@ -206,8 +210,8 @@ function search() {
 
 async function openDetail(row) {
   try {
-    const r = await http.get(ADMIN_API + `/copyright/complaints/${row.id}`)
-    detail.value = r.data
+    const d = await adminGetCopyrightComplaint(row.id)
+    detail.value = d.data
     detailVisible.value = true
     handlerComment.value = ''
   } catch (e) {
@@ -224,9 +228,14 @@ async function doAction(action) {
     await ElMessageBox.confirm(`确认${actionLabels[action]}此投诉？`, '提示', {
       type: action === 'reject' || action === 'takedown' ? 'warning' : 'info',
     })
-    await http.post(ADMIN_API + `/copyright/complaints/${detail.value.id}/${action}`, {
-      handler_comment: handlerComment.value.trim(),
-    })
+    let fn
+    switch (action) {
+      case 'accept': fn = adminAcceptCopyrightComplaint; break
+      case 'reject': fn = () => adminRejectCopyrightComplaint(detail.value.id, handlerComment.value); break
+      case 'takedown': fn = adminTakedownCopyright; break
+      case 'restore': fn = adminRestoreCopyright; break
+    }
+    await fn(detail.value.id)
     ElMessage.success(`已${actionLabels[action]}`)
     await openDetail(detail.value)
     fetch()

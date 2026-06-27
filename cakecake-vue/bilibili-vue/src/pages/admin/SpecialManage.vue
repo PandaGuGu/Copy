@@ -6,10 +6,10 @@
 
     <el-tabs v-model="tab" @tab-change="onTabChange">
       <el-tab-pane label="专题页" name="specials">
-        <div class="sm-toolbar">
-          <el-button type="primary" size="default" @click="openSpecialDialog(null)">新建专题</el-button>
-        </div>
-        <el-table :data="specials" stripe size="default" empty-text="暂无专题">
+        <AdminDataTable :data="specials" :loading="loading" :show-pagination="false">
+          <template #toolbar>
+            <el-button type="primary" size="default" @click="openSpecialDialog(null)">新建专题</el-button>
+          </template>
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
           <el-table-column prop="slug" label="标识" width="120" />
@@ -31,14 +31,14 @@
               </el-popconfirm>
             </template>
           </el-table-column>
-        </el-table>
+        </AdminDataTable>
       </el-tab-pane>
 
       <el-tab-pane label="活动" name="campaigns">
-        <div class="sm-toolbar">
-          <el-button type="primary" size="default" @click="openCampaignDialog(null)">新建活动</el-button>
-        </div>
-        <el-table :data="campaigns" stripe size="default" empty-text="暂无活动">
+        <AdminDataTable :data="campaigns" :loading="loading" :show-pagination="false">
+          <template #toolbar>
+            <el-button type="primary" size="default" @click="openCampaignDialog(null)">新建活动</el-button>
+          </template>
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
           <el-table-column prop="slug" label="标识" width="120" />
@@ -63,7 +63,7 @@
               </el-popconfirm>
             </template>
           </el-table-column>
-        </el-table>
+        </AdminDataTable>
       </el-tab-pane>
     </el-tabs>
 
@@ -121,13 +121,24 @@
 </template>
 
 <script>
-import http from "@/utils/adminHttp";
 import { ElMessage } from "element-plus";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
+import {
+  adminListSpecials,
+  adminCreateSpecial,
+  adminUpdateSpecial,
+  adminDeleteSpecial,
+  adminListCampaigns,
+  adminCreateCampaign,
+  adminUpdateCampaign,
+  adminDeleteCampaign,
+} from "@/api/admin";
 
 const STATUS = { draft: "草稿", published: "已发布", archived: "已归档", active: "进行中", ended: "已结束" };
 
 export default {
   name: "SpecialManage",
+  components: { AdminDataTable },
   data() {
     return {
       loading: false,
@@ -150,11 +161,11 @@ export default {
       this.loading = true;
       try {
         const [sr, cr] = await Promise.all([
-          http.get("/api/v1/admin/specials"),
-          http.get("/api/v1/admin/campaigns")
+          adminListSpecials(),
+          adminListCampaigns()
         ]);
-        this.specials = Array.isArray(sr.data?.data) ? sr.data.data : [];
-        this.campaigns = Array.isArray(cr.data?.data) ? cr.data.data : [];
+        this.specials = Array.isArray(sr.data) ? sr.data : [];
+        this.campaigns = Array.isArray(cr.data) ? cr.data : [];
       } catch { ElMessage.error("加载失败"); }
       finally { this.loading = false; }
     },
@@ -174,9 +185,9 @@ export default {
       this.specialSaving = true;
       try {
         if (this.specialFormId) {
-          await http.put(`/api/v1/admin/specials/${this.specialFormId}`, f);
+          await adminUpdateSpecial(this.specialFormId, f);
         } else {
-          await http.post("/api/v1/admin/specials", f);
+          await adminCreateSpecial(f);
         }
         ElMessage.success("保存成功");
         this.specialFormOpen = false;
@@ -186,7 +197,7 @@ export default {
     },
     async deleteSpecial(row) {
       try {
-        await http.delete(`/api/v1/admin/specials/${row.id}`);
+        await adminDeleteSpecial(row.id);
         ElMessage.success("已删除");
         this.specials = this.specials.filter(r => r.id !== row.id);
       } catch { ElMessage.error("删除失败"); }
@@ -206,9 +217,9 @@ export default {
       this.campaignSaving = true;
       try {
         if (this.campaignFormId) {
-          await http.put(`/api/v1/admin/campaigns/${this.campaignFormId}`, f);
+          await adminUpdateCampaign(this.campaignFormId, f);
         } else {
-          await http.post("/api/v1/admin/campaigns", f);
+          await adminCreateCampaign(f);
         }
         ElMessage.success("保存成功");
         this.campaignFormOpen = false;
@@ -218,7 +229,7 @@ export default {
     },
     async deleteCampaign(row) {
       try {
-        await http.delete(`/api/v1/admin/campaigns/${row.id}`);
+        await adminDeleteCampaign(row.id);
         ElMessage.success("已删除");
         this.campaigns = this.campaigns.filter(r => r.id !== row.id);
       } catch { ElMessage.error("删除失败"); }

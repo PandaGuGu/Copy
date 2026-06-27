@@ -312,22 +312,8 @@ func (a *API) uploadAgentProfileAvatarToOSS(fh *multipart.FileHeader, slug strin
 	return a.uploadBannerImageToOSS(fh, key)
 }
 
-// Legacy singleton endpoints (compat): map to first profile.
-
-func (a *API) AdminGetAgentSettings(c *gin.Context) {
-	list, err := data.ListAgentProfiles(a.DB)
-	if err != nil || len(list) == 0 {
-		if err := data.EnsureAgentProfiles(a.DB, a.Cfg, a.Log); err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		list, _ = data.ListAgentProfiles(a.DB)
-	}
-	if len(list) == 0 {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	p := list[0]
+// respondAgentSettings writes the "legacy singleton" agent settings payload.
+func (a *API) respondAgentSettings(c *gin.Context, p *model.AgentProfile) {
 	welcome := model.ParseWelcomeMessages(p.WelcomeMessagesJSON)
 	welcomeOne := ""
 	if len(welcome) > 0 {
@@ -346,13 +332,46 @@ func (a *API) AdminGetAgentSettings(c *gin.Context) {
 	})
 }
 
-func (a *API) AdminPutAgentSettings(c *gin.Context) {
-	list, _ := data.ListAgentProfiles(a.DB)
+// firstAgentProfile returns the first agent profile, ensuring defaults on empty DB.
+func (a *API) firstAgentProfile() (*model.AgentProfile, int) {
+	list, err := data.ListAgentProfiles(a.DB)
+	if err != nil || len(list) == 0 {
+		if err := data.EnsureAgentProfiles(a.DB, a.Cfg, a.Log); err != nil {
+			return nil, http.StatusInternalServerError
+		}
+		list, _ = data.ListAgentProfiles(a.DB)
+	}
 	if len(list) == 0 {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return nil, http.StatusNotFound
+	}
+	return &list[0], 0
+}
+
+// Legacy singleton endpoints (compat): map to first profile.
+
+func (a *API) AdminGetAgentSettings(c *gin.Context) {
+	p, status := a.firstAgentProfile()
+	if status != 0 {
+		if status == http.StatusNotFound {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		}
 		return
 	}
-	c.Params = append(c.Params, gin.Param{Key: "id", Value: strconv.FormatUint(list[0].ID, 10)})
+	a.respondAgentSettings(c, p)
+}
+
+func (a *API) AdminPutAgentSettings(c *gin.Context) {
+	p, status := a.firstAgentProfile()
+	if status != 0 {
+		if status == http.StatusNotFound {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		}
+		return
+	}
 	var req adminAgentSettingsReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -374,7 +393,6 @@ func (a *API) AdminPutAgentSettings(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	p := list[0]
 	updates := map[string]interface{}{
 		"display_name":          strings.TrimSpace(req.DisplayName),
 		"avatar_url":            strings.TrimSpace(req.AvatarURL),
@@ -385,10 +403,10 @@ func (a *API) AdminPutAgentSettings(c *gin.Context) {
 	if req.AssistantEnabled != nil {
 		updates["enabled"] = *req.AssistantEnabled
 	}
-	_ = a.DB.Model(&p).Updates(updates).Error
-	_ = a.DB.First(&p, p.ID).Error
-	_ = data.SyncAgentProfile(a.DB, &p)
-	a.AdminGetAgentSettings(c)
+	_ = a.DB.Model(p).Updates(updates).Error
+	_ = a.DB.First(p, p.ID).Error
+	_ = data.SyncAgentProfile(a.DB, p)
+	a.respondAgentSettings(c, p)
 }
 
 type adminAgentSettingsReq struct {
@@ -400,12 +418,44 @@ type adminAgentSettingsReq struct {
 	AssistantEnabled *bool  `json:"assistant_enabled"`
 }
 
-func (a *API) AdminUploadAgentAvatar(c *gin.Context) {
-	list, _ := data.ListAgentProfiles(a.DB)
-	if len(list) == 0 {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+// uploadFirstAgentAvatar handles the legacy singleton avatar upload flow.
+func (a *API) uploadFirstAgentAvatar(c *gin.Context) {
+	p, status := a.firstAgentProfile()
+	if status != 0 {
+		if status == http.StatusNotFound {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		}
 		return
 	}
-	c.Params = append(c.Params, gin.Param{Key: "id", Value: strconv.FormatUint(list[0].ID, 10)})
-	a.AdminUploadAgentProfileAvatar(c)
+	if err := c.Request.ParseMultipartForm(12 << 20); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	fh, err := c.FormFile("image")
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	oldAvatar := strings.TrimSpace(p.AvatarURL)
+	url, code := a.uploadAgentProfileAvatarToOSS(fh, p.Slug)
+	if code != 0 {
+		resp.Err(c, http.StatusBadRequest, code)
+		return
+	}
+	if err := a.DB.Model(p).Update("avatar_url", url).Error; err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	_ = a.DB.First(p, p.ID).Error
+	if agentAvatarURLChanged(oldAvatar, url) {
+		purgeAgentAvatarOSS(a.Cfg, a.OSS, a.Log, oldAvatar)
+	}
+	_ = data.SyncAgentProfile(a.DB, p)
+	resp.OK(c, gin.H{"avatar_url": url, "profile": adminAgentProfilePayload(p)})
+}
+
+func (a *API) AdminUploadAgentAvatar(c *gin.Context) {
+	a.uploadFirstAgentAvatar(c)
 }

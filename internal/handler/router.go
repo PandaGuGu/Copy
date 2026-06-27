@@ -119,9 +119,12 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.GET("/bi/creator-stats", a.AdminGetCreatorStats)
 		admin.GET("/bi/time-series", a.AdminGetTimeSeries)
 		admin.GET("/bi/reports", a.AdminListSavedReports)
-		admin.POST("/bi/reports", a.AdminSaveReport)
-		admin.DELETE("/bi/reports/:id", a.AdminDeleteSavedReport)
-		admin.POST("/bi/export", a.AdminExportReport)
+
+		// BI write — requires dashboard:export
+		biOps := admin.Group("", middleware.RequirePermission(a.DB, "dashboard", "export"))
+		biOps.POST("/bi/reports", a.AdminSaveReport)
+		biOps.DELETE("/bi/reports/:id", a.AdminDeleteSavedReport)
+		biOps.POST("/bi/export", a.AdminExportReport)
 
 		// Permission-protected: user.ban
 		userOps := admin.Group("", middleware.RequirePermission(a.DB, "user", "ban"))

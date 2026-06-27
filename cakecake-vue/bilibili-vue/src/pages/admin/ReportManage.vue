@@ -182,8 +182,7 @@
 
 <script>
 import { ElMessage, ElMessageBox } from "element-plus";
-import { adminListReports, adminHandleReport, adminDeleteReport } from "@/api/admin";
-import adminHttp from "@/utils/adminHttp";
+import { adminListReports, adminHandleReport, adminDeleteReport, adminBatchHandleReports } from "@/api/admin";
 
 const reasonIcons = {
   nsfw: "🔞", violence: "🩸", spam: "📢", harassment: "🔥", illegal: "⚖️", copyright: "©️", other: "📌"
@@ -266,7 +265,7 @@ export default {
         await ElMessageBox.confirm(`确认批量处理 ${this.selectedIds.length} 条举报？`);
       } catch { return; }
       try {
-        await adminHttp.post("/api/v1/admin/reports/batch", { ids: this.selectedIds, action: "resolve", handler_note: "" });
+        await adminBatchHandleReports({ ids: this.selectedIds, action: "resolve", handler_note: "" });
         ElMessage.success("已批量处理");
         this.fetch();
       } catch (e) {
@@ -278,7 +277,7 @@ export default {
         await ElMessageBox.confirm(`确认批量驳回 ${this.selectedIds.length} 条举报？`);
       } catch { return; }
       try {
-        await adminHttp.post("/api/v1/admin/reports/batch", { ids: this.selectedIds, action: "dismiss", handler_note: "" });
+        await adminBatchHandleReports({ ids: this.selectedIds, action: "dismiss", handler_note: "" });
         ElMessage.success("已批量驳回");
         this.fetch();
       } catch (e) {

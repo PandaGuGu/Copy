@@ -34,6 +34,7 @@ type Dependencies struct {
 	DanmakuRelay *service.DanmakuRelay
 	IPLocate     *iplocate.Searcher
 	Agent        *service.AgentService
+	Svcs         *service.Services
 }
 
 // API exposes HTTP handlers.

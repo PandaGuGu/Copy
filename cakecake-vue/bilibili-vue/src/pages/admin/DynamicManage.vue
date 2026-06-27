@@ -5,16 +5,6 @@
         动态管理
         <el-tag type="info" size="small" class="adm-badge">无需审核</el-tag>
       </h2>
-      <div class="adm-toolbar">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索标题或正文"
-          clearable
-          style="width: 240px"
-          @keyup.enter="onSearch"
-        />
-        <el-button type="primary" @click="onSearch">搜索</el-button>
-      </div>
     </div>
 
     <p class="adm-hint">
@@ -22,7 +12,27 @@
     </p>
 
     <div class="adm-table-wrap">
-      <el-table v-loading="loading" :data="rows" border stripe class="adm-dyn-table">
+      <AdminDataTable
+        :data="rows"
+        :loading="loading"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :show-pagination="true"
+        class="adm-dyn-table"
+        @update:page="page = $event; load()"
+      >
+        <template #search-bar>
+          <el-input
+            v-model="keyword"
+            placeholder="搜索标题或正文"
+            clearable
+            style="width: 240px"
+            @keyup.enter="onSearch"
+          />
+          <el-button type="primary" @click="onSearch">搜索</el-button>
+        </template>
+
         <el-table-column prop="id" label="ID" width="64" />
         <el-table-column label="图片" width="108">
           <template #default="{ row }">
@@ -48,13 +58,7 @@
             <el-button link type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
-    </div>
-
-    <div v-if="totalPages > 1" class="adm-pager">
-      <el-button :disabled="page <= 1" @click="goPage(page - 1)">上一页</el-button>
-      <span>{{ page }} / {{ totalPages }}（共 {{ total }} 条）</span>
-      <el-button :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</el-button>
+      </AdminDataTable>
     </div>
 
     <el-dialog
@@ -110,8 +114,10 @@ import {
   adminListDynamics
 } from "@/api/admin";
 import { ElMessage, ElMessageBox } from "element-plus";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 export default {
+  components: { AdminDataTable },
   data() {
     return {
       loading: false,
@@ -120,7 +126,6 @@ export default {
       page: 1,
       pageSize: 20,
       total: 0,
-      totalPages: 1,
       keyword: "",
       detailVisible: false,
       detail: null
@@ -147,20 +152,14 @@ export default {
         });
         const d = body.data || {};
         this.rows = d.items || [];
-        this.page = d.page || 1;
         this.total = d.total || 0;
-        this.totalPages = d.total_pages || 1;
+        this.page = d.page || 1;
       } finally {
         this.loading = false;
       }
     },
     onSearch() {
       this.page = 1;
-      void this.load();
-    },
-    goPage(p) {
-      if (p < 1 || p > this.totalPages || p === this.page) return;
-      this.page = p;
       void this.load();
     },
     formatTime(t) {

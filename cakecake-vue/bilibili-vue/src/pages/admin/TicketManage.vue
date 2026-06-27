@@ -225,22 +225,17 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import http from '@/utils/adminHttp'
-
-async function api(path, opts = {}) {
-  const method = (opts.method || 'GET').toLowerCase()
-  let raw
-  if (method === 'post') {
-    raw = await http.post('/api/v1/admin' + path, opts.body || {})
-  } else if (method === 'put') {
-    raw = await http.put('/api/v1/admin' + path, opts.body || {})
-  } else {
-    raw = await http.get('/api/v1/admin' + path)
-  }
-  // adminHttp interceptor returns response body {code, data, msg}
-  // code !== 0 already throws, so here code is always 0
-  return (raw && raw.data) || raw
-}
+import {
+  adminListTickets,
+  adminGetTicket,
+  adminAssignTicket,
+  adminAutoAssignTicket,
+  adminUpdateTicketStatus,
+  adminTicketSendMessage,
+  adminCloseTicket,
+  adminReopenTicket,
+  adminListAdmins,
+} from '@/api/admin'
 
 const loading = ref(false)
 const items = ref([])
@@ -262,18 +257,18 @@ const replyContent = ref('')
 async function fetch() {
   loading.value = true
   try {
-    const params = new URLSearchParams({ page: page.value, page_size: pageSize })
-    if (filterStatus.value) params.set('status', filterStatus.value)
-    if (filterCategory.value) params.set('category', filterCategory.value)
-    if (filterPriority.value) params.set('priority', filterPriority.value)
-    const d = await api(`/tickets?${params}`)
-    items.value = d.items || []
-    total.value = d.total || 0
+    const params = { page: page.value, page_size: pageSize }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterPriority.value) params.priority = filterPriority.value
+    const d = await adminListTickets(params)
+    items.value = d.data.items || []
+    total.value = d.data.total || 0
     Object.assign(stats, {
-      open_count: d.open_count || 0,
-      processing_count: d.processing_count || 0,
-      resolved_count: d.resolved_count || 0,
-      closed_count: d.closed_count || 0,
+      open_count: d.data.open_count || 0,
+      processing_count: d.data.processing_count || 0,
+      resolved_count: d.data.resolved_count || 0,
+      closed_count: d.data.closed_count || 0,
     })
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -289,17 +284,16 @@ function search() {
 
 async function openDetail(row) {
   try {
-    const d = await api(`/tickets/${row.id}`)
-    detail.value = d
+    const d = await adminGetTicket(row.id)
+    detail.value = d.data
     detailVisible.value = true
-    actionAssignee.value = d.assignee_id || null
+    actionAssignee.value = d.data.assignee_id || null
     actionStatus.value = ''
     replyContent.value = ''
-    // load admin list for assignment
     if (adminList.value.length === 0) {
       try {
-        const ad = await api('/rbac/admins')
-        adminList.value = ad.items || ad || []
+        const ad = await adminListAdmins()
+        adminList.value = ad.data.items || []
       } catch { /* ignore */ }
     }
   } catch (e) {
@@ -310,7 +304,7 @@ async function openDetail(row) {
 async function doAssign() {
   if (!detail.value || !actionAssignee.value) return
   try {
-    await api(`/tickets/${detail.value.id}/assign`, { method: 'POST', body: { assignee_id: Number(actionAssignee.value) } })
+    await adminAssignTicket(detail.value.id, Number(actionAssignee.value))
     ElMessage.success('已指派')
     await openDetail({ id: detail.value.id })
     fetch()
@@ -321,7 +315,7 @@ async function doAssign() {
 
 async function doAutoAssign(row) {
   try {
-    await api(`/tickets/${row.id}/auto-assign`, { method: 'POST' })
+    await adminAutoAssignTicket(row.id)
     ElMessage.success('已自动分配')
     fetch()
   } catch (e) {
@@ -332,7 +326,7 @@ async function doAutoAssign(row) {
 async function doAutoAssignFromDetail() {
   if (!detail.value) return
   try {
-    await api(`/tickets/${detail.value.id}/auto-assign`, { method: 'POST' })
+    await adminAutoAssignTicket(detail.value.id)
     ElMessage.success('已自动分配给工作量最少的客服')
     await openDetail({ id: detail.value.id })
     fetch()
@@ -344,7 +338,7 @@ async function doAutoAssignFromDetail() {
 async function doUpdateStatus() {
   if (!detail.value || !actionStatus.value) return
   try {
-    await api(`/tickets/${detail.value.id}/status`, { method: 'POST', body: { status: actionStatus.value } })
+    await adminUpdateTicketStatus(detail.value.id, actionStatus.value)
     ElMessage.success('状态已更新')
     await openDetail(detail.value)
     fetch()
@@ -356,7 +350,7 @@ async function doUpdateStatus() {
 async function doReply() {
   if (!detail.value || !replyContent.value.trim()) return
   try {
-    await api(`/tickets/${detail.value.id}/messages`, { method: 'POST', body: { content: replyContent.value.trim() } })
+    await adminTicketSendMessage(detail.value.id, replyContent.value.trim())
     replyContent.value = ''
     ElMessage.success('已发送')
     await openDetail(detail.value)
@@ -369,7 +363,7 @@ async function doClose() {
   if (!detail.value) return
   try {
     await ElMessageBox.confirm('确认关闭此工单？')
-    await api(`/tickets/${detail.value.id}/close`, { method: 'POST' })
+    await adminCloseTicket(detail.value.id)
     ElMessage.success('工单已关闭')
     await openDetail(detail.value)
     fetch()
@@ -381,7 +375,7 @@ async function doClose() {
 async function doReopen() {
   if (!detail.value) return
   try {
-    await api(`/tickets/${detail.value.id}/reopen`, { method: 'POST' })
+    await adminReopenTicket(detail.value.id)
     ElMessage.success('工单已重新打开')
     await openDetail(detail.value)
     fetch()
