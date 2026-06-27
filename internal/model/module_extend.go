@@ -287,6 +287,18 @@ type CSTemplate struct {
 
 func (CSTemplate) TableName() string { return "cs_templates" }
 
+// LiveWarnTemplate stores pre-defined admin warning messages for live rooms.
+type LiveWarnTemplate struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"size:80;not null" json:"name"`
+	Content   string    `gorm:"type:text;not null" json:"content"`
+	SortOrder int       `gorm:"not null;default:0" json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (LiveWarnTemplate) TableName() string { return "live_warn_templates" }
+
 // CSConversation records a customer service conversation session.
 type CSConversation struct {
 	ID          uint64    `gorm:"primaryKey"`

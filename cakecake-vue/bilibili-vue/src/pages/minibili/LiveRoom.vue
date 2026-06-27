@@ -79,6 +79,7 @@
 
           <!-- 主画面 -->
           <div class="live-screen">
+            <div v-if="warnMsg" class="admin-warn-banner">{{ warnMsg }}</div>
             <LivePlayer :room="room" :danmakus="danmakus" :gifts="giftQueue" />
           </div>
 
@@ -192,6 +193,7 @@ export default {
     const reportVisible = ref(false);
     const showReportModal = ref(false);
     const selectedReason = ref("");
+    const warnMsg = ref("");
     const danmakuSetting = ref(true);
     const audienceListSetting = ref(true);
     const giftEffectSetting = ref(true);
@@ -231,6 +233,17 @@ export default {
           } else if (m.type === "system") {
             messages.push({ type: "system", content: m.msg || m.content });
             while (messages.length > 300) messages.shift();
+            scrollChat();
+          } else if (m.type === "admin_warning") {
+            warnMsg.value = m.msg || `⚠ 管理员警告：${m.reason || "违规直播"}`;
+            setTimeout(() => { warnMsg.value = ""; }, 5000);
+            messages.push({ type: "system", content: warnMsg.value });
+            while (messages.length > 300) messages.shift();
+            scrollChat();
+          } else if (m.type === "admin_ban") {
+            warnMsg.value = m.msg || "直播间已被管理员封禁";
+            setTimeout(() => { warnMsg.value = ""; }, 60000);
+            messages.push({ type: "system", content: warnMsg.value });
             scrollChat();
           }
         } catch (_) {}
@@ -333,7 +346,7 @@ export default {
       if (ws) { ws.onclose = null; ws.close(); }
     });
 
-    return { loading, room, messages, danmakus, giftQueue, audienceList, audienceCount, showMore, inputText, connected, msgContainer, setBtnWrap, gifts, settingsVisible, reportVisible, showReportModal, selectedReason, danmakuSetting, audienceListSetting, giftEffectSetting, reportReasons, sendChat, sendGiftWs, sendFollowWs, toggleMore, openReportModal, closeReportModal, submitReport, shareRoom, copyRoomLink };
+    return { loading, room, messages, danmakus, giftQueue, audienceList, audienceCount, showMore, inputText, connected, msgContainer, setBtnWrap, gifts, settingsVisible, reportVisible, showReportModal, selectedReason, danmakuSetting, audienceListSetting, giftEffectSetting, warnMsg, reportReasons, sendChat, sendGiftWs, sendFollowWs, toggleMore, openReportModal, closeReportModal, submitReport, shareRoom, copyRoomLink };
   }
 };
 </script>
@@ -477,10 +490,23 @@ export default {
 
 /* 主画面 */
 .live-screen {
-  flex: 1; background: #222; min-height: 0;
+  flex: 1; background: #222; min-height: 0; position: relative;
 }
 .live-screen :deep(.lp-container) { width: 100%; height: 100%; }
 .live-screen :deep(.lp-placeholder) { background: #222; color: #aaa; }
+
+.admin-warn-banner {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 20; pointer-events: none;
+  background: rgba(200, 0, 0, 0.88); color: #fff; font-size: 14px;
+  text-align: center; padding: 10px 24px; line-height: 1.5;
+  border-radius: 12px; max-width: 85%;
+  animation: warn-flash 0.5s ease-in-out infinite alternate;
+}
+@keyframes warn-flash {
+  from { background: rgba(200, 0, 0, 0.88); }
+  to { background: rgba(230, 20, 20, 0.92); }
+}
 
 /* 底部礼物栏 */
 .gift-bar {
