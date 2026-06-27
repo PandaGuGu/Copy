@@ -228,6 +228,7 @@ func main() {
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
 		JWT: jm, Sens: sens, OSS: ossc, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
+		Svcs: service.NewServices(db, cfg),
 	}
 	if mq != nil {
 		deps.MQ = mq

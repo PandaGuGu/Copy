@@ -278,22 +278,22 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import http from '@/utils/adminHttp'
 import { ElMessage, ElMessageBox } from 'element-plus'
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
-const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
-
-async function api(path, opts = {}) {
-  const m = (opts.method || 'GET').toLowerCase();
-  let r;
-  if (m === 'get') r = await http.get(ADMIN_API + path);
-  else if (m === 'post') r = await http.post(ADMIN_API + path, opts.body || {});
-  else if (m === 'put') r = await http.put(ADMIN_API + path, opts.body || {});
-  else if (m === 'delete') r = await http.delete(ADMIN_API + path);
-  else r = await http.get(ADMIN_API + path);
-  return r.data;
-}
+import {
+  adminListRoles,
+  adminCreateRole,
+  adminUpdateRole,
+  adminDeleteRole,
+  adminGetRole,
+  adminAssignPermissions,
+  adminListAdmins,
+  adminCreateAdmin,
+  adminAssignRole,
+  adminListAuditLogs,
+  adminListApprovals,
+  adminApproveFlow,
+  adminRejectFlow,
+} from '@/api/admin'
 
 
 
@@ -380,7 +380,7 @@ async function createAdmin() {
   }
   saving.value = true
   try {
-    await api('/rbac/admins', { method: 'POST', body: { ...createAdminForm } })
+    await adminCreateAdmin({ ...createAdminForm })
     ElMessage.success('管理员创建成功')
     createAdminVisible.value = false
     fetchAdmins()
@@ -394,8 +394,8 @@ async function createAdmin() {
 async function fetchRoles() {
   loading.value = true
   try {
-    const d = await api('/rbac/roles')
-    roles.value = d.items || d || []
+    const d = await adminListRoles()
+    roles.value = d.data.items || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -405,8 +405,8 @@ async function fetchRoles() {
 
 async function fetchAdmins() {
   try {
-    const d = await api('/rbac/admins')
-    adminList.value = d.items || d || []
+    const d = await adminListAdmins()
+    adminList.value = d.data.items || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   }
@@ -438,9 +438,9 @@ async function saveRole() {
   saving.value = true
   try {
     if (roleForm.id) {
-      await api(`/rbac/roles/${roleForm.id}`, { method: 'PUT', body: { ...roleForm } })
+      await adminUpdateRole(roleForm.id, { ...roleForm })
     } else {
-      await api('/rbac/roles', { method: 'POST', body: { ...roleForm } })
+      await adminCreateRole({ ...roleForm })
     }
     ElMessage.success('已保存')
     roleDialogVisible.value = false
@@ -454,7 +454,7 @@ async function saveRole() {
 
 async function deleteRole(row) {
   try {
-    await api(`/rbac/roles/${row.id}`, { method: 'DELETE' })
+    await adminDeleteRole(row.id)
     ElMessage.success('已删除')
     fetchRoles()
   } catch (e) {
@@ -464,9 +464,9 @@ async function deleteRole(row) {
 
 async function openPermissionDialog(row) {
   try {
-    const d = await api(`/rbac/roles/${row.id}`)
-    permissionForm.role = d.role
-    permissionForm.permissions = (d.permissions || []).map(p => typeof p === 'string' ? p : p.code)
+    const d = await adminGetRole(row.id)
+    permissionForm.role = d.data.role
+    permissionForm.permissions = (d.data.permissions || []).map(p => typeof p === 'string' ? p : p.code)
     permissionDialogVisible.value = true
   } catch (e) {
     ElMessage.error(e.message || '获取权限失败')
@@ -505,10 +505,7 @@ async function savePermissions() {
   if (!permissionForm.role) return
   saving.value = true
   try {
-    await api(`/rbac/roles/${permissionForm.role.id}/permissions`, {
-      method: 'POST',
-      body: { permissions: permissionForm.permissions },
-    })
+    await adminAssignPermissions(permissionForm.role.id, permissionForm.permissions)
     ElMessage.success('权限已更新')
     permissionDialogVisible.value = false
     fetchRoles()
@@ -529,10 +526,7 @@ async function saveAssign() {
   if (!assignForm.admin) return
   saving.value = true
   try {
-    await api(`/rbac/admins/${assignForm.admin.id}/role`, {
-      method: 'POST',
-      body: { role_id: assignForm.role_id },
-    })
+    await adminAssignRole(assignForm.admin.id, assignForm.role_id)
     ElMessage.success('已分配')
     assignDialogVisible.value = false
     fetchAdmins()
@@ -546,17 +540,17 @@ async function saveAssign() {
 async function fetchAudit() {
   loading.value = true
   try {
-    const params = new URLSearchParams({ page: auditPage.value, page_size: auditPageSize })
-    if (auditFilter.admin_id) params.set('admin_id', auditFilter.admin_id)
-    if (auditFilter.action) params.set('action', auditFilter.action)
-    if (auditFilter.resource) params.set('resource', auditFilter.resource)
+    const params = { page: auditPage.value, page_size: auditPageSize }
+    if (auditFilter.admin_id) params.admin_id = auditFilter.admin_id
+    if (auditFilter.action) params.action = auditFilter.action
+    if (auditFilter.resource) params.resource = auditFilter.resource
     if (auditFilter.time_range && auditFilter.time_range.length === 2) {
-      params.set('start_time', new Date(auditFilter.time_range[0]).toISOString())
-      params.set('end_time', new Date(auditFilter.time_range[1]).toISOString())
+      params.start_time = new Date(auditFilter.time_range[0]).toISOString()
+      params.end_time = new Date(auditFilter.time_range[1]).toISOString()
     }
-    const d = await api(`/rbac/audit-logs?${params}`)
-    auditLogs.value = d.items || []
-    auditTotal.value = d.total || 0
+    const d = await adminListAuditLogs(params)
+    auditLogs.value = d.data.items || []
+    auditTotal.value = d.data.total || 0
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -572,10 +566,10 @@ function searchAudit() {
 async function fetchApprovals() {
   loading.value = true
   try {
-    const params = new URLSearchParams()
-    if (approvalFilter.status) params.set('status', approvalFilter.status)
-    const d = await api(`/rbac/approval-flows?${params}`)
-    approvals.value = d.items || d || []
+    const params = {}
+    if (approvalFilter.status) params.status = approvalFilter.status
+    const d = await adminListApprovals(params)
+    approvals.value = d.data.items || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
@@ -589,9 +583,11 @@ async function doApprove(row, approved) {
     await ElMessageBox.confirm(`确认${label}此审批？`, '提示', {
       type: approved ? 'info' : 'warning',
     })
-    await api(`/rbac/approval-flows/${row.id}/${approved ? 'approve' : 'reject'}`, {
-      method: 'POST',
-    })
+    if (approved) {
+      await adminApproveFlow(row.id)
+    } else {
+      await adminRejectFlow(row.id)
+    }
     ElMessage.success(`已${label}`)
     fetchApprovals()
   } catch (e) {

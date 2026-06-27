@@ -273,3 +273,192 @@ export function adminBatchHandleReports(payload) {
 export function adminDeleteReport(id) {
   return adminHttp.delete(`/api/v1/admin/reports/${id}`);
 }
+
+// ---------- RBAC / 权限审计 ----------
+
+export function adminListRoles() {
+  return adminHttp.get("/api/v1/admin/rbac/roles");
+}
+
+export function adminCreateRole(payload) {
+  return adminHttp.post("/api/v1/admin/rbac/roles", payload);
+}
+
+export function adminUpdateRole(id, payload) {
+  return adminHttp.put(`/api/v1/admin/rbac/roles/${id}`, payload);
+}
+
+export function adminDeleteRole(id) {
+  return adminHttp.delete(`/api/v1/admin/rbac/roles/${id}`);
+}
+
+export function adminGetRole(id) {
+  return adminHttp.get(`/api/v1/admin/rbac/roles/${id}`);
+}
+
+export function adminAssignPermissions(roleId, permissions) {
+  return adminHttp.post(`/api/v1/admin/rbac/roles/${roleId}/permissions`, { permissions });
+}
+
+export function adminListAdmins(params) {
+  return adminHttp.get("/api/v1/admin/rbac/admins", { params });
+}
+
+export function adminCreateAdmin(payload) {
+  return adminHttp.post("/api/v1/admin/rbac/admins", payload);
+}
+
+export function adminAssignRole(adminId, roleId) {
+  return adminHttp.post(`/api/v1/admin/rbac/admins/${adminId}/role`, { role_id: roleId });
+}
+
+export function adminListAuditLogs(params) {
+  return adminHttp.get("/api/v1/admin/rbac/audit-logs", { params });
+}
+
+export function adminListApprovals(params) {
+  return adminHttp.get("/api/v1/admin/rbac/approval-flows", { params });
+}
+
+export function adminApproveFlow(id) {
+  return adminHttp.post(`/api/v1/admin/rbac/approval-flows/${id}/approve`);
+}
+
+export function adminRejectFlow(id) {
+  return adminHttp.post(`/api/v1/admin/rbac/approval-flows/${id}/reject`);
+}
+
+// ---------- 客服管理 ----------
+
+export function adminListConversations(params) {
+  return adminHttp.get("/api/v1/admin/cs/conversations", { params });
+}
+
+export function adminGetConversation(id) {
+  return adminHttp.get(`/api/v1/admin/cs/conversations/${id}`);
+}
+
+export function adminSendConversationMessage(id, content) {
+  return adminHttp.post(`/api/v1/admin/cs/conversations/${id}/messages`, { content });
+}
+
+export function adminCloseConversation(id) {
+  return adminHttp.post(`/api/v1/admin/cs/conversations/${id}/close`);
+}
+
+export function adminAssignConversation(id) {
+  return adminHttp.post(`/api/v1/admin/cs/conversations/${id}/assign`);
+}
+
+export function adminListCsTemplates() {
+  return adminHttp.get("/api/v1/admin/cs/templates");
+}
+
+export function adminCreateCsTemplate(payload) {
+  return adminHttp.post("/api/v1/admin/cs/templates", payload);
+}
+
+export function adminUpdateCsTemplate(id, payload) {
+  return adminHttp.put(`/api/v1/admin/cs/templates/${id}`, payload);
+}
+
+export function adminDeleteCsTemplate(id) {
+  return adminHttp.delete(`/api/v1/admin/cs/templates/${id}`);
+}
+
+// ---------- 工单管理 ----------
+
+export function adminListTickets(params) {
+  return adminHttp.get("/api/v1/admin/tickets", { params });
+}
+
+export function adminGetTicket(id) {
+  return adminHttp.get(`/api/v1/admin/tickets/${id}`);
+}
+
+export function adminAssignTicket(id, adminId) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/assign`, { admin_id: adminId });
+}
+
+export function adminAutoAssignTicket(id) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/auto-assign`);
+}
+
+export function adminUpdateTicketStatus(id, status) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/status`, { status });
+}
+
+export function adminTicketSendMessage(id, content) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/messages`, { content });
+}
+
+export function adminCloseTicket(id) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/close`);
+}
+
+export function adminReopenTicket(id) {
+  return adminHttp.post(`/api/v1/admin/tickets/${id}/reopen`);
+}
+
+// ---------- 版权管理 ----------
+
+export function adminListCopyrightComplaints(params) {
+  return adminHttp.get("/api/v1/admin/copyright/complaints", { params });
+}
+
+export function adminGetCopyrightComplaint(id) {
+  return adminHttp.get(`/api/v1/admin/copyright/complaints/${id}`);
+}
+
+export function adminAcceptCopyrightComplaint(id) {
+  return adminHttp.post(`/api/v1/admin/copyright/complaints/${id}/accept`);
+}
+
+export function adminRejectCopyrightComplaint(id, comment) {
+  return adminHttp.post(`/api/v1/admin/copyright/complaints/${id}/reject`, { handler_comment: comment || '' });
+}
+
+export function adminTakedownCopyright(id) {
+  return adminHttp.post(`/api/v1/admin/copyright/complaints/${id}/takedown`);
+}
+
+export function adminRestoreCopyright(id) {
+  return adminHttp.post(`/api/v1/admin/copyright/complaints/${id}/restore`);
+}
+
+// ---------- 自用 ----------
+
+export function adminGetMyPermissions() {
+  return adminHttp.get("/api/v1/admin/rbac/me/permissions");
+}
+
+export function adminGetUserViolations(uid) {
+  return adminHttp.get(`/api/v1/admin/users/${uid}/violations`);
+}
+
+// ---------- 专题 & 活动 ----------
+
+export function adminListSpecials() {
+  return adminHttp.get("/api/v1/admin/specials");
+}
+export function adminCreateSpecial(payload) {
+  return adminHttp.post("/api/v1/admin/specials", payload);
+}
+export function adminUpdateSpecial(id, payload) {
+  return adminHttp.put(`/api/v1/admin/specials/${id}`, payload);
+}
+export function adminDeleteSpecial(id) {
+  return adminHttp.delete(`/api/v1/admin/specials/${id}`);
+}
+export function adminListCampaigns() {
+  return adminHttp.get("/api/v1/admin/campaigns");
+}
+export function adminCreateCampaign(payload) {
+  return adminHttp.post("/api/v1/admin/campaigns", payload);
+}
+export function adminUpdateCampaign(id, payload) {
+  return adminHttp.put(`/api/v1/admin/campaigns/${id}`, payload);
+}
+export function adminDeleteCampaign(id) {
+  return adminHttp.delete(`/api/v1/admin/campaigns/${id}`);
+}

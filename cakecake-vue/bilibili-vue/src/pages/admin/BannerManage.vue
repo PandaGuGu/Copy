@@ -33,11 +33,11 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog
+    <AdminFormDialog
       v-model="dialogVisible"
-      :title="editingId ? '编辑轮播' : '新增轮播'"
-      width="520px"
-      destroy-on-close
+      :is-edit="!!editingId"
+      entity-label="轮播"
+      :on-save="saveBanner"
     >
       <el-form label-width="88px">
         <el-form-item label="标题" required>
@@ -103,11 +103,7 @@
           <el-switch v-model="form.enabled" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
-      </template>
-    </el-dialog>
+    </AdminFormDialog>
   </div>
 </template>
 
@@ -120,14 +116,15 @@ import {
   adminUploadBannerImage
 } from "@/api/admin";
 import { ElMessage, ElMessageBox } from "element-plus";
+import AdminFormDialog from "@/components/admin/AdminFormDialog.vue";
 
 const MAX_BANNER_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export default {
+  components: { AdminFormDialog },
   data() {
     return {
       loading: false,
-      saving: false,
       imageUploading: false,
       rows: [],
       dialogVisible: false,
@@ -206,26 +203,21 @@ export default {
       };
       this.dialogVisible = true;
     },
-    async onSave() {
+    async saveBanner() {
       if (!String(this.form.title).trim() || !String(this.form.image_url).trim()) {
         ElMessage.warning("请填写标题并上传轮播图");
-        return;
+        throw new Error("validation");
       }
-      this.saving = true;
-      try {
-        const payload = { ...this.form };
-        if (this.editingId) {
-          await adminUpdateBanner(this.editingId, payload);
-          ElMessage.success("已更新");
-        } else {
-          await adminCreateBanner(payload);
-          ElMessage.success("已创建");
-        }
-        this.dialogVisible = false;
-        await this.load();
-      } finally {
-        this.saving = false;
+      const payload = { ...this.form };
+      if (this.editingId) {
+        await adminUpdateBanner(this.editingId, payload);
+        ElMessage.success("已更新");
+      } else {
+        await adminCreateBanner(payload);
+        ElMessage.success("已创建");
       }
+      this.dialogVisible = false;
+      await this.load();
     },
     async onDelete(row) {
       await ElMessageBox.confirm(`确定删除「${row.title}」？`, "确认");

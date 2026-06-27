@@ -4,27 +4,32 @@
       <h2 class="adm-page__title">用户管理</h2>
     </div>
 
-    <!-- 搜索栏 -->
-    <div class="adm-toolbar">
-      <el-select v-model="filterStatus" placeholder="状态筛选" size="small" clearable @change="doSearch">
-        <el-option label="全部" value="" />
-        <el-option label="正常" value="active" />
-        <el-option label="已封禁" value="banned" />
-        <el-option label="已禁用" value="disabled" />
-      </el-select>
-      <el-input
-        v-model="searchText"
-        placeholder="搜索用户名 / CakeID / 昵称"
-        size="small"
-        style="width: 260px; margin-left: 12px"
-        clearable
-        @keyup.enter="doSearch"
-      />
-      <el-button type="primary" size="small" @click="doSearch">搜索</el-button>
-    </div>
+    <AdminDataTable
+      :data="users"
+      :loading="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @update:page="page = $event; loadUsers()"
+    >
+      <template #search-bar>
+        <el-select v-model="filterStatus" placeholder="状态筛选" size="small" clearable @change="doSearch">
+          <el-option label="全部" value="" />
+          <el-option label="正常" value="active" />
+          <el-option label="已封禁" value="banned" />
+          <el-option label="已禁用" value="disabled" />
+        </el-select>
+        <el-input
+          v-model="searchText"
+          placeholder="搜索用户名 / CakeID / 昵称"
+          size="small"
+          style="width: 260px"
+          clearable
+          @keyup.enter="doSearch"
+        />
+        <el-button type="primary" size="small" @click="doSearch">搜索</el-button>
+      </template>
 
-    <!-- 用户列表 -->
-    <el-table :data="users" v-loading="loading" border stripe size="small" style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="120" />
       <el-table-column prop="cake_id" label="CakeID" width="160" />
@@ -65,18 +70,7 @@
           <el-button type="danger" size="small" link @click="confirmDelete(row)">强制注销</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <!-- 分页 -->
-    <div class="adm-pagination">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="loadUsers"
-      />
-    </div>
+    </AdminDataTable>
 
     <!-- 用户详情弹窗 -->
     <el-dialog v-model="detailVisible" title="用户详情" width="620px" destroy-on-close top="5vh">
@@ -262,11 +256,12 @@
 </template>
 
 <script>
-import { adminListUsers, adminGetUser, adminBanUser, adminUnbanUser, adminDeleteUser } from "@/api/admin";
-import adminHttp from "@/utils/adminHttp";
+import { adminListUsers, adminGetUser, adminBanUser, adminUnbanUser, adminDeleteUser, adminGetUserViolations } from "@/api/admin";
+import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 export default {
   name: "AdminUserManage",
+  components: { AdminDataTable },
   data() {
     return {
       loading: false,
@@ -330,9 +325,8 @@ export default {
     async loadViolations(uid) {
       this.vioLoading = true;
       try {
-        const res = await adminHttp.get(`/api/v1/admin/users/${uid}/violations`);
-        const d = res.data || res || {};
-        this.violations = d.reports || [];
+        const d = await adminGetUserViolations(uid);
+        this.violations = (d.data && d.data.reports) || [];
       } catch {
         this.violations = [];
       } finally {

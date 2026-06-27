@@ -617,6 +617,12 @@
             </div>
           </div>
 
+          <!-- 创作者字幕编辑器（仅 UP 主可见） -->
+          <CreatorSubtitleEditor
+            v-if="isVideoOwner && apiDetail"
+            :video-id="Number(aidParam)"
+          />
+
           <div class="vd-comments" id="comment-main">
             <div class="vd-comments-mock">
             <div class="vd-cmt-head">
@@ -1176,6 +1182,7 @@ import {
 } from "@/constants/minibiliComments";
 import MinibiliDanmakuFeed from "@/pages/minibili/MinibiliDanmakuFeed.vue";
 import ReportDialog from "@/components/ReportDialog.vue";
+import CreatorSubtitleEditor from "@/components/creator/CreatorSubtitleEditor.vue";
 import MbUserHoverCard, {
   invalidateUserHoverProfileCache
 } from "@/components/minibili/MbUserHoverCard.vue";
@@ -1190,7 +1197,8 @@ export default {
     MinibiliCommentsLive,
     MinibiliDanmakuFeed,
     MbUserHoverCard,
-    ReportDialog
+    ReportDialog,
+    CreatorSubtitleEditor
   },
   data() {
     const demoCover = akariCover;
@@ -1607,6 +1615,12 @@ export default {
     }),
     aidParam() {
       return this.$route.params.aid || "";
+    },
+    /** 当前用户是否为视频 UP 主 */
+    isVideoOwner() {
+      if (!this.isMb) return false;
+      const me = getUserId();
+      return me > 0 && me === this.mbVideoAuthorId;
     },
     pageTitle() {
       if (this.apiDetail && this.apiDetail.title) {

@@ -51,7 +51,15 @@ func (a *API) ListComments(c *gin.Context) {
 		commentQ = commentQ.Where("approved = ?", true)
 	}
 	var list []model.Comment
-	if err := commentQ.Order("id ASC").Find(&list).Error; err != nil {
+	sortKey := strings.TrimSpace(c.Query("sort"))
+	orderClause := "id ASC"
+	switch sortKey {
+	case "hot":
+		orderClause = "like_count DESC, id DESC"
+	case "latest":
+		orderClause = "created_at DESC, id DESC"
+	}
+	if err := commentQ.Order(orderClause).Find(&list).Error; err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
