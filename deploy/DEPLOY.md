@@ -1,16 +1,60 @@
-# Minibili 生产部署指南（阿里云 CentOS 7）
+# Minibili 部署指南
 
-面向 **个人站 / 面试演示 / 小流量**。默认架构：
+面向 **个人站 / 面试演示 / 小流量**。
+
+> **快捷方式**：如果你只是想快速给别人演示，建议用 [Docker Compose](#docker-compose-推荐)（3 步启动，无需手动装依赖）。以下适用于传统的服务器手动部署。
+
+---
+
+## Docker Compose（推荐）
+
+无需安装 MySQL/Redis/RabbitMQ/SRS/FFmpeg，也无需配置云存储。后端自动使用本地文件系统。
+
+```bash
+# 1. 构建前端
+cd cakecake-vue/bilibili-vue && npm install && npm run build && cd ../..
+
+# 2. 配置（只需 JWT_SECRET）
+cp .env.example .env
+# 编辑 .env：JWT_SECRET=任意长字符串，OSS_* 全部留空
+
+# 3. 启动
+docker compose up -d
+```
+
+访问 `http://localhost`。所有上传文件保存在 Docker 卷 `uploads_data`，由 Nginx 直接服务。
+
+> 需要生产环境 OSS 时，在 `.env` 中填写 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` / `OSS_BUCKET` / `OSS_ENDPOINT` / `OSS_PUBLIC_URL_PREFIX` 即可自动切换。
+
+### 一键启动脚本
+
+如果已安装 Go / Node.js / MySQL / Redis / RabbitMQ，也可以不用 Docker，直接跑脚本：
+
+```bash
+# Windows
+.\scripts\start.ps1
+
+# Linux / macOS
+./scripts/start.sh
+
+# 或切 Docker 模式: ./scripts/start.sh --docker
+```
+
+脚本会自动检测端口、跳过已运行的服务、尝试启动缺失项，后端不存在时自动 `go build`。
+
+详见根目录 [README.md](../README.md) 的「Docker 一键部署」章节。
+
+---
+
+## 一、架构示意
+
+默认架构：
 
 - **阿里云 ECS（CentOS 7，约 2 核 2G）**：Nginx + Go 后端 + MySQL + Redis + RabbitMQ + FFmpeg  
 - **阿里云 OSS**：视频 / 封面 / 动态图片  
 - **腾讯云 ES Serverless**：搜索（按量，个人用量极低；与 ECS 跨云公网连通）
 
 > **不要在 2G 应用机上跑 Elasticsearch 集群。** CentOS 7 已停止维护，公网暴露请加固 SSH、改默认密码、仅开放 80/443。
-
----
-
-## 一、架构示意
 
 ```
 浏览器

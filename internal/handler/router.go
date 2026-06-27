@@ -543,6 +543,9 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 
 	// Serve HLS live streaming files (node-media-server outputs to data/live/)
 	r.Static("/live-hls", "./data/live")
+
+	// Serve local uploads (used when OSS is not configured — local storage fallback)
+	r.Static("/uploads", "./data/uploads")
 }
 
 func corsMiddleware(c *gin.Context) {

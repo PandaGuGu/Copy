@@ -46,7 +46,7 @@ func articleOSSObjectKeys(cfg *config.C, art model.Article) []string {
 	return out
 }
 
-func purgeArticleOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, art model.Article) {
+func purgeArticleOSSObjects(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, art model.Article) {
 	if ossClient == nil {
 		return
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 // purgeAgentAvatarOSS removes a previously stored agent avatar object when replaced.
-func purgeAgentAvatarOSS(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, avatarURL string) {
+func purgeAgentAvatarOSS(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, avatarURL string) {
 	if cfg == nil || ossClient == nil {
 		return
 	}
