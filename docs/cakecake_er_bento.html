@@ -276,6 +276,10 @@
   .theme-audit .card-icon { background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.1)); border: 1px solid rgba(239,68,68,0.2); }
   .theme-audit .table-name-en { color: #ef4444; }
   .theme-audit .field-count { color: #ef4444; border: 1px solid rgba(239,68,68,0.15); }
+  .theme-live .card-module-name { color: #f43f5e; }
+  .theme-live .card-icon { background: linear-gradient(135deg, rgba(244,63,94,0.2), rgba(225,29,72,0.1)); border: 1px solid rgba(244,63,94,0.2); }
+  .theme-live .table-name-en { color: #f43f5e; }
+  .theme-live .field-count { color: #f43f5e; border: 1px solid rgba(244,63,94,0.15); }
 
   /* ── Center diagram connector area ── */
   .center-diagram {
@@ -408,10 +412,10 @@
   <!-- Stats Strip -->
   <div class="stats-strip">
     <div class="stat-item"><div class="stat-num" style="color:#FB7299">6</div><div class="stat-label">核心模块</div></div>
-    <div class="stat-item"><div class="stat-num" style="color:#3b82f6">10</div><div class="stat-label">视频互动</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#3b82f6">12</div><div class="stat-label">视频互动</div></div>
     <div class="stat-item"><div class="stat-num" style="color:#f59e0b">5</div><div class="stat-label">文章互动</div></div>
     <div class="stat-item"><div class="stat-num" style="color:#10b981">4</div><div class="stat-label">关注社交</div></div>
-    <div class="stat-item"><div class="stat-num" style="color:#8b5cf6">5</div><div class="stat-label">消息通知</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#8b5cf6">6</div><div class="stat-label">消息通知</div></div>
     <div class="stat-item"><div class="stat-num" style="color:#ec4899">5</div><div class="stat-label">动态系统</div></div>
     <div class="stat-item"><div class="stat-num" style="color:#64748b">4</div><div class="stat-label">历史记录</div></div>
     <div class="stat-item"><div class="stat-num" style="color:#06b6d4">4</div><div class="stat-label">硬币运营</div></div>
@@ -488,7 +492,7 @@
       <div class="card-icon">&#9654;</div>
       <div class="card-title-area">
         <div class="card-module-name">视频互动</div>
-        <div class="card-table-count">10 TABLES · 58 COLUMNS</div>
+        <div class="card-table-count">12 TABLES · 69 COLUMNS</div>
       </div>
     </div>
     <div class="table-list">
@@ -561,6 +565,20 @@
           <div class="table-name-zh">稍后观看表</div>
         </div>
         <div class="field-count">3</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">video_bitrates</div>
+          <div class="table-name-zh">码率变体</div>
+        </div>
+        <div class="field-count">7</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">comment_images</div>
+          <div class="table-name-zh">评论图片</div>
+        </div>
+        <div class="field-count">4</div>
       </div>
     </div>
   </div>
@@ -655,6 +673,13 @@
         </div>
         <div class="field-count">3</div>
       </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">scheduled_publishes</div>
+          <div class="table-name-zh">定时发布</div>
+        </div>
+        <div class="field-count">5</div>
+      </div>
     </div>
   </div>
 
@@ -664,7 +689,7 @@
       <div class="card-icon">&#128276;</div>
       <div class="card-title-area">
         <div class="card-module-name">消息通知</div>
-        <div class="card-table-count">5 TABLES · 27 COLUMNS</div>
+        <div class="card-table-count">6 TABLES · 37 COLUMNS</div>
       </div>
     </div>
     <div class="table-list">
@@ -702,6 +727,13 @@
           <div class="table-name-zh">私信消息表</div>
         </div>
         <div class="field-count">4</div>
+      </div>
+      <div class="table-row">
+        <div class="table-info">
+          <div class="table-name-en">notification_records</div>
+          <div class="table-name-zh">通知记录扩展</div>
+        </div>
+        <div class="field-count">10</div>
       </div>
     </div>
   </div>
@@ -805,7 +837,7 @@
       <div class="card-icon">&#9830;</div>
       <div class="card-title-area">
         <div class="card-module-name">硬币 + 运营</div>
-        <div class="card-table-count">4 TABLES · 29 COLUMNS</div>
+        <div class="card-table-count">5 TABLES · 34 COLUMNS</div>
       </div>
     </div>
     <div class="table-list">
@@ -941,6 +973,21 @@
     </div>
   </div>
 
+  <!-- 直播 3表 -->
+  <div class="bento-card theme-live" id="live">
+    <div class="card-header">
+      <div class="card-icon">&#128250;</div>
+      <div class="card-title-area">
+        <div class="card-module-name">直播</div>
+        <div class="card-table-count">2 TABLES · 15 COLUMNS</div>
+      </div>
+    </div>
+    <div class="table-list">
+      <div class="table-row"><div class="table-info"><div class="table-name-en">live_rooms</div><div class="table-name-zh">直播间表</div></div><div class="field-count">10</div></div>
+      <div class="table-row"><div class="table-info"><div class="table-name-en">live_warn_templates</div><div class="table-name-zh">警告模板</div></div><div class="field-count">5</div></div>
+    </div>
+  </div>
+
 <!-- ════════ SVG CONNECTION LAYER ════════ -->
 <div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;opacity:0.45;" id="svg-layer">
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" style="overflow:visible;">
@@ -1006,7 +1053,7 @@
 
 <!-- ════════ FOOTER ════════ -->
 <div class="footer">
-  CAKECAKE DATABASE ARCHITECTURE · 82 TABLES · 14 MODULES · BENTO INFOGRAPHIC · v3.0
+  CAKECAKE DATABASE ARCHITECTURE · 84 TABLES · 15 MODULES · BENTO INFOGRAPHIC · v3.1
 </div>
 
 <script>
