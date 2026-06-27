@@ -33,7 +33,7 @@ func dynamicOSSObjectKeys(cfg *config.C, dyn model.UserDynamic) []string {
 	return out
 }
 
-func purgeDynamicImageURLs(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, urls []string) {
+func purgeDynamicImageURLs(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, urls []string) {
 	if ossClient == nil || cfg == nil || len(urls) == 0 {
 		return
 	}
@@ -61,7 +61,7 @@ func purgeDynamicImageURLs(cfg *config.C, ossClient *storage.OSS, log *zap.Logge
 	}
 }
 
-func purgeRemovedDynamicImageURLs(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, oldURLs, newURLs []string) {
+func purgeRemovedDynamicImageURLs(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, oldURLs, newURLs []string) {
 	newSet := make(map[string]struct{}, len(newURLs))
 	for _, u := range newURLs {
 		u = strings.TrimSpace(u)
@@ -81,7 +81,7 @@ func purgeRemovedDynamicImageURLs(cfg *config.C, ossClient *storage.OSS, log *za
 	purgeDynamicImageURLs(cfg, ossClient, log, removed)
 }
 
-func purgeDynamicOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, dyn model.UserDynamic) {
+func purgeDynamicOSSObjects(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, dyn model.UserDynamic) {
 	if ossClient == nil {
 		return
 	}

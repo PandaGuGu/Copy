@@ -32,7 +32,7 @@ type TranscodeJob struct {
 }
 
 // StartTranscodeConsumer runs a blocking AMQP consumer loop.
-func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient *storage.OSS, esc *search.Client) {
+func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient storage.FileStorager, esc *search.Client) {
 	ch, err := mq.NewConsumerChannel()
 	if err != nil {
 		logger.L.Fatal("transcode: 无法打开消费 Channel（请检查 RabbitMQ）", zap.Error(err))
@@ -64,7 +64,7 @@ func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq 
 	}
 }
 
-func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *amqp.Channel, ossClient *storage.OSS, esc *search.Client, d amqp.Delivery) {
+func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *amqp.Channel, ossClient storage.FileStorager, esc *search.Client, d amqp.Delivery) {
 	lg := logger.L
 	var job TranscodeJob
 	if err := json.Unmarshal(d.Body, &job); err != nil {

@@ -38,7 +38,7 @@ func videoOSSObjectKeys(cfg *config.C, v model.Video) []string {
 	return out
 }
 
-func purgeVideoOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, v model.Video) {
+func purgeVideoOSSObjects(cfg *config.C, ossClient storage.FileStorager, log *zap.Logger, v model.Video) {
 	if ossClient == nil {
 		return
 	}
