@@ -21,6 +21,7 @@
     --c-bi: #ec4899; --c-bi-bg: #fdf2f8;
     --c-special: #a855f7; --c-special-bg: #faf5ff;
     --c-subtitle: #14b8a6; --c-subtitle-bg: #f0fdfa;
+    --c-live: #f43f5e; --c-live-bg: #fff1f2;
     --c-core: #0ea5e9; --c-core-bg: #f0f9ff;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -67,6 +68,7 @@
   .label-bi { background: var(--c-bi-bg); color: var(--c-bi); }
   .label-special { background: var(--c-special-bg); color: var(--c-special); }
   .label-subtitle { background: var(--c-subtitle-bg); color: var(--c-subtitle); }
+  .label-live { background: var(--c-live-bg); color: var(--c-live); }
   .label-core { background: var(--c-core-bg); color: var(--c-core); }
 
   .card-fields { padding: 8px 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -124,6 +126,7 @@
   <div class="legend-item"><div class="legend-dot" style="background:var(--c-bi)"></div>报表</div>
   <div class="legend-item"><div class="legend-dot" style="background:var(--c-special)"></div>专题</div>
   <div class="legend-item"><div class="legend-dot" style="background:var(--c-subtitle)"></div>字幕</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-live)"></div>直播</div>
 </div>
 
 <div class="zoom-controls">
@@ -188,9 +191,15 @@ const tables = [
   { id: 'special_pages', x: 1450, y: 1080, w: 220, cat:'special', fields:['id PK','title','slug','cover_url','blocks_json','status','start_at','end_at','created_at'] },
   { id: 'campaigns', x: 1450, y: 1280, w: 220, cat:'special', fields:['id PK','title','description','cover_url','type','start_at','end_at','status','rules_json','created_at'] },
 
-  // ── SUBTITLE 字幕 (2张) ──
+  // ── SUBTITLE 字幕 + Player (4张) ──
   { id: 'subtitles', x: 1160, y: 460, w: 220, cat:'subtitle', fields:['id PK','video_id FK','lang','title','content','format','auto_gen','created_at'] },
   { id: 'video_chapters', x: 1160, y: 640, w: 220, cat:'subtitle', fields:['id PK','video_id FK','title','time_sec','sort_order'] },
+  { id: 'video_bitrates', x: 1160, y: 820, w: 220, cat:'subtitle', fields:['id PK','video_id FK','label','width','height','kbps','url','created_at'] },
+  { id: 'comment_images', x: 1160, y: 1000, w: 220, cat:'subtitle', fields:['id PK','comment_id FK','url','created_at'] },
+
+  // ── LIVE 直播 (2张) ──
+  { id: 'live_rooms', x: 1450, y: 1480, w: 220, cat:'live', fields:['id PK','user_id FK','title','stream_key','status','viewer_count','host_name','started_at'] },
+  { id: 'scheduled_publishes', x: 1450, y: 1680, w: 220, cat:'live', fields:['id PK','video_id FK','publish_at','published','created_at'] },
 ];
 
 const catMap = {
@@ -205,6 +214,7 @@ const catMap = {
   bi:{label:'BI',cls:'label-bi'},
   special:{label:'Special',cls:'label-special'},
   subtitle:{label:'Subtitle',cls:'label-subtitle'},
+  live:{label:'Live',cls:'label-live'},
 };
 
 const relations = [
@@ -243,9 +253,14 @@ const relations = [
   { from:'admins', to:'audit_logs', label:'操作', fc:'1', tc:'N' },
   { from:'admins', to:'admin_login_logs', label:'登录', fc:'1', tc:'N' },
   { from:'admins', to:'approval_flows', label:'审批', fc:'1', tc:'N' },
-  // Subtitle
+  // Subtitle + Player
   { from:'videos', to:'subtitles', label:'字幕', fc:'1', tc:'N' },
   { from:'videos', to:'video_chapters', label:'章节', fc:'1', tc:'N' },
+  { from:'videos', to:'video_bitrates', label:'码率', fc:'1', tc:'N' },
+  { from:'comments', to:'comment_images', label:'图片', fc:'1', tc:'N' },
+  // Live
+  { from:'users', to:'live_rooms', label:'开播', fc:'1', tc:'N' },
+  { from:'videos', to:'scheduled_publishes', label:'定时', fc:'1', tc:'1' },
 ];
 
 // ── DOM rendering ──
