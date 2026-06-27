@@ -34,11 +34,280 @@ $mb-hist-bar-bottom: $mb-hist-sep-gap + 22px;
 .mb-pc-history__hd {
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 0 18px;
+}
+
+/* ===== Row 1: Title + Toggle + QR ===== */
+.mb-pc-history__row1 {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 0 18px;
   flex-wrap: wrap;
+}
+
+.mb-pc-history__row1-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* ---- toggle switch ---- */
+.mb-pc-history__toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mb-pc-history__toggle-label {
+  font-size: 13px;
+  color: #61666d;
+  line-height: 22px;
+}
+
+.mb-pc-history__toggle-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mb-pc-history__toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #c9ccd0;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mb-pc-history__toggle-input:checked + .mb-pc-history__toggle-track {
+  background: $mb-hist-blue;
+}
+
+.mb-pc-history__toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.mb-pc-history__toggle-input:checked + .mb-pc-history__toggle-track .mb-pc-history__toggle-thumb {
+  transform: translateX(20px);
+}
+
+.mb-pc-history__toggle-input:disabled + .mb-pc-history__toggle-track {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- QR button ---- */
+.mb-pc-history__qr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9499a0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: #61666d;
+    background: #f1f2f3;
+  }
+}
+
+/* ===== Row 2: Tabs + Filter + Search + Actions ===== */
+.mb-pc-history__row2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---- category tabs ---- */
+.mb-pc-history__tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.mb-pc-history__tab {
+  position: relative;
+  height: 34px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #61666d;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 34px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 0;
+    height: 3px;
+    border-radius: 2px;
+    background: $mb-hist-blue;
+    transform: translateX(-50%);
+    transition: width 0.2s ease;
+  }
+
+  &:hover {
+    color: $mb-hist-text;
+  }
+
+  &--active {
+    color: $mb-hist-blue;
+    font-weight: 600;
+
+    &::after {
+      width: calc(100% - 16px);
+    }
+  }
+}
+
+/* ---- filter dropdown ---- */
+.mb-pc-history__filter-drop {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mb-pc-history__filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid $mb-hist-border;
+  border-radius: 6px;
+  background: #fff;
+  color: #61666d;
+  font-size: 13px;
+  line-height: 30px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: #c9ccd0;
+  }
+}
+
+.mb-pc-history__filter-arrow {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+
+  &--up {
+    transform: rotate(180deg);
+  }
+}
+
+.mb-pc-history__filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 110px;
+  padding: 4px 0;
+  border: 1px solid $mb-hist-border;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 30;
+}
+
+.mb-pc-history__filter-item {
+  display: block;
+  width: 100%;
+  padding: 0 16px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #18191c;
+  font-size: 13px;
+  line-height: 32px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s ease;
+
+  &:hover {
+    background: #f1f2f3;
+  }
+
+  &--sel {
+    color: $mb-hist-blue;
+    font-weight: 600;
+  }
+}
+
+/* ---- action buttons (clear / batch) ---- */
+.mb-pc-history__action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid $mb-hist-border;
+  border-radius: 6px;
+  background: #fff;
+  color: #61666d;
+  font-size: 13px;
+  line-height: 30px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: #c9ccd0;
+    color: #18191c;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &--danger:hover:not(:disabled) {
+    color: #ed4242;
+    border-color: #ed4242;
+  }
+
+  &--active {
+    border-color: $mb-hist-blue;
+    color: $mb-hist-blue;
+    background: rgba(0, 174, 236, 0.06);
+  }
 }
 
 .mb-pc-history__paused-panel {
@@ -102,7 +371,6 @@ $mb-hist-bar-bottom: $mb-hist-sep-gap + 22px;
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  background: url("@/assets/icons.png") -83px -850px no-repeat;
 }
 
 .mb-pc-history__title-text {
@@ -120,40 +388,42 @@ $mb-hist-bar-bottom: $mb-hist-sep-gap + 22px;
   flex-wrap: wrap;
 }
 
+/* ---- search input (in row2) ---- */
 .mb-pc-history__search {
   position: relative;
-  width: 216px;
+  width: 200px;
+  flex-shrink: 0;
 }
 
 .mb-pc-history__search-input {
   width: 100%;
-  height: 30px;
-  padding: 0 30px 0 12px;
+  height: 32px;
+  padding: 0 32px 0 12px;
   border: 1px solid $mb-hist-border;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: $mb-hist-text;
   box-sizing: border-box;
   outline: none;
-  background: #fff;
+  background: #f1f2f3;
+  transition: background 0.15s ease, border-color 0.15s ease;
 
   &:focus {
     border-color: $mb-hist-blue;
+    background: #fff;
   }
 
   &::placeholder {
-    color: $mb-hist-sub2;
+    color: #9499a0;
   }
 }
 
 .mb-pc-history__search-ico {
   position: absolute;
-  right: 10px;
+  right: 8px;
   top: 50%;
-  width: 14px;
-  height: 14px;
-  margin-top: -7px;
-  background: url("@/assets/icons.png") -111px -94px no-repeat;
+  margin-top: -8px;
+  color: #9499a0;
   pointer-events: none;
 }
 

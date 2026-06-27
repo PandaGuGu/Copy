@@ -23,3 +23,13 @@ type ArticleViewHistory struct {
 	ViewedAt  time.Time `gorm:"index:idx_view_hist_art_user_viewed,priority:2"`
 	UpdatedAt time.Time
 }
+
+// LiveViewHistory stores a user's watch history for live streams (直播).
+type LiveViewHistory struct {
+	ID         uint64    `gorm:"primaryKey"`
+	UserID     uint64    `gorm:"uniqueIndex:uk_view_hist_user_live,priority:1;not null"`
+	LiveRoomID uint64    `gorm:"uniqueIndex:uk_view_hist_user_live,priority:2;not null"`
+	Device     string    `gorm:"size:16;not null;default:web"` // web | mobile
+	ViewedAt   time.Time `gorm:"index:idx_view_hist_live_user_viewed,priority:2"`
+	UpdatedAt  time.Time
+}
