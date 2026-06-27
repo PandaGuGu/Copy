@@ -8,12 +8,15 @@
 
 本项目（[PandaGuGu/Copy](https://github.com/PandaGuGu/Copy)）在 earthcake2233 原有项目基础上进行了大幅改造与扩展，主要变更包括但不限于：
 
-- 数据库从 43 张表扩展至 **82 张表**，新增 14 个业务模块
+- 数据库从 43 张表扩展至 **84 张表**，共 15 个业务模块
 - 运营后台从基础管理扩展至 **23 个模块**（工单/风控/版权/BI/运维/配置发布/RBAC审计等）
+- **直播系统**：SRS RTMP 推流 → flv.js HTTP-FLV 播放 → WebSocket 实时聊天+6种礼物+弹幕飘屏 → 观众追踪 → 管理员警告/封禁
 - 视频转码管线重构（FFmpeg + RabbitMQ + 阿里云 OSS）
 - 弹幕/评论/私信/通知系统全面增强
 - AI 助手（DeepSeek）集成
-- 完整的灰度发布与功能开关体系
+- 完整的灰度发布与功能开关体系（FNV-1a Hash + 快照部署 + 回滚）
+- Service 分层架构（handler → service → gorm）与共享前端组件库（AdminDataTable / AdminFormDialog）
+- 管理端 API 集中化（18 模块文件）与页面目录重组（6 个分组）
 
 ## 原作者 / Original Author
 
@@ -28,6 +31,48 @@ Repository: https://github.com/earthcake2233
 Copyright (c) 2026 PandaGuGu
 Repository: https://github.com/PandaGuGu/Copy
 ```
+
+---
+
+## 第三方依赖 / Third-Party Dependencies
+
+本项目依赖以下开源组件，各自遵循其原始许可证：
+
+### 后端 (Go)
+
+| 组件 | 版本 | 许可证 | 用途 |
+|------|------|--------|------|
+| [Gin](https://github.com/gin-gonic/gin) | 1.10 | MIT | HTTP 框架 |
+| [GORM](https://github.com/go-gorm/gorm) | — | MIT | ORM 框架 |
+| [Gorilla WebSocket](https://github.com/gorilla/websocket) | — | BSD-2 | WebSocket 通信 |
+| [go-redis](https://github.com/redis/go-redis) | — | BSD-2 | Redis 客户端 |
+| [aliyun-oss-go-sdk](https://github.com/aliyun/aliyun-oss-go-sdk) | 3.0 | Apache-2.0 | 阿里云 OSS 上传 |
+| [go-elasticsearch](https://github.com/elastic/go-elasticsearch) | 8.19 | Apache-2.0 | ES 全文搜索 |
+| [golang-jwt](https://github.com/golang-jwt/jwt) | — | MIT | JWT 鉴权 |
+| RabbitMQ (go-amqp) | — | BSD-2 | 消息队列客户端 |
+
+### 前端 (Vue 3)
+
+| 组件 | 版本 | 许可证 | 用途 |
+|------|------|--------|------|
+| [Vue 3](https://github.com/vuejs/core) | 3.5 | MIT | 前端框架 |
+| [Vite](https://github.com/vitejs/vite) | 6.0 | MIT | 构建工具 |
+| [Element Plus](https://github.com/element-plus/element-plus) | 2.9 | MIT | UI 组件库 |
+| [flv.js](https://github.com/bilibili/flv.js) | 1.6 | Apache-2.0 | HTTP-FLV 直播播放 |
+| [axios](https://github.com/axios/axios) | 1.7 | MIT | HTTP 客户端 |
+| [markdown-it](https://github.com/markdown-it/markdown-it) | 14.1 | MIT | Markdown 渲染 |
+
+### 基础设施
+
+| 组件 | 用途 |
+|------|------|
+| [SRS](https://github.com/ossrs/srs) (MIT) | RTMP 推流服务器（直播） |
+| [FFmpeg](https://ffmpeg.org/) (LGPL) | 视频转码与封面截帧 |
+| MySQL 8.0 (GPL) | 数据库 |
+| Redis 7.0 (BSD-3) | 缓存 / Token 存储 |
+| Elasticsearch 8.x (Apache-2.0) | 全文搜索（可选） |
+
+以上所有第三方组件的版权和商标归各自所有者所有。
 
 ---
 
