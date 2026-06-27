@@ -332,19 +332,19 @@ const routes = [
       {
         path: "dashboard",
         name: "adminDashboard",
-        component: () => import("@/pages/admin/Dashboard.vue"),
+        component: () => import("@/pages/admin/data/Dashboard.vue"),
         meta: { title: "数据仪表盘 - 运营后台", perm: "dashboard:view" }
       },
       {
         path: "banners",
         name: "adminBanners",
-        component: () => import("@/pages/admin/BannerManage.vue"),
+        component: () => import("@/pages/admin/content/BannerManage.vue"),
         meta: { title: "首页轮播 - 运营后台", perm: "banner:manage" }
       },
       {
         path: "hot-search",
         name: "adminHotSearch",
-        component: () => import("@/pages/admin/HotSearchManage.vue"),
+        component: () => import("@/pages/admin/content/HotSearchManage.vue"),
         meta: { title: "热搜运营 - 运营后台", perm: "hotsearch:manage" }
       },
       {
@@ -356,13 +356,13 @@ const routes = [
       {
         path: "video-review",
         name: "adminVideoReview",
-        component: () => import("@/pages/admin/VideoReview.vue"),
+        component: () => import("@/pages/admin/review/VideoReview.vue"),
         meta: { title: "视频审核 - 运营后台", perm: "video:approve" }
       },
       {
         path: "article-review",
         name: "adminArticleReview",
-        component: () => import("@/pages/admin/ArticleReview.vue"),
+        component: () => import("@/pages/admin/review/ArticleReview.vue"),
         meta: { title: "专栏审核 - 运营后台", perm: "article:approve" }
       },
       {
@@ -374,7 +374,7 @@ const routes = [
       {
         path: "comments",
         name: "adminComments",
-        component: () => import("@/pages/admin/CommentManage.vue"),
+        component: () => import("@/pages/admin/social/CommentManage.vue"),
         meta: { title: "评论管理 - 运营后台", perm: "comment:delete" }
       },
       {
@@ -386,7 +386,7 @@ const routes = [
       {
         path: "reports",
         name: "adminReports",
-        component: () => import("@/pages/admin/ReportManage.vue"),
+        component: () => import("@/pages/admin/social/ReportManage.vue"),
         meta: { title: "举报处理 - 运营后台", perm: "report:handle" }
       },
       {
@@ -399,67 +399,67 @@ const routes = [
       {
         path: "tickets",
         name: "adminTicketManage",
-        component: () => import("@/pages/admin/TicketManage.vue"),
+        component: () => import("@/pages/admin/social/TicketManage.vue"),
         meta: { title: "工单管理 - 运营后台", perm: "ticket:handle" }
       },
       {
         path: "risk",
         name: "adminRiskManage",
-        component: () => import("@/pages/admin/RiskManage.vue"),
+        component: () => import("@/pages/admin/social/RiskManage.vue"),
         meta: { title: "风控管理 - 运营后台", perm: "risk:manage" }
       },
       {
         path: "copyright",
         name: "adminCopyrightManage",
-        component: () => import("@/pages/admin/CopyrightManage.vue"),
+        component: () => import("@/pages/admin/social/CopyrightManage.vue"),
         meta: { title: "版权管理 - 运营后台", perm: "copyright:handle" }
       },
       {
         path: "bi",
         name: "adminBIReport",
-        component: () => import("@/pages/admin/BIReport.vue"),
+        component: () => import("@/pages/admin/data/BIReport.vue"),
         meta: { title: "数据报表 - 运营后台", perm: "dashboard:export" }
       },
       {
         path: "cs",
         name: "adminCSManage",
-        component: () => import("@/pages/admin/CSManage.vue"),
+        component: () => import("@/pages/admin/social/CSManage.vue"),
         meta: { title: "客服后台 - 运营后台", perm: "cs:manage" }
       },
       {
         path: "ops",
         name: "adminOpsMonitor",
-        component: () => import("@/pages/admin/OpsMonitor.vue"),
+        component: () => import("@/pages/admin/ops/OpsMonitor.vue"),
         meta: { title: "运维监控 - 运营后台", perm: "ops:manage" }
       },
       {
         path: "config",
         name: "adminConfigManage",
-        component: () => import("@/pages/admin/ConfigManage.vue"),
+        component: () => import("@/pages/admin/ops/ConfigManage.vue"),
         meta: { title: "配置发布 - 运营后台", perm: "config:manage" }
       },
       {
         path: "rbac",
         name: "adminRBACManage",
-        component: () => import("@/pages/admin/RBACManage.vue"),
+        component: () => import("@/pages/admin/ops/RBACManage.vue"),
         meta: { title: "权限审计 - 运营后台", perm: "rbac:manage" }
       },
       {
         path: "subtitles",
         name: "adminSubtitleManage",
-        component: () => import("@/pages/admin/SubtitleManage.vue"),
+        component: () => import("@/pages/admin/content/SubtitleManage.vue"),
         meta: { title: "字幕管理 - 运营后台", perm: "subtitle:manage" }
       },
       {
         path: "specials",
         name: "adminSpecialManage",
-        component: () => import("@/pages/admin/SpecialManage.vue"),
+        component: () => import("@/pages/admin/content/SpecialManage.vue"),
         meta: { title: "专题活动 - 运营后台", perm: "special:manage" }
       },
       {
         path: "live",
         name: "adminLiveManage",
-        component: () => import("@/pages/admin/LiveManage.vue"),
+        component: () => import("@/pages/admin/review/LiveManage.vue"),
         meta: { title: "直播管理 - 运营后台", perm: "live:manage" }
       }
     ]

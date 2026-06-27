@@ -1,9 +1,9 @@
 
-## Mini-Bili v1.0 技能手册（Skill）
+## Mini-Bili 技能手册（Skill）
 
-**版本**：v1.0
-**最后更新**：2026-05-11
-**依赖文档**：Mini-Bili v1.0 SPEC、Mini-Bili v1.0 Rule
+**版本**：v2.0
+**最后更新**：2026-06-27
+**依赖文档**：SPEC v2.0、Rule.md
 
 ### 关于 Skill 的说明
 
@@ -500,3 +500,53 @@ if !colorRegex.MatchString(color) {
 
 - 前端应在弹幕发送框提供颜色选择器（`<input type="color">`），让用户可视化选择任意颜色。
 - 前端也应对用户手动输入的色号进行格式预校验，提升用户体验。
+
+---
+
+### S-015：Service 层使用
+
+**对应架构**：SPEC v2.0 F15
+
+**触发条件**：新增业务逻辑时，必须在 handler 和 DB 之间使用 Service 层。
+
+**当前可用服务**：
+- `a.Svcs.Video` — ListPublished / Publish / Reject / Delete / GetByID
+- `a.Svcs.User` — List / Ban / Unban / Delete / GetByID
+- `a.Svcs.Comment` — ListByVideo / Create / Delete / ToggleLike
+
+**新增服务步骤**：
+1. 在 `internal/service/` 下新建 `xxx_service.go`，定义 `XxxService struct{ DB *gorm.DB }`
+2. 在 `service/services.go` 的 `NewServices` 中注册
+3. Handler 通过 `a.Svcs.Xxx.Method()` 调用
+4. 执行 `go build ./...` 验证
+
+**禁止行为**：handler 直接 `a.DB.Model(...)` 绕开已有 Service。
+
+---
+
+### S-016：Admin API 模块
+
+**模块文件**（`src/api/admin/` 下）：auth / banner / hot-search / video / article / dynamic / agent / comment / user / report / settings / dashboard / rbac / cs / ticket / copyright / special
+
+**Barrel 入口**：`src/api/admin.js` — 所有页面统一 `import { ... } from "@/api/admin"`
+
+**新增端点**：
+1. 在对应模块文件中添加具名导出函数
+2. 在 `admin.js` barrel 中增加 re-export
+3. 严禁在 Vue 组件中裸调 `adminHttp.get/post`
+
+---
+
+### S-017：AdminDataTable 共享组件
+
+**适用**：搜索+表格+分页的标准 CRUD 列表页
+**不适用**：Dashboard（图表）/ Settings（表单）/ OpsMonitor, ConfigManage, RiskManage 等多 tab 复杂页面
+
+```vue
+<AdminDataTable :data="items" :loading="loading" :page="page" :total="total"
+  @update:page="page = $event; fetch()">
+  <template #search-bar>...</template>
+  <template #toolbar>...</template>
+  <el-table-column ... />
+</AdminDataTable>
+```
