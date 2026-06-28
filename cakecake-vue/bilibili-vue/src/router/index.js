@@ -123,6 +123,12 @@ const routes = [
     ]
   },
   {
+    name: "zonePage",
+    path: "/zone/:zoneName",
+    component: () => import("@/pages/zone/ZonePage.vue"),
+    meta: { title: (route) => `${route.params.zoneName}分区` }
+  },
+  {
     name: "video",
     path: "/video/:aid",
     component: () => import("@/pages/video/video.vue"),

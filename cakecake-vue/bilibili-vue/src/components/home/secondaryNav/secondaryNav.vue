@@ -24,20 +24,28 @@
 
       <!-- 中部分类标签：2行11列，均匀分布 -->
       <div class="sn-center">
-        <a
-          v-for="item in categoryAll"
-          :key="item.name"
-          :href="item.url"
-          target="_blank"
-          class="sn-cat-btn"
-        >
-          {{ item.name }}
-          <span v-if="item.hasArrow" class="sn-arrow-down">
-            <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-        </a>
+        <template v-for="item in categoryAll" :key="item.name">
+          <router-link
+            v-if="item.innerZone"
+            :to="'/zone/' + item.innerZone"
+            class="sn-cat-btn"
+          >
+            {{ item.name }}
+          </router-link>
+          <a
+            v-else
+            :href="item.url"
+            target="_blank"
+            class="sn-cat-btn"
+          >
+            {{ item.name }}
+            <span v-if="item.hasArrow" class="sn-arrow-down">
+              <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </a>
+        </template>
       </div>
 
       <!-- 右侧附加栏目：二行三列 -->
@@ -61,27 +69,27 @@ export default {
   data() {
     return {
       categoryAll: [
-        { name: "番剧", url: "https://www.bilibili.com/v/anime" },
-        { name: "国创", url: "https://www.bilibili.com/v/guochuang" },
-        { name: "综艺", url: "https://www.bilibili.com/v/variety" },
-        { name: "动画", url: "https://www.bilibili.com/v/douga" },
-        { name: "鬼畜", url: "https://www.bilibili.com/v/kichiku" },
-        { name: "舞蹈", url: "https://www.bilibili.com/v/dance" },
-        { name: "娱乐", url: "https://www.bilibili.com/v/ent" },
-        { name: "科技数码", url: "https://www.bilibili.com/v/tech" },
-        { name: "美食", url: "https://www.bilibili.com/v/life" },
-        { name: "汽车", url: "https://www.bilibili.com/v/car" },
-        { name: "体育运动", url: "https://www.bilibili.com/v/sports" },
-        { name: "电影", url: "https://www.bilibili.com/v/movie" },
-        { name: "电视剧", url: "https://www.bilibili.com/v/tv" },
-        { name: "纪录片", url: "https://www.bilibili.com/v/documentary" },
-        { name: "游戏", url: "https://www.bilibili.com/v/game" },
-        { name: "音乐", url: "https://www.bilibili.com/v/music" },
-        { name: "影视", url: "https://www.bilibili.com/v/cinephile" },
-        { name: "知识", url: "https://www.bilibili.com/v/knowledge" },
-        { name: "资讯", url: "https://www.bilibili.com/v/information" },
-        { name: "小剧场", url: "https://www.bilibili.com/v/theatre" },
-        { name: "时尚美妆", url: "https://www.bilibili.com/v/fashion" },
+        { name: "番剧", url: "https://www.bilibili.com/v/anime", innerZone: "番剧" },
+        { name: "国创", url: "https://www.bilibili.com/v/guochuang", innerZone: "国创" },
+        { name: "综艺", url: "https://www.bilibili.com/v/variety", innerZone: "综艺" },
+        { name: "动画", url: "https://www.bilibili.com/v/douga", innerZone: "动画" },
+        { name: "鬼畜", url: "https://www.bilibili.com/v/kichiku", innerZone: "鬼畜" },
+        { name: "舞蹈", url: "https://www.bilibili.com/v/dance", innerZone: "舞蹈" },
+        { name: "娱乐", url: "https://www.bilibili.com/v/ent", innerZone: "娱乐" },
+        { name: "科技数码", url: "https://www.bilibili.com/v/tech", innerZone: "科技" },
+        { name: "美食", url: "https://www.bilibili.com/v/life", innerZone: "生活" },
+        { name: "汽车", url: "https://www.bilibili.com/v/car", innerZone: "汽车" },
+        { name: "体育运动", url: "https://www.bilibili.com/v/sports", innerZone: "体育运动" },
+        { name: "电影", url: "https://www.bilibili.com/v/movie", innerZone: "放映厅" },
+        { name: "电视剧", url: "https://www.bilibili.com/v/tv", innerZone: "放映厅" },
+        { name: "纪录片", url: "https://www.bilibili.com/v/documentary", innerZone: "放映厅" },
+        { name: "游戏", url: "https://www.bilibili.com/v/game", innerZone: "游戏" },
+        { name: "音乐", url: "https://www.bilibili.com/v/music", innerZone: "音乐" },
+        { name: "影视", url: "https://www.bilibili.com/v/cinephile", innerZone: "影视" },
+        { name: "知识", url: "https://www.bilibili.com/v/knowledge", innerZone: "知识" },
+        { name: "资讯", url: "https://www.bilibili.com/v/information", innerZone: "资讯" },
+        { name: "小剧场", url: "https://www.bilibili.com/v/theatre", innerZone: "小剧场" },
+        { name: "时尚美妆", url: "https://www.bilibili.com/v/fashion", innerZone: "时尚" },
         { name: "更多", url: "https://www.bilibili.com/v/category", hasArrow: true }
       ]
     };
