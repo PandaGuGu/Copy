@@ -35,7 +35,7 @@
 完全实现：GET/PUT /users/me、POST /users/me/avatar、PUT /users/me/password、GET /users/me/videos
 
 #### F1：用户认证
-JWT 双 Token（Access 2h + Refresh 7d），bcrypt 密码，注册唯一性校验，独立 Admin JWT
+JWT 双 Token（用户 Access 2h + Refresh 30d；管理员 Access 2h + Refresh 3d），bcrypt 密码，注册唯一性校验，独立 Admin JWT
 
 #### F2：视频上传
 multipart ≤500MB ≤30min → RabbitMQ → FFmpeg H.264 MP4 → OSS videos/{id}.mp4
@@ -87,7 +87,7 @@ WebSocket ≤200ms、5s 冷却、敏感词过滤、Canvas 多轨道渲染、200 
 | 字幕管理 | subtitle.go | content/SubtitleManage.vue | ✅ |
 | 专题活动 | admin_special.go | content/SpecialManage.vue | ✅ |
 
-共 82 张数据表，80+ API 端点，19 种 RBAC 权限码（resource:action 格式）。
+共 85 张数据表，180+ API 端点，23 种 RBAC 权限码（resource:action 格式）。
 
 #### F12：直播系统
 创建直播 → SRS 推流回调 → flv.js 播放 → WebSocket 实时聊天 + 礼物 → 观众追踪 → 直播历史记录 → 管理后台审核/警告/封禁

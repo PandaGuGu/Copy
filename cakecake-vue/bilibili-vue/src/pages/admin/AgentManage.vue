@@ -37,81 +37,125 @@
           <el-tag v-if="llmConfig.configured" size="small" type="success" effect="plain">已配置</el-tag>
           <el-tag v-else size="small" type="warning" effect="plain">未配置</el-tag>
           <el-tag v-if="llmConfig.from_env" size="small" type="info" effect="plain">来源: .env</el-tag>
-          <el-tag v-else-if="llmConfig.db_api_key_set" size="small" type="info" effect="plain">来源: 数据库</el-tag>
-          <el-button v-if="!llmEditing" size="small" type="primary" plain @click="startEditLLM">
-            编辑
+          <el-button size="small" type="primary" plain @click="showProviderForm = true">
+            + 添加厂商
           </el-button>
         </div>
       </div>
 
-      <!-- 查看模式 -->
-      <div v-if="!llmEditing" class="ai-llm-readonly">
-        <div class="ai-llm-row">
-          <span class="ai-llm-label">接口地址</span>
-          <code class="ai-llm-value">{{ llmConfig.base_url || "（未设置）" }}</code>
-        </div>
-        <div class="ai-llm-row">
-          <span class="ai-llm-label">模型名称</span>
-          <code class="ai-llm-value">{{ llmConfig.model || "（未设置）" }}</code>
-        </div>
-        <div class="ai-llm-row">
-          <span class="ai-llm-label">API Key</span>
-          <code v-if="llmConfig.api_key" class="ai-llm-value ai-llm-value--masked">
-            {{ llmConfig.api_key }}
-          </code>
-          <span v-else class="ai-llm-value ai-llm-value--none">（未设置）</span>
-        </div>
-        <el-alert
-          v-if="!llmConfig.configured"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="ai-llm__alert"
-          title="未配置 API Key，用户发消息后将收到未配置提示。"
-        />
+      <!-- Provider list table -->
+      <div v-if="providers.length > 0" class="ai-provider-table">
+        <el-table :data="providers" size="small" stripe>
+          <el-table-column prop="name" label="厂商名称" min-width="100" />
+          <el-table-column prop="base_url" label="接口地址" min-width="200">
+            <template #default="{ row }">
+              <code style="font-size:12px">{{ row.base_url }}</code>
+            </template>
+          </el-table-column>
+          <el-table-column prop="model" label="模型" min-width="130">
+            <template #default="{ row }">
+              <el-tag size="small" type="info" effect="plain">{{ row.model }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="api_key_mask" label="API Key" width="110">
+            <template #default="{ row }">
+              <code style="font-size:11px">{{ row.api_key_mask || '***' }}</code>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.is_enabled"
+                size="small"
+                @change="toggleProvider(row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="默认" width="70" align="center">
+            <template #default="{ row }">
+              <el-tooltip :content="row.is_default ? '当前默认' : '设为默认'" placement="top">
+                <el-button
+                  :type="row.is_default ? 'success' : ''"
+                  size="small"
+                  text
+                  @click="!row.is_default && setDefault(row)"
+                >
+                  {{ row.is_default ? '★' : '☆' }}
+                </el-button>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" align="center">
+            <template #default="{ row }">
+              <el-button size="small" text type="primary" @click="editProvider(row)">编辑</el-button>
+              <el-popconfirm title="确认删除？" @confirm="deleteProvider(row)">
+                <template #reference>
+                  <el-button size="small" text type="danger">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
+      <el-empty v-else description="尚未添加 LLM 厂商" :image-size="60" />
 
-      <!-- 编辑模式 -->
-      <div v-else class="ai-llm-edit">
+      <!-- Add/Edit Provider Dialog -->
+      <el-dialog
+        v-model="showProviderForm"
+        :title="editingProvider ? '编辑厂商' : '添加 LLM 厂商'"
+        width="520px"
+        destroy-on-close
+      >
         <el-form label-position="top" @submit.prevent>
-          <el-form-item label="接口地址 (Base URL)">
+          <el-form-item label="厂商名称" required>
             <el-input
-              v-model="llmForm.base_url"
-              placeholder="https://api.openai.com/v1"
+              v-model="provForm.name"
+              placeholder="如：DeepSeek、阶跃星辰、阿里百炼"
+              maxlength="64"
+            />
+          </el-form-item>
+          <el-form-item label="接口地址 (Base URL)" required>
+            <el-input
+              v-model="provForm.base_url"
+              placeholder="https://api.deepseek.com"
               clearable
             />
-            <p class="ai-llm-edit__hint">
-              兼容 OpenAI 格式的 API 端点地址，留空则使用 .env 中的默认值
-            </p>
+            <p class="ai-llm-edit__hint">兼容 OpenAI 格式的 API 端点地址</p>
           </el-form-item>
-          <el-form-item label="模型名称 (Model)">
+          <el-form-item label="模型名称 (Model)" required>
             <el-input
-              v-model="llmForm.model"
-              placeholder="gpt-4o / deepseek-chat / step-3.7-flash"
+              v-model="provForm.model"
+              placeholder="deepseek-v4-pro / step-3.7-flash / qwen-plus"
               clearable
             />
-            <p class="ai-llm-edit__hint">
-              模型标识符，留空则使用 .env 中的默认值
-            </p>
           </el-form-item>
-          <el-form-item label="API Key">
+          <el-form-item label="API Key" required>
             <el-input
-              v-model="llmForm.api_key"
+              v-model="provForm.api_key"
               type="password"
               show-password
-              placeholder="输入新的 API Key（留空则不修改）"
+              :placeholder="editingProvider ? '留空则不修改' : 'sk-...'"
             />
-            <p class="ai-llm-edit__hint">
-              ⚠️ 已保存的 Key 仅显示前后各 4 位，留空则不修改已有配置
-            </p>
           </el-form-item>
-          <div class="ai-llm-edit__actions">
-            <el-button @click="cancelEditLLM">取消</el-button>
-            <el-button type="primary" :loading="llmSaving" @click="saveLLMConfig">
-              保存配置
-            </el-button>
-          </div>
+          <el-form-item label="">
+            <el-checkbox v-model="provForm.is_default">设为默认</el-checkbox>
+          </el-form-item>
         </el-form>
+        <template #footer>
+          <el-button @click="showProviderForm = false; editingProvider = null">取消</el-button>
+          <el-button type="primary" :loading="provSaving" @click="saveProvider">
+            {{ editingProvider ? '保存修改' : '添加' }}
+          </el-button>
+        </template>
+      </el-dialog>
+
+      <!-- Legacy single-form (keep for .env / DEEPSEEK_* override) -->
+      <el-divider v-if="!llmConfig.configured && providers.length === 0" />
+      <div v-if="!llmEditing && llmConfig.base_url" class="ai-llm-readonly" style="opacity:0.6;margin-top:12px">
+        <div class="ai-llm-row">
+          <span class="ai-llm-label">环境变量 (DEEPSEEK_*)</span>
+          <code class="ai-llm-value">{{ llmConfig.base_url }} / {{ llmConfig.model }}</code>
+        </div>
       </div>
     </section>
 
@@ -313,11 +357,15 @@
 <script>
 import {
   adminCreateAgentProfile,
+  adminCreateLLMProvider,
   adminDeleteAgentProfile,
+  adminDeleteLLMProvider,
   adminGetLLMConfig,
   adminListAgentProfiles,
   adminPutLLMConfig,
+  adminSetDefaultLLMProvider,
   adminUpdateAgentProfile,
+  adminUpdateLLMProvider,
   adminUploadAgentProfileAvatar
 } from "@/api/admin";
 import MbAvatarCropDialog from "@/components/minibili/MbAvatarCropDialog.vue";
@@ -357,6 +405,18 @@ export default {
         base_url: "",
         model: "",
         api_key: ""
+      },
+      // Multi-provider state
+      providers: [],
+      showProviderForm: false,
+      editingProvider: null,
+      provSaving: false,
+      provForm: {
+        name: "",
+        base_url: "",
+        model: "",
+        api_key: "",
+        is_default: false
       },
       drawerVisible: false,
       editingId: null,
@@ -445,6 +505,10 @@ export default {
           db_model: d.db_model || "",
           db_api_key_set: d.db_api_key_set === true
         };
+        this.providers = (d.providers || []).map(p => ({
+          ...p,
+          is_enabled: p.is_enabled !== false
+        }));
         this.llmForm = {
           base_url: d.base_url || "",
           model: d.model || "",
@@ -452,6 +516,88 @@ export default {
         };
       } catch (e) {
         // silently ignore
+      }
+    },
+    // ── Provider management ──
+    editProvider(row) {
+      this.editingProvider = row;
+      this.provForm = {
+        name: row.name,
+        base_url: row.base_url,
+        model: row.model,
+        api_key: "",
+        is_default: row.is_default
+      };
+      this.showProviderForm = true;
+    },
+    async saveProvider() {
+      this.provSaving = true;
+      try {
+        const payload = {
+          name: this.provForm.name,
+          base_url: this.provForm.base_url,
+          model: this.provForm.model,
+          api_key: this.provForm.api_key,
+          is_default: this.provForm.is_default
+        };
+        if (!payload.name || !payload.base_url || !payload.model) {
+          ElMessage.warning("请填写厂商名称、接口地址和模型名称");
+          this.provSaving = false;
+          return;
+        }
+        if (this.editingProvider) {
+          if (!payload.api_key) delete payload.api_key;
+          payload.is_enabled = this.editingProvider.is_enabled;
+          await adminUpdateLLMProvider(this.editingProvider.id, payload);
+          ElMessage.success("厂商已更新");
+        } else {
+          if (!payload.api_key) {
+            ElMessage.warning("请填写 API Key");
+            this.provSaving = false;
+            return;
+          }
+          await adminCreateLLMProvider(payload);
+          ElMessage.success("厂商已添加");
+        }
+        this.showProviderForm = false;
+        this.editingProvider = null;
+        await this.loadLLMConfig();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "操作失败");
+      } finally {
+        this.provSaving = false;
+      }
+    },
+    async deleteProvider(row) {
+      try {
+        await adminDeleteLLMProvider(row.id);
+        ElMessage.success(`已删除 ${row.name}`);
+        await this.loadLLMConfig();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "删除失败");
+      }
+    },
+    async toggleProvider(row) {
+      try {
+        await adminUpdateLLMProvider(row.id, {
+          name: row.name,
+          base_url: row.base_url,
+          model: row.model,
+          is_default: row.is_default,
+          is_enabled: !row.is_enabled
+        });
+        row.is_enabled = !row.is_enabled;
+      } catch (e) {
+        ElMessage.error((e && e.message) || "操作失败");
+      }
+    },
+    async setDefault(row) {
+      try {
+        await adminSetDefaultLLMProvider(row.id);
+        ElMessage.success(`${row.name} 已设为默认`);
+        await this.loadLLMConfig();
+      } catch (e) {
+        ElMessage.error((e && e.message) || "操作失败");
       }
     },
     startEditLLM() {
@@ -1064,5 +1210,16 @@ export default {
 }
 .adm-upload__input {
   display: none;
+}
+/* Provider table */
+.ai-provider-table {
+  margin-top: 12px;
+}
+.ai-provider-table .el-table {
+  font-size: 13px;
+}
+.ai-provider-table .el-table th {
+  font-weight: 600;
+  color: #606266;
 }
 </style>

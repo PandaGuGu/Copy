@@ -202,6 +202,11 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		setOps := admin.Group("", middleware.RequirePermission(a.DB, "setting", "manage"))
 		setOps.GET("/llm-config", a.AdminGetLLMConfig)
 		setOps.PUT("/llm-config", a.AdminPutLLMConfig)
+		setOps.GET("/llm-config/providers", a.AdminListLLMProviders)
+		setOps.POST("/llm-config/providers", a.AdminCreateLLMProvider)
+		setOps.PUT("/llm-config/providers/:id", a.AdminUpdateLLMProvider)
+		setOps.DELETE("/llm-config/providers/:id", a.AdminDeleteLLMProvider)
+		setOps.POST("/llm-config/providers/:id/set-default", a.AdminSetDefaultLLMProvider)
 		setOps.GET("/settings", a.AdminGetSettings)
 		setOps.PUT("/settings", a.AdminPutSettings)
 

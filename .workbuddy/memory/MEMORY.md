@@ -37,7 +37,7 @@
 | 23 | RBAC审计 | ✅ | ✅ | `admin_rbac.go` / `RBACManage.vue` |
 
 新增模型文件：`internal/model/module_extend.go`（20+ 模型）
-新增路由：80+ API 端点（admin 60+ / auth 20+ / public 5+）
+新增路由：180+ API 端点（admin ~150 / auth ~20 / public ~10）
 
 ---
 

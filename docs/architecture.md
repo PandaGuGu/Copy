@@ -269,7 +269,7 @@ ES 全文检索（ik 中文分词）
 | ADR-007 | 统一错误码体系（errcode 包） | 已接受 | NFR-PERF-3 |
 | ADR-008 | Feature Flag FNV-1a 灰度策略 | 已接受 | NFR-CONFIG-3 |
 | ADR-009 | 审批流多级串行审核 | 已接受 | NFR-AUTH-5 |
-| ADR-016 | ItemCF 协同过滤推荐引擎 | 提议 | NFR-REC-1/2 |
+| ADR-016 | ItemCF 协同过滤推荐引擎 | 部分实施（MMR/DPP 重排序已落地） | NFR-REC-1/2 |
 
 ---
 
@@ -979,7 +979,7 @@ HTTP 状态码归类：
 | ADR-013 | 移动端渐进式适配 | 提议 | P1 | 先用 CSS 响应式覆盖核心页面；播放器独立移动端组件；管理后台最小可用 |
 | ADR-014 | 支付集成架构 | 提议 | P2 | 统一支付网关抽象（支付宝/微信）；回调幂等处理；对账定时任务 |
 | ADR-015 | 直播技术选型 | **已实施**（v2.0） | P3 | SRS 流媒体服务器；RTMP 推流 → FLV 拉流；与现有 WebSocket 弹幕复用 |
-| ADR-016 | ItemCF 推荐引擎 | 提议 | P1 | 用户行为交互矩阵 → Cosine 相似度 → 多路召回融合；Go 离线计算 + Redis 在线服务 |
+| ADR-016 | ItemCF 推荐引擎 | 部分实施 | P1 | 用户行为交互矩阵 → Cosine 相似度 → 多路召回融合；Go 离线计算 + Redis 在线服务 |
 
 ### 11.5 覆盖矩阵增量（新增 FR/NFR）
 
@@ -995,7 +995,7 @@ HTTP 状态码归类：
 | FR-033 | FR | 评论排序/过滤 UI | Comment Enhancement | — | 待实施 |
 | FR-034 | FR | 视频合集/播放列表 | Playlist System | ADR-002 | 待实施 |
 | FR-035 | FR | 创作者数据中心 | Creator Center | — | 待实施 |
-| FR-036 | FR | 推荐算法升级 | Recommendation Engine | ADR-011 / ADR-016 | 设计中 |
+| FR-036 | FR | 推荐算法升级 | Recommendation Engine | ADR-011 / ADR-016 | 部分实施 |
 | FR-037 | FR | 视频标签系统 | Tag System | ADR-002 | 待实施 |
 | FR-038 | FR | 话题系统 | Topic System | ADR-002 | 待实施 |
 | FR-039 | FR | 二级分区 | Zone System | ADR-002 | 待实施 |
@@ -1015,7 +1015,7 @@ HTTP 状态码归类：
 | FR-053 | FR | 游戏中心 | Game Center | — | 待实施 |
 | FR-054 | FR | 音频/播客 | Audio Content | — | 待实施 |
 | NFR-MOBILE-1 | NFR | 响应式适配 | Frontend | ADR-013 | 待处理 |
-| NFR-REC-1 | NFR | 推荐性能 | Recommendation | ADR-011 / ADR-016 | 设计中 |
+| NFR-REC-1 | NFR | 推荐性能 | Recommendation | ADR-011 / ADR-016 | 部分实施 |
 | NFR-TRANSCODE-1 | NFR | 多码率转码 | Transcode | ADR-010 | 待处理 |
 | NFR-PAY-1 | NFR | 支付安全 | Payment | ADR-014 | 待处理 |
 | NFR-LIVE-1 | NFR | 直播延迟 | Live | ADR-015 | **已处理**（v2.0） |
