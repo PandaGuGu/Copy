@@ -141,6 +141,12 @@ const routes = [
     meta: { title: "活动" }
   },
   {
+    name: "specialDetail",
+    path: "/special/:slug",
+    component: () => import("@/pages/special/SpecialDetail.vue"),
+    meta: { title: "专题详情" }
+  },
+  {
     name: "classPage",
     path: "/class",
     component: () => import("@/pages/class/ClassPage.vue"),
