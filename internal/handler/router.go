@@ -56,6 +56,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		pub.GET("/videos/:id/comments", middleware.OptionalJWT(jwtm), a.ListComments)
 		pub.GET("/articles/:id", middleware.OptionalJWT(jwtm), a.GetArticle)
 		pub.GET("/articles", middleware.OptionalJWT(jwtm), a.ListPublishedArticles)
+		pub.GET("/online", a.GetOnlineCount)
 		pub.GET("/articles/:id/comments", middleware.OptionalJWT(jwtm), a.ListArticleComments)
 		pub.GET("/space/:userId/articles", middleware.OptionalJWT(jwtm), a.ListUserPublishedArticles)
 		pub.GET("/space/:userId/dynamics", middleware.OptionalJWT(jwtm), a.ListUserPublishedDynamics)
