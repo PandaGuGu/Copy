@@ -1,5 +1,16 @@
 <template>
   <div class="live-page">
+    <!-- 顶部开播按钮 -->
+    <div class="live-top-bar">
+      <div class="live-top-bar-inner">
+        <h2 class="live-section-title">直播广场</h2>
+        <router-link to="/minibili/live/create" class="go-live-btn">
+          <span class="go-live-icon">📹</span>
+          我要开播
+        </router-link>
+      </div>
+    </div>
+
     <!-- 顶部大图区 -->
     <div class="top-banner">
       <div class="banner-main">
@@ -102,12 +113,15 @@
       <div class="rank-block">
         <div class="rank-title">直播排行</div>
         <div
-          v-for="(r, idx) in liveRooms.slice(0, 10)"
+          v-for="(r, idx) in rankedRooms"
           :key="r.id"
           class="rank-item"
         >
           <span :class="['rank-num', { top3: idx < 3 }]">{{ idx + 1 }}</span>
-          <router-link :to="`/minibili/live/${r.id}`" class="rank-link">{{ r.title }}</router-link>
+          <router-link :to="`/minibili/live/${r.id}`" class="rank-link">
+            {{ r.title }}
+            <span v-if="r.status !== 'live'" class="rank-idle-tag">未开播</span>
+          </router-link>
           <span class="rank-count">👁 {{ fmtCount(r.viewers) }}</span>
         </div>
       </div>
@@ -122,7 +136,8 @@
         <div v-for="item in allRooms" :key="item.id" class="live-card">
           <router-link :to="`/minibili/live/${item.id}`" class="lc-cover-wrap">
             <img :src="item.cover" class="lc-cover" loading="lazy" />
-            <span class="lc-badge">{{ fmtCount(item.viewers) }} 观看</span>
+            <span v-if="item.status === 'live'" class="lc-badge lc-badge--live">● 直播中 {{ fmtCount(item.viewers) }} 观看</span>
+            <span v-else class="lc-badge lc-badge--idle">未开播</span>
           </router-link>
           <router-link :to="`/minibili/live/${item.id}`" class="lc-title">{{ item.title }}</router-link>
           <div class="lc-meta">{{ item.host }}</div>
@@ -171,6 +186,12 @@ export default {
     allRooms() {
       return this.items.map((r) => this.mapRoom(r));
     },
+    rankedRooms() {
+      return [...this.items]
+        .sort((a, b) => (b.viewer_count || 0) - (a.viewer_count || 0))
+        .slice(0, 10)
+        .map((r) => this.mapRoom(r));
+    },
     gridSkeleton() {
       return Math.max(0, 10 - this.allRooms.length);
     },
@@ -195,7 +216,7 @@ export default {
       try {
         const res = await http.get("/api/v1/live/rooms");
         if (res && res.code === 0 && res.data) {
-          this.items = res.data.items || res.data || [];
+          this.items = res.data.rooms || res.data.items || res.data || [];
         }
       } catch (e) {
         console.warn("LivePage fetch:", e);
@@ -215,6 +236,35 @@ export default {
   background: #f5f5f7;
   min-height: 100vh;
 }
+
+/* Top bar with go-live button */
+.live-top-bar {
+  max-width: 1400px; margin: 0 auto;
+  padding: 16px 20px 8px;
+}
+.live-top-bar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.live-section-title {
+  font-size: 22px; font-weight: 700; color: #222; margin: 0;
+}
+.go-live-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #fb7299, #ff5682);
+  color: #fff;
+  font-size: 15px; font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(251,114,153,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.go-live-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(251,114,153,0.5);
+  color: #fff;
+}
+.go-live-icon { font-size: 18px; }
 
 /* Top banner */
 .top-banner {
@@ -374,6 +424,10 @@ export default {
 }
 .rank-link:hover { color: #ff5682; }
 .rank-count { color: #999; font-size: 12px; flex-shrink: 0; }
+.rank-idle-tag {
+  font-size: 11px; color: #999; margin-left: 4px;
+  background: #f0f0f0; padding: 0 4px; border-radius: 2px;
+}
 
 /* Recommend grid */
 .recommend-wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px 20px; }
@@ -392,6 +446,8 @@ export default {
   background: rgba(0,0,0,0.6); color: #fff;
   font-size: 11px; padding: 2px 6px; border-radius: 2px;
 }
+.lc-badge--live { background: rgba(251,114,153,0.85); }
+.lc-badge--idle { background: rgba(0,0,0,0.45); }
 .lc-title {
   font-size: 14px; color: #222; text-decoration: none;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
