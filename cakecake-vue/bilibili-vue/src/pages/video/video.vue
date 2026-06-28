@@ -229,13 +229,18 @@
                   @mouseleave="onLikeLeave"
                 >
                   <span class="op-icon-wrap is-like">
-                    <span
-                      class="op-icon like-sprite"
-                      :class="{
-                        animating: likeState.animating && !likeState.done,
-                        'is-done': likeState.done
-                      }"
-                    />
+                    <svg
+                      class="op-icon"
+                      viewBox="0 0 24 24"
+                      width="22"
+                      height="22"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                    </svg>
                   </span>
                   <span class="op-lines">
                     <span class="op-title">{{
@@ -3221,8 +3226,8 @@ $video-col-width: 819px;
 /* 图标左、文案右，与主站播放页工具栏一致 */
 .op-icon-wrap {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -3231,11 +3236,11 @@ $video-col-width: 819px;
 }
 
 .op-icon-wrap.is-coin {
-  height: 56px;
+  height: 40px;
 }
 
 .op-icon-wrap.is-wait {
-  height: 56px;
+  height: 40px;
 }
 
 .op-lines {
@@ -3260,7 +3265,7 @@ $video-col-width: 819px;
   top: 50%;
   width: $anim-fav-fw;
   height: $anim-fav-h;
-  transform: translate(-50%, -50%) scale(0.72);
+  transform: translate(-50%, -50%) scale(0.67);
   transform-origin: center center;
   background-image: url("@/assets/anim-fav.png");
   background-size: $anim-fav-w $anim-fav-h;
@@ -3268,7 +3273,7 @@ $video-col-width: 819px;
 }
 .fav-sprite.is-done {
   background-position: (-($anim-fav-frames - 1) * $anim-fav-fw) 0;
-  transform: translate(-50%, -50%) scale(0.72);
+  transform: translate(-50%, -50%) scale(0.67);
 }
 .fav-sprite.animating {
   animation: fav-strip $dur-fav steps($anim-fav-frames - 1) infinite;
@@ -3290,7 +3295,7 @@ $video-col-width: 819px;
   top: 50%;
   width: 80px;
   height: $anim-coin-h;
-  transform: translate(-50%, -50%) scale(0.68);
+  transform: translate(-50%, -50%) scale(0.50);
   transform-origin: center center;
   background-image: url("@/assets/anim-coin.png");
   background-size: $anim-coin-w $anim-coin-h;
@@ -3298,7 +3303,7 @@ $video-col-width: 819px;
 }
 .coin-sprite.is-done {
   background-position: (-($anim-coin-frames - 1) * $anim-coin-fw) 0;
-  transform: translate(-50%, -50%) scale(0.68);
+  transform: translate(-50%, -50%) scale(0.50);
 }
 .coin-sprite.animating {
   animation: coin-strip $dur-coin steps($anim-coin-frames - 1) infinite;
@@ -3320,7 +3325,7 @@ $video-col-width: 819px;
   top: 50%;
   width: $anim-wait-fw;
   height: $anim-wait-h;
-  transform: translate(-50%, -50%) scale(0.72);
+  transform: translate(-50%, -50%) scale(0.62);
   transform-origin: center center;
   background-image: url("@/assets/anim-wait.png");
   background-size: $anim-wait-w $anim-wait-h;
@@ -3328,7 +3333,7 @@ $video-col-width: 819px;
 }
 .wait-sprite.is-done {
   background-position: (-($anim-wait-frames - 1) * $anim-wait-fw) 0;
-  transform: translate(-50%, -50%) scale(0.72);
+  transform: translate(-50%, -50%) scale(0.62);
 }
 .wait-sprite.animating {
   animation: wait-strip $dur-wait steps($anim-wait-frames - 1) infinite;
@@ -3346,6 +3351,12 @@ $video-col-width: 819px;
 .toolbar-op.is-active .op-title {
   color: $text1;
   font-weight: 600;
+}
+
+/* 点赞激活态：填充蓝色 */
+.like-op.is-active .op-icon-wrap svg {
+  fill: $bili-blue;
+  stroke: $bili-blue;
 }
 .toolbar-op .op-title {
   line-height: 16px;
