@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"minibili/internal/model"
+	"minibili/internal/pkg/resp"
 )
 
 // ─── Special Pages (Module 9) ───
@@ -191,4 +194,24 @@ func (a *API) ListPublicSpecialPages(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok", "data": pages})
+}
+
+// AdminUploadSpecialCover POST /api/v1/admin/specials/upload-cover — multipart field "image".
+func (a *API) AdminUploadSpecialCover(c *gin.Context) {
+	if err := c.Request.ParseMultipartForm(12 << 20); err != nil {
+		resp.Err(c, http.StatusBadRequest, 400)
+		return
+	}
+	fh, err := c.FormFile("image")
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, 400)
+		return
+	}
+	key := fmt.Sprintf("special-covers/%s.jpg", uuid.NewString())
+	url, code := a.uploadBannerImageToOSS(fh, key)
+	if code != 0 {
+		resp.Err(c, http.StatusBadRequest, code)
+		return
+	}
+	resp.OK(c, gin.H{"cover_url": url})
 }

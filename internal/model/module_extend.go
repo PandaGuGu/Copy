@@ -560,33 +560,33 @@ func (ApprovalStep) TableName() string { return "approval_steps" }
 
 // SpecialPage represents a curated content aggregation page (e.g. "2026 夏季新番专题").
 type SpecialPage struct {
-	ID          uint64 `gorm:"primaryKey"`
-	Title       string `gorm:"size:100;not null"`
-	Slug        string `gorm:"size:60;uniqueIndex;not null"` // URL-friendly identifier
-	CoverURL    string `gorm:"size:1024"`
-	Description string `gorm:"size:500"`
-	Blocks      string `gorm:"type:longtext"` // JSON: array of content blocks (video IDs, articles, banners)
-	Status      string `gorm:"size:16;not null;default:draft"` // draft / published / archived
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uint64    `gorm:"primaryKey" json:"id"`
+	Title       string    `gorm:"size:100;not null" json:"title"`
+	Slug        string    `gorm:"size:60;uniqueIndex;not null" json:"slug"`
+	CoverURL    string    `gorm:"size:1024" json:"cover_url"`
+	Description string    `gorm:"size:500" json:"description"`
+	Blocks      string    `gorm:"type:longtext" json:"blocks"`
+	Status      string    `gorm:"size:16;not null;default:draft" json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (SpecialPage) TableName() string { return "special_pages" }
 
 // Campaign represents a time-limited event with rules and rewards.
 type Campaign struct {
-	ID          uint64     `gorm:"primaryKey"`
-	Title       string     `gorm:"size:100;not null"`
-	Slug        string     `gorm:"size:60;uniqueIndex;not null"`
-	CoverURL    string     `gorm:"size:1024"`
-	Description string     `gorm:"size:500"`
-	Rules       string     `gorm:"type:text"`       // plain text or Markdown
-	Rewards     string     `gorm:"type:text"`        // description of rewards
-	StartTime   *time.Time `gorm:"index"`
-	EndTime     *time.Time `gorm:"index"`
-	Status      string     `gorm:"size:16;not null;default:draft"` // draft / active / ended
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uint64     `gorm:"primaryKey" json:"id"`
+	Title       string     `gorm:"size:100;not null" json:"title"`
+	Slug        string     `gorm:"size:60;uniqueIndex;not null" json:"slug"`
+	CoverURL    string     `gorm:"size:1024" json:"cover_url"`
+	Description string     `gorm:"size:500" json:"description"`
+	Rules       string     `gorm:"type:text" json:"rules"`
+	Rewards     string     `gorm:"type:text" json:"rewards"`
+	StartTime   *time.Time `gorm:"index" json:"start_time"`
+	EndTime     *time.Time `gorm:"index" json:"end_time"`
+	Status      string     `gorm:"size:16;not null;default:draft" json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 func (Campaign) TableName() string { return "campaigns" }

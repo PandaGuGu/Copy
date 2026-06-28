@@ -346,6 +346,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		speOps := admin.Group("", middleware.RequirePermission(a.DB, "special", "manage"))
 		speOps.GET("/specials", a.AdminListSpecialPages)
 		speOps.POST("/specials", a.AdminCreateSpecialPage)
+		speOps.POST("/specials/upload-cover", a.AdminUploadSpecialCover)
 		speOps.PUT("/specials/:id", a.AdminUpdateSpecialPage)
 		speOps.DELETE("/specials/:id", a.AdminDeleteSpecialPage)
 		speOps.GET("/campaigns", a.AdminListCampaigns)
