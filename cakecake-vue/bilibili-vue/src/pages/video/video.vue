@@ -622,12 +622,6 @@
             </div>
           </div>
 
-          <!-- 创作者字幕编辑器（仅 UP 主可见） -->
-          <CreatorSubtitleEditor
-            v-if="isVideoOwner && apiDetail"
-            :video-id="Number(aidParam)"
-          />
-
           <div class="vd-comments" id="comment-main">
             <div class="vd-comments-mock">
             <div class="vd-cmt-head">
@@ -1187,7 +1181,6 @@ import {
 } from "@/constants/minibiliComments";
 import MinibiliDanmakuFeed from "@/pages/minibili/MinibiliDanmakuFeed.vue";
 import ReportDialog from "@/components/ReportDialog.vue";
-import CreatorSubtitleEditor from "@/components/creator/CreatorSubtitleEditor.vue";
 import MbUserHoverCard, {
   invalidateUserHoverProfileCache
 } from "@/components/minibili/MbUserHoverCard.vue";
@@ -1202,8 +1195,7 @@ export default {
     MinibiliCommentsLive,
     MinibiliDanmakuFeed,
     MbUserHoverCard,
-    ReportDialog,
-    CreatorSubtitleEditor
+    ReportDialog
   },
   data() {
     const demoCover = akariCover;

@@ -12,6 +12,8 @@ import (
 )
 
 // ─── Feed & Recommendation Enhancement (Module 7) ───
+
+// ─── Feed & Recommendation Enhancement (Module 7) ───
 //
 // Handlers delegate to FeedService which performs:
 //
@@ -73,7 +75,7 @@ func (a *API) GetRecommendationFeed(c *gin.Context) {
 		"code": e.CodeSuccess,
 		"msg":  e.GetMsg(e.CodeSuccess),
 		"data": gin.H{
-			"items":       videoOrEmpty(result.Items),
+			"items":       a.simpleVideoCards(result.Items),
 			"next_cursor": result.NextCursor,
 		},
 	})
@@ -132,7 +134,7 @@ func (a *API) GetZoneRecommendation(c *gin.Context) {
 		"code": e.CodeSuccess,
 		"msg":  e.GetMsg(e.CodeSuccess),
 		"data": gin.H{
-			"items":       videoOrEmpty(result.Items),
+			"items":       a.simpleVideoCards(result.Items),
 			"next_cursor": result.NextCursor,
 		},
 	})
@@ -153,10 +155,67 @@ func (a *API) getOptionalUserID(c *gin.Context) uint64 {
 	return uid
 }
 
-// videoOrEmpty ensures the response is never null.
-func videoOrEmpty(videos []*model.Video) []*model.Video {
+// simpleVideoCards converts []*model.Video to frontend-compatible []gin.H.
+// Matches the field names used by videoCard() in video.go.
+func (a *API) simpleVideoCards(videos []*model.Video) []gin.H {
 	if videos == nil {
-		return []*model.Video{}
+		return []gin.H{}
 	}
-	return videos
+	// Batch-lookup usernames.
+	uidSet := make(map[uint64]bool)
+	for _, v := range videos {
+		if v != nil {
+			uidSet[v.UserID] = true
+		}
+	}
+	uids := make([]uint64, 0, len(uidSet))
+	for uid := range uidSet {
+		uids = append(uids, uid)
+	}
+	var users []model.User
+	_ = a.DB.Where("id IN ?", uids).Find(&users).Error
+	userName := make(map[uint64]string)
+	for _, u := range users {
+		userName[u.ID] = u.Username
+	}
+
+	items := make([]gin.H, 0, len(videos))
+	for _, v := range videos {
+		if v == nil {
+			continue
+		}
+		zp, zc := splitVideoZone(v.Zone)
+		items = append(items, gin.H{
+			"id":                v.ID,
+			"user_id":           v.UserID,
+			"uploader":          userName[v.UserID],
+			"title":             v.Title,
+			"description":       v.Description,
+			"cover_url":         v.CoverURL,
+			"video_url":         v.VideoURL,
+			"duration":          v.DurationSec,
+			"status":            v.Status,
+			"zone":              normalizeVideoZone(v.Zone),
+			"zone_parent":       zp,
+			"zone_child":        zc,
+			"category":          videoZoneCategoryLabel(v.Zone),
+			"play_count":        v.PlayCount,
+			"danmaku_count":     v.DanmakuCount,
+			"comment_count":     v.CommentCount,
+			"like_count":        v.LikeCount,
+			"fav_count":         v.FavCount,
+			"coin_count":        v.CoinCount,
+			"comments_closed":   v.CommentsClosed,
+			"comments_curated":  v.CommentsCurated,
+			"danmaku_closed":    v.DanmakuClosed,
+			"liked_by_me":       false,
+			"coined_by_me":      false,
+			"favorited_by_me":   false,
+			"in_watch_later":    false,
+			"followed_by_me":    false,
+			"my_coin_amount":    0,
+			"created_at":        v.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	return items
 }
