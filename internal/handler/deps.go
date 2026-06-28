@@ -17,7 +17,7 @@ import (
 )
 
 // Dependencies are shared across HTTP handlers.
-type Dependencies struct {
+type 	Dependencies struct {
 	Cfg          *config.C
 	DB           *gorm.DB
 	Redis        *redis.Client
@@ -35,6 +35,7 @@ type Dependencies struct {
 	IPLocate     *iplocate.Searcher
 	Agent        *service.AgentService
 	Svcs         *service.Services
+	Feed         *service.FeedService
 }
 
 // API exposes HTTP handlers.

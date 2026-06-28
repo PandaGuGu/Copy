@@ -66,9 +66,7 @@
 | 25 | 用户端 | 专题活动 | `admin_special.go` |
 
 **不在范围内:**
-- 直播功能（见 SPEC.md v1.0 明确排除）
 - 移动端/小程序适配
-- 视频推荐算法（ML 模型）
 - 支付、会员、充电商业化
 
 ### 1.3 架构驱动因素
@@ -411,11 +409,12 @@
 
 | 需求项 | 规格 |
 |--------|------|
-| 推荐流 | `GET /api/v1/feed/recommendation` — 基于规则/热度排序 |
+| 推荐流 | `GET /api/v1/feed/recommendation` — 基于规则/热度排序 → MMR/DPP 多样性重排序 |
 | 订阅流 | `GET /api/v1/feed/subscription` (auth) — 关注 UP 主内容 |
 | 排行榜 | `GET /api/v1/leaderboard` |
 | 分区推荐 | `GET /api/v1/zones/:zone/recommendation` |
 | 前端 | `VideoFeed.vue` / `recommend.vue` / `ranking.vue` |
+| 重排序 | MMR（最大边际相关性）或 DPP（行列式点过程），平衡相关性与多样性，避免同类内容聚集 |
 
 ### FR-025：专题与活动页（模块 9）
 
@@ -509,13 +508,11 @@
 
 以下功能明确不在本版本（当前运营中心）范围内：
 
-1. **ML 推荐模型** — 当前 Feed 推荐为基于规则/热度的排序，无协同过滤或向量召回
-2. **直播功能** — 无直播间、推流、连麦、直播回放（需流媒体服务器）
-3. **移动端/小程序** — 当前 Vue SPA 以 PC 端为主，无响应式适配
-4. **CDN 实际分发** — 仅有管理接口，未部署实际 CDN
-5. **Whisper ASR** — 字幕自动转写 Worker 未实现（`TaskLog.task_type = subtitle_asr` 已预留）
-6. **支付/会员/充电** — 商业化功能不在范围
-7. **第三方 MCP/Connector 集成** — 虽 UI 预留了连接器管理，未实际对接
+1. **移动端/小程序** — 当前 Vue SPA 以 PC 端为主，无响应式适配
+2. **CDN 实际分发** — 仅有管理接口，未部署实际 CDN
+3. **Whisper ASR** — 字幕自动转写 Worker 未实现（`TaskLog.task_type = subtitle_asr` 已预留）
+4. **支付/会员/充电** — 商业化功能不在范围
+5. **第三方 MCP/Connector 集成** — 虽 UI 预留了连接器管理，未实际对接
 
 ---
 
