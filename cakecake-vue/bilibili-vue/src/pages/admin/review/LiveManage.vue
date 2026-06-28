@@ -218,7 +218,7 @@ import {
 
 export default {
   name: "LiveManage",
-  components: { LiveChat },
+  components: { LiveChat, AdminDataTable },
   setup() {
     const loading = ref(false);
     const acting = ref(false);
