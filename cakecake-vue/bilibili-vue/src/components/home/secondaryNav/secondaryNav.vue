@@ -51,12 +51,12 @@
       <!-- 右侧附加栏目：二行三列 -->
       <div class="sn-right">
         <div class="sn-right-grid">
-          <a href="https://www.bilibili.com/v/column" target="_blank" class="sn-right-link">专栏</a>
-          <a href="https://www.bilibili.com/blackboard/activity" target="_blank" class="sn-right-link">活动</a>
-          <a href="https://www.bilibili.com/blackboard/community" target="_blank" class="sn-right-link">社区中心</a>
+          <router-link to="/article" class="sn-right-link">专栏</router-link>
+          <router-link to="/activity" class="sn-right-link">活动</router-link>
+          <router-link to="/community" class="sn-right-link">社区中心</router-link>
           <a href="/#/minibili/live" class="sn-right-link">直播</a>
-          <a href="https://www.bilibili.com/v/classroom" target="_blank" class="sn-right-link">课堂</a>
-          <a href="https://www.bilibili.com/v/music" target="_blank" class="sn-right-link sn-right-highlight">新歌热榜</a>
+          <router-link to="/class" class="sn-right-link">课堂</router-link>
+          <router-link to="/zone/音乐" class="sn-right-link sn-right-highlight">新歌热榜</router-link>
         </div>
       </div>
     </div>

@@ -129,6 +129,30 @@ const routes = [
     meta: { title: (route) => `${route.params.zoneName}分区` }
   },
   {
+    name: "articlePage",
+    path: "/article",
+    component: () => import("@/pages/article/ArticlePage.vue"),
+    meta: { title: "专栏" }
+  },
+  {
+    name: "activityPage",
+    path: "/activity",
+    component: () => import("@/pages/activity/ActivityPage.vue"),
+    meta: { title: "活动" }
+  },
+  {
+    name: "classPage",
+    path: "/class",
+    component: () => import("@/pages/class/ClassPage.vue"),
+    meta: { title: "课堂" }
+  },
+  {
+    name: "communityPage",
+    path: "/community",
+    component: () => import("@/pages/community/CommunityPage.vue"),
+    meta: { title: "社区中心" }
+  },
+  {
     name: "video",
     path: "/video/:aid",
     component: () => import("@/pages/video/video.vue"),
@@ -302,7 +326,7 @@ const routes = [
   {
     name: "minibiliLiveList",
     path: "/minibili/live",
-    component: () => import("@/pages/minibili/LiveRoomList.vue"),
+    component: () => import("@/pages/live/LivePage.vue"),
     meta: { title: "直播 - cakecake" }
   },
   {
