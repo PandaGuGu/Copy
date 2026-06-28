@@ -5,7 +5,7 @@
 **作者**: 架构师 Winston（BMAD 框架）
 **轨道**: BMad Method
 **状态**: 草稿 — 从现有代码逆向提取
-**来源代码**: `internal/handler/admin_*.go` (24 文件) + `internal/model/module_extend.go`
+**来源代码**: `internal/handler/admin_*.go` (25 文件) + `internal/model/module_extend.go`
 
 > 此 PRD 从已实现的 23 模块代码中逆向提取，描述系统"实际做了什么"而非"计划做什么"。
 

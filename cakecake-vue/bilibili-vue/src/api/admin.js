@@ -25,6 +25,8 @@ export {
   adminListAgentProfiles, adminCreateAgentProfile, adminUpdateAgentProfile,
   adminDeleteAgentProfile, adminUploadAgentProfileAvatar,
   adminGetLLMConfig, adminPutLLMConfig,
+  adminListLLMProviders, adminCreateLLMProvider, adminUpdateLLMProvider,
+  adminDeleteLLMProvider, adminSetDefaultLLMProvider,
 } from "./admin/agent";
 export {
   adminListComments, adminGetComment, adminDeleteComment,

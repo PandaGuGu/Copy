@@ -338,7 +338,7 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
    - 使用 HS256 签名，密钥从环境变量 `JWT_SECRET` 读取。
 3. 生成 **Refresh Token**：
    - Payload 包含：`user_id`、`token_id`、`type: "refresh"`
-   - 过期时间：当前时间 + **3 天**
+   - 过期时间：当前时间 + **30 天**（管理员 Refresh Token 为 **3 天**）
    - 使用 HS256 签名，密钥从环境变量 `JWT_SECRET` 读取。
 4. 将 Access Token 和 Refresh Token 一并返回给客户端。
 
@@ -352,7 +352,7 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
    - Redis 键：`refresh_token:invalid:{token_id}`
    - 若存在 → 该 Refresh Token 已被使用过，返回 `40100`（可能被盗用），并要求重新登录。
 5. 将当前 Refresh Token 的 `token_id` 标记为失效：
-   - Redis 键：`refresh_token:invalid:{token_id}`，TTL 设为 **3 天**（与原 Refresh Token 有效期一致）。
+   - Redis 键：`refresh_token:invalid:{token_id}`，TTL 与原 Refresh Token 有效期一致（用户 30 天 / 管理员 3 天）。
 6. 生成新的 `token_id`，按"登录时颁发"的流程生成新的 Access Token 和 Refresh Token，返回给客户端。
 
 **禁止行为**：
@@ -360,7 +360,7 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
 - 严禁 Refresh Token 用于业务 API 访问（只能调用刷新接口）。
 - 严禁刷新成功后不标记旧 Refresh Token 为失效。
 - 严禁 Access Token 有效期超过 2 小时。
-- 严禁 Refresh Token 有效期超过 3 天。
+- 严禁用户 Refresh Token 有效期超过 30 天，管理员 Refresh Token 有效期超过 3 天。
 - 严禁在 Access Token 中存储敏感信息（如密码）。
 
 ---
