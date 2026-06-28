@@ -235,11 +235,14 @@ func main() {
 		ChatHub: chatHub, Log: log,
 	}
 
+	feedSvc := service.NewFeedService(db, rdb)
+
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
 		JWT: jm, Sens: sens, OSS: ossc, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		Svcs: service.NewServices(db, cfg),
+		Feed: feedSvc,
 	}
 	if mq != nil {
 		deps.MQ = mq
@@ -266,6 +269,7 @@ func main() {
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
 	log.Info("shutting down")
+	feedSvc.Shutdown()
 	cancel()
 	time.Sleep(300 * time.Millisecond)
 }
