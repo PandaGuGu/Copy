@@ -153,6 +153,12 @@ const routes = [
     meta: { title: "社区中心" }
   },
   {
+    name: "trendingPage",
+    path: "/trending",
+    component: () => import("@/pages/trending/TrendingPage.vue"),
+    meta: { title: "热门" }
+  },
+  {
     name: "video",
     path: "/video/:aid",
     component: () => import("@/pages/video/video.vue"),

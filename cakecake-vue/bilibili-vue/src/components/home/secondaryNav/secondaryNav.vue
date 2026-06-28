@@ -11,7 +11,7 @@
           </span>
           <span class="sn-entry-text">动态</span>
         </a>
-        <a href="https://www.bilibili.com/v/popular" class="sn-quick-entry" title="热门" target="_blank">
+        <router-link to="/trending" class="sn-quick-entry" title="热门">
           <span class="sn-icon-circle sn-icon-hot">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2C12 2 10 7 10 10C10 13 12 16 12 16C12 16 14 13 14 10C14 7 12 2 12 2Z" fill="white"/>
@@ -19,7 +19,7 @@
             </svg>
           </span>
           <span class="sn-entry-text">热门</span>
-        </a>
+        </router-link>
       </div>
 
       <!-- 中部分类标签：2行11列，均匀分布 -->
