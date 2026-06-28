@@ -1,10 +1,10 @@
 ## Mini-Bili 设计规格文档（SPEC）
 
-**版本**：v2.0
-**最后更新**：2026-06-27
+**版本**：v2.1
+**最后更新**：2026-06-28
 **性质**：确定性需求规格
 
-> v1.0 核心体验（F0-F10，AC-1 至 AC-16）已于 2026-05 全部达标。v2.0 在此基础上扩展运营后台、直播、社交、Service 层架构。
+> v1.0 核心体验（F0-F10，AC-1 至 AC-16）已于 2026-05 全部达标。v2.0 在此基础上扩展运营后台、直播、社交、Service 层架构。v2.1 新增推荐引擎规划。
 
 ---
 
@@ -114,6 +114,35 @@ handler（HTTP 请求处理）
 - `api/admin/` — 18 模块模块化 API（auth / banner / video / comment / user / rbac / cs / ticket / copyright / ...）
 - admin 页面按分组子目录：data / review / ops / content / social
 
+#### F17：推荐引擎（v2.1 规划中）
+
+> 当前：F14 Feed 推荐为规则/热度排序（`ORDER BY play_count DESC`），所有用户看到同一份榜单。
+> v2.1 计划：引入 ItemCF 协同过滤实现个性化推荐。
+
+**一期 — ItemCF 协同过滤核心引擎：**
+
+| 阶段 | 内容 | 技术路线 |
+|------|------|---------|
+| ① 离线计算 | 每日凌晨 Go 定时任务构建用户-视频交互矩阵 | 7 种行为加权（点赞1.0/投币3.0/收藏2.0/观看0.5/评论1.5/弹幕1.0）→ Cosine 相似度 → `video_similarities` 表 |
+| ② 多路召回 | ItemCF + 内容(同zone/标签) + 热门(时间衰减) + 社交(关注UP主) | Go service 层，四路并发召回 → 加权融合 |
+| ③ 粗排 | 加权打分公式 | `like×120 + coin×200 + fav×90 + dm×85 + play×1.2 + 时间衰减` |
+| ④ 重排 | 类目打散 + 频控 | MMR 多样性 + Redis 曝光计数器 |
+| ⑤ 在线服务 | `GET /api/v1/feed/recommendation` 个性化 | Redis 缓存 top-200 + MySQL 相似度表 |
+| ⑥ 冷启动 | 新用户/新视频专门策略 | 新用户 → 热门兜底；新视频 → 内容相似度提权×2.0 |
+
+**二期 — 排序模型升级：**
+- LR/GBDT 排序替代加权公式
+- AB 实验框架（分流+埋点+统计检验）
+- 多目标优化（CTR + 停留时长 + 互动率）
+
+**新增数据表：**
+- `video_similarities` — 视频相似度矩阵
+- `rec_exposure_log` — 推荐曝光日志
+
+**评估指标：**
+- 离线：Precision@K, Recall@K, NDCG@K
+- 在线：CTR, 人均播放数, 7日留存
+
 ---
 
 ### 四、验收标准
@@ -133,6 +162,7 @@ AC-1 至 AC-16：用户注册登录、视频上传转码、弹幕实时、评论
 | AC-22 | Service 层编译 | go build ./... 零错误，internal/service/ 4 文件 |
 | AC-23 | 前端 API 归队 | 所有 admin 页面通过 @/api/admin barrel 导入，零裸 adminHttp 调用 |
 | AC-24 | 共享组件覆盖 | AdminDataTable 接入 9 个 admin 页面 |
+| AC-25 | ItemCF 召回可用 | `GET /api/v1/feed/recommendation` 返回个性化结果（非全局热门），离线相似度计算成功入表 |
 
 ---
 
