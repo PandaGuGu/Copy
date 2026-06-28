@@ -2728,35 +2728,42 @@ $share-icon-view: 40px;
   background-position: $x $y;
 }
 
+/* 左侧播放列宽度（播放器 / 工具栏 / 下方稿件扩展区与之对齐，避免整块撑满 1160） */
+$video-col-width: 819px;
+
 .video-page {
   padding-top: 16px;
   padding-bottom: 40px;
   background: #fff;
+
+  /* 覆盖全局 bili-wrapper 的 padding:0 60px，让 819+16+325=1160 刚好居中对称 */
+  .video-main.bili-wrapper {
+    max-width: 1160px;
+    padding: 0 !important;
+  }
 }
 
-/* 顶栏：左稿件区、右 UP 区（主站布局） */
+/* 顶栏：左稿件区、右 UP 区 — 与下方 body-stack + side-dock 对齐 */
 .video-info-strip {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 32px;
+  gap: 16px;
   padding: 12px 0 16px;
   margin-bottom: 12px;
   border-bottom: 1px solid $line;
 }
 
 .strip-video {
-  flex: 1;
+  flex: 0 0 $video-col-width;
   min-width: 0;
-  padding-right: 16px;
 }
 
-/* UP 卡片（与主站稿：昵称 + 发消息 / 签名 / 投稿粉丝 / 关注 + 充电） */
+/* UP 卡片 — 宽度与侧栏对齐（325px），左边缘与下方 .video-side-dock 一致 */
 .strip-up.up-card {
   display: flex;
   align-items: flex-start;
   flex-shrink: 0;
-  width: 318px;
+  width: 325px;
   gap: 16px;
 }
 
@@ -3009,9 +3016,6 @@ $share-icon-view: 40px;
     color: #ff7e29;
   }
 }
-
-/* 左侧播放列宽度（播放器 / 工具栏 / 下方稿件扩展区与之对齐，避免整块撑满 1160） */
-$video-col-width: 819px;
 
 /* 侧栏不参与文档流高度：绝对定位于左侧栈，高度强制等于播放器+工具栏 */
 .video-body-row {
