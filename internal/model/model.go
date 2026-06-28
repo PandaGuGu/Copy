@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // User is a registered account.
 type User struct {
@@ -82,6 +86,7 @@ type Video struct {
 	ReviewedByAdminID *uint64 `gorm:"index"`
 	CreatedAt      time.Time `gorm:"index:idx_video_created"`
 	UpdatedAt      time.Time
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
 }
 
 // Danmaku is a persisted bullet comment.
