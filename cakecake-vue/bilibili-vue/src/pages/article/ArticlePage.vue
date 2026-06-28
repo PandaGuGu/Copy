@@ -90,7 +90,7 @@ export default {
   data() {
     return {
       items: [],
-      loading: true,
+      loading: false,
       hasMore: true,
       page: 1,
       searchKeyword: "",

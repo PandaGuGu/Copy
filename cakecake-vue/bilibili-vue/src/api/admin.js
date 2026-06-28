@@ -63,5 +63,6 @@ export {
 } from "./admin/copyright";
 export {
   adminListSpecials, adminCreateSpecial, adminUpdateSpecial, adminDeleteSpecial,
+  adminUploadSpecialCover,
   adminListCampaigns, adminCreateCampaign, adminUpdateCampaign, adminDeleteCampaign,
 } from "./admin/special";
