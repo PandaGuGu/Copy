@@ -466,6 +466,70 @@ func (a *API) GetArticle(c *gin.Context) {
 	resp.OK(c, articleDetailPayload(a, &art, &author, eng, viewer))
 }
 
+// ListPublishedArticles returns a paginated list of published articles.
+func (a *API) ListPublishedArticles(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	var articles []model.Article
+	q := a.DB.Where("status = ?", "published").Order("published_at DESC, id DESC")
+	if keyword := strings.TrimSpace(c.Query("keyword")); keyword != "" {
+		q = q.Where("title LIKE ?", "%"+keyword+"%")
+	}
+	q.Offset((page - 1) * limit).Limit(limit).Find(&articles)
+
+	type card struct {
+		ID           uint64     `json:"id"`
+		UserID       uint64     `json:"user_id"`
+		Title        string     `json:"title"`
+		CoverURL     string     `json:"cover_url"`
+		Summary      string     `json:"summary"`
+		Category     string     `json:"category"`
+		TagsJSON     string     `json:"tags_json"`
+		ViewCount    uint64     `json:"view_count"`
+		CommentCount uint64     `json:"comment_count"`
+		FavCount     uint64     `json:"fav_count"`
+		CoinCount    uint64     `json:"coin_count"`
+		Uploader     string     `json:"uploader"`
+		AvatarURL    string     `json:"avatar_url"`
+		PublishedAt  *time.Time `json:"published_at"`
+	}
+	out := make([]card, 0, len(articles))
+	for _, art := range articles {
+		var u model.User
+		_ = a.DB.First(&u, art.UserID).Error
+		summary := art.BodyMD
+		if len([]rune(summary)) > 150 {
+			summary = string([]rune(summary)[:150]) + "..."
+		}
+		out = append(out, card{
+			ID:           art.ID,
+			UserID:       art.UserID,
+			Title:        art.Title,
+			CoverURL:     art.CoverURL,
+			Summary:      summary,
+			Category:     art.Category,
+			TagsJSON:     art.TagsJSON,
+			ViewCount:    art.ViewCount,
+			CommentCount: art.CommentCount,
+			FavCount:     art.FavCount,
+			CoinCount:    art.CoinCount,
+			Uploader:     model.DisplayUsername(&u),
+			AvatarURL:    u.AvatarURL,
+			PublishedAt:  art.PublishedAt,
+		})
+	}
+	if out == nil {
+		out = []card{}
+	}
+	resp.OK(c, gin.H{"items": out})
+}
+
 // PostArticleView increments view count (best-effort).
 func (a *API) PostArticleView(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
