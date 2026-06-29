@@ -11,7 +11,7 @@
         <div class="rk-toolbar">
           <el-button type="primary" size="default" @click="openRuleDialog(null)">新建规则</el-button>
         </div>
-        <el-table :data="rules" stripe size="default" empty-text="暂无规则">
+        <el-table :data="rules" stripe size="default">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="name" label="规则名称" min-width="140" show-overflow-tooltip />
           <el-table-column label="分类" width="100">
@@ -60,17 +60,17 @@
         <div class="rk-toolbar">
           <el-select v-model="filterListType" placeholder="类型" clearable size="default" style="width: 120px" @change="fetchLists">
             <el-option label="全部" value="" />
-            <el-option label="黑名单" value="black" />
-            <el-option label="白名单" value="white" />
+            <el-option label="黑名单" value="blacklist" />
+            <el-option label="白名单" value="whitelist" />
           </el-select>
           <el-button type="primary" size="default" @click="openListDialog(null)">新建条目</el-button>
         </div>
-        <el-table :data="listItems" stripe size="default" empty-text="暂无名单数据">
+        <el-table :data="listItems" stripe size="default">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column label="类型" width="80">
             <template #default="{ row }">
-              <el-tag :type="row.list_type === 'black' ? 'danger' : 'success'" size="small" effect="dark">
-                {{ row.list_type === 'black' ? '黑名单' : '白名单' }}
+              <el-tag :type="row.list_type === 'blacklist' ? 'danger' : 'success'" size="small" effect="dark">
+                {{ row.list_type === 'blacklist' ? '黑名单' : '白名单' }}
               </el-tag>
             </template>
           </el-table-column>
@@ -114,11 +114,10 @@
         </el-form-item>
         <el-form-item label="分类">
           <el-select v-model="ruleForm.category" style="width: 100%">
-            <el-option label="内容违规" value="content" />
-            <el-option label="行为异常" value="behavior" />
-            <el-option label="账号安全" value="account" />
-            <el-option label="反垃圾" value="spam" />
-            <el-option label="其他" value="other" />
+            <el-option label="关键词匹配" value="keyword" />
+            <el-option label="频率限制" value="rate_limit" />
+            <el-option label="设备指纹" value="device_fingerprint" />
+            <el-option label="行为分析" value="behavior" />
           </el-select>
         </el-form-item>
         <el-form-item label="规则类型">
@@ -134,10 +133,10 @@
         </el-form-item>
         <el-form-item label="动作">
           <el-select v-model="ruleForm.action" style="width: 100%">
-            <el-option label="拦截" value="block" />
-            <el-option label="标记" value="flag" />
-            <el-option label="审核" value="review" />
-            <el-option label="限流" value="throttle" />
+            <el-option label="拦截删除" value="reject" />
+            <el-option label="隔离待审" value="quarantine" />
+            <el-option label="告警通知" value="notify_admin" />
+            <el-option label="自动封禁" value="auto_ban" />
           </el-select>
         </el-form-item>
         <el-form-item label="优先级">
@@ -158,8 +157,8 @@
       <el-form :model="listForm" label-width="80px" size="default">
         <el-form-item label="名单类型">
           <el-select v-model="listForm.list_type" style="width: 100%">
-            <el-option label="黑名单" value="black" />
-            <el-option label="白名单" value="white" />
+            <el-option label="黑名单" value="blacklist" />
+            <el-option label="白名单" value="whitelist" />
           </el-select>
         </el-form-item>
         <el-form-item label="目标类型">
@@ -193,8 +192,7 @@ import { ref, reactive, onMounted } from 'vue'
 import http from '@/utils/adminHttp'
 import { ElMessage } from 'element-plus'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
-const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
+const ADMIN_API = '/api/v1/admin'
 
 async function api(path, opts = {}) {
   const m = (opts.method || 'GET').toLowerCase();
@@ -207,8 +205,6 @@ async function api(path, opts = {}) {
   return r.data;
 }
 
-
-
 const loading = ref(false)
 const saving = ref(false)
 const activeTab = ref('rules')
@@ -217,8 +213,8 @@ const activeTab = ref('rules')
 const rules = ref([])
 const ruleDialogVisible = ref(false)
 const ruleForm = reactive({
-  id: null, name: '', category: 'content', rule_type: 'regex',
-  pattern: '', action: 'block', priority: 10, enabled: true,
+  id: null, name: '', category: 'keyword', rule_type: 'keyword',
+  pattern: '', action: 'reject', priority: 10, enabled: true,
 })
 
 // Lists
@@ -226,7 +222,7 @@ const listItems = ref([])
 const filterListType = ref('')
 const listDialogVisible = ref(false)
 const listForm = reactive({
-  id: null, list_type: 'black', target_type: 'user', target: '', reason: '', expires_at: null,
+  id: null, list_type: 'blacklist', target_type: 'user', target: '', reason: '', expires_at: null,
 })
 
 async function fetchRules() {
@@ -246,7 +242,7 @@ async function fetchLists() {
   try {
     const params = new URLSearchParams()
     if (filterListType.value) params.set('list_type', filterListType.value)
-    const d = await api(`/risk/lists?${params}`)
+    const d = await api(`/risk/bw-list?${params}`)
     listItems.value = d.items || d || []
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -262,7 +258,7 @@ function onTabChange(tab) {
 
 async function toggleRule(row) {
   try {
-    await api(`/risk/rules/${row.id}`, { method: 'PUT', body: { enabled: row.enabled } })
+    await api(`/risk/rules/${row.id}/toggle`, { method: 'POST' })
     ElMessage.success(row.enabled ? '已启用' : '已禁用')
   } catch (e) {
     row.enabled = !row.enabled
@@ -278,8 +274,8 @@ function openRuleDialog(row) {
     })
   } else {
     Object.assign(ruleForm, {
-      id: null, name: '', category: 'content', rule_type: 'regex',
-      pattern: '', action: 'block', priority: 10, enabled: true,
+      id: null, name: '', category: 'keyword', rule_type: 'keyword',
+      pattern: '', action: 'reject', priority: 10, enabled: true,
     })
   }
   ruleDialogVisible.value = true
@@ -325,7 +321,7 @@ function openListDialog(row) {
     })
   } else {
     Object.assign(listForm, {
-      id: null, list_type: 'black', target_type: 'user', target: '', reason: '', expires_at: null,
+      id: null, list_type: 'blacklist', target_type: 'user', target: '', reason: '', expires_at: null,
     })
   }
   listDialogVisible.value = true
@@ -341,7 +337,7 @@ async function saveListItem() {
     const payload = { ...listForm }
     if (payload.expires_at) payload.expires_at = new Date(payload.expires_at).toISOString()
     if (listForm.id) {
-      await api(`/risk/lists/${listForm.id}`, { method: 'PUT', body: payload })
+      await api(`/risk/bw-list/${listForm.id}`, { method: 'PUT', body: payload })
     } else {
       await api('/risk/bw-list', { method: 'POST', body: payload })
     }
@@ -357,7 +353,7 @@ async function saveListItem() {
 
 async function deleteListItem(row) {
   try {
-    await api(`/risk/lists/${row.id}`, { method: 'DELETE' })
+    await api(`/risk/bw-list/${row.id}`, { method: 'DELETE' })
     ElMessage.success('已删除')
     fetchLists()
   } catch (e) {
@@ -366,19 +362,19 @@ async function deleteListItem(row) {
 }
 
 function categoryLabel(c) {
-  return { content: '内容违规', behavior: '行为异常', account: '账号安全', spam: '反垃圾', other: '其他' }[c] || c
+  return { keyword: '关键词匹配', rate_limit: '频率限制', device_fingerprint: '设备指纹', behavior: '行为分析' }[c] || c
 }
 
 function ruleTypeLabel(t) {
-  return { regex: '正则匹配', threshold: '阈值检测', rate_limit: '频率限制', keyword: '关键词' }[t] || t
+  return { keyword: '关键词', regex: '正则匹配', threshold: '阈值检测', rate_limit: '频率限制' }[t] || t
 }
 
 function actionLabel(a) {
-  return { block: '拦截', flag: '标记', review: '审核', throttle: '限流' }[a] || a
+  return { reject: '拦截删除', quarantine: '隔离待审', notify_admin: '告警通知', auto_ban: '自动封禁' }[a] || a
 }
 
 function actionTag(a) {
-  return { block: 'danger', flag: 'warning', review: 'info', throttle: 'warning' }[a] || ''
+  return { reject: 'danger', quarantine: 'warning', notify_admin: 'info', auto_ban: 'danger' }[a] || ''
 }
 
 function targetTypeLabel(t) {

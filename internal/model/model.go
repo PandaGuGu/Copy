@@ -50,6 +50,7 @@ type User struct {
 	Status       string     `gorm:"size:16;not null;default:active;index"`
 	BannedReason string     `gorm:"size:200"`
 	BannedAt     *time.Time `gorm:"index"`
+	BanExpiresAt *time.Time `gorm:"index"`
 }
 
 // Video stores metadata and OSS URLs after transcoding.
