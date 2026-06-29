@@ -451,7 +451,6 @@
               v-if="isMinibiliMode && minibiliDynamicsTo"
               class="t"
               :to="minibiliDynamicsTo"
-              @click.prevent="dynamicShow = !dynamicShow"
               title="动态"
             >
               <span class="nav-icon">
