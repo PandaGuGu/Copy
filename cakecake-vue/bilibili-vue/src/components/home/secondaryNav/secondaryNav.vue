@@ -3,14 +3,14 @@
     <div class="sn-inner">
       <!-- 左侧快捷入口 -->
       <div class="sn-left">
-        <a href="https://t.bilibili.com" class="sn-quick-entry" title="动态" target="_blank">
+        <router-link to="/minibili/dynamics" class="sn-quick-entry" title="动态">
           <span class="sn-icon-circle sn-icon-dynamic">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="white" stroke="white" stroke-width="1"/>
             </svg>
           </span>
           <span class="sn-entry-text">动态</span>
-        </a>
+        </router-link>
         <router-link to="/trending" class="sn-quick-entry" title="热门">
           <span class="sn-icon-circle sn-icon-hot">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
