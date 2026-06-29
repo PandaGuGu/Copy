@@ -1,5 +1,24 @@
 # cakecake
 
+<p align="center">
+  <b>仿 B 站的全栈视频社交平台</b><br>
+  <sub>视频上传/异步转码 · 弹幕 WebSocket · 直播 SRS · 评论/私信/硬币 · 23 模块运营后台 · Docker 一键部署</sub>
+</p>
+
+<p align="center">
+  <b>A Bilibili-like Full-Stack Video Social Platform</b><br>
+  <sub>Upload + Async Transcode (FFmpeg + RabbitMQ) · Danmaku via WebSocket · Live Streaming (SRS) · Comments / DMs / Coin Economy · 23 Admin Modules · Docker One-Click</sub>
+</p>
+
+<p align="center">
+  <a href="#docker-一键部署推荐给他人试用"><img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&style=flat-square" alt="Docker"></a>
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&style=flat-square" alt="Go">
+  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&style=flat-square" alt="Vue">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/tables-85-orange?style=flat-square" alt="85 Tables">
+  <img src="https://img.shields.io/badge/admin_modules-23-blueviolet?style=flat-square" alt="23 Admin Modules">
+</p>
+
 仿 B 站核心链路的全栈视频社交平台（用户端品牌 **cakecake**），后端 Go 模块名 `minibili`。
 
 > 项目灵感来源于 [earthcake2233/cakecake](https://github.com/earthcake2233)，在此基础上完成了数据库重构、运营后台全面扩建（85 张数据表，23 个后台模块），形成了可投入生产级使用的完整系统。维护仓库：[PandaGuGu/Copy](https://github.com/PandaGuGu/Copy)。
