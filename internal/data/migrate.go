@@ -96,6 +96,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.Campaign{},
 		&model.VideoDailyStat{},
 		&model.RiskHitLog{},
+		&model.RiskRateCounter{},
 		&model.AdminLoginLog{},
 		&model.TicketSatisfaction{},
 		&model.CounterNotice{},

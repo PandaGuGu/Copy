@@ -28,7 +28,7 @@
 | 5 | 创作者中心 | ✅ | ✅ | `creator_center.go` |
 | 7 | Feed推荐 | ✅ | 🟡 | `feed.go` |
 | 13 | 工单系统 | ✅ | ✅ | `admin_ticket.go` / `TicketManage.vue` |
-| 14 | 风控管理 | ✅ | ✅ | `admin_risk.go` / `RiskManage.vue` |
+| 14 | 风控管理 | ✅ | ✅ | `admin_risk.go` / `RiskManage.vue` — 引擎重写：黑白名单+正则+频率限制+auto_ban真封号 |
 | 15 | 版权管理 | ✅ | ✅ | `admin_copyright.go` / `CopyrightManage.vue` |
 | 16 | BI报表 | ✅ | ✅ | `admin_bi.go` / `BIReport.vue` |
 | 17 | 客服后台 | ✅ | ✅ | `admin_cs.go` / `CSManage.vue` |
