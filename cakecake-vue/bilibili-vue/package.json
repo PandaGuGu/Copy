@@ -13,10 +13,12 @@
   "dependencies": {
     "axios": "^1.7.9",
     "dompurify": "^3.4.5",
+    "echarts": "^6.1.0",
     "element-plus": "^2.9.4",
     "flv.js": "^1.6.2",
     "markdown-it": "^14.1.1",
     "vue": "^3.5.13",
+    "vue-echarts": "^8.0.1",
     "vue-lazyload": "^3.0.0-rc.2",
     "vue-router": "^4.5.0",
     "vuex": "^4.1.0"

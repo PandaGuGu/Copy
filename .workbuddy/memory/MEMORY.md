@@ -1,7 +1,7 @@
 # 运营后台 & 23 模块扩展状态
 
-> 最后更新：2026-06-28
-> 状态：架构文档 v2.0 全面重评估完成（P0/P1/P2/P3 四轮迭代）
+> 最后更新：2026-06-29
+> 状态：统一动态视图上线 + UserDynamic Type 字段新增
 
 ---
 
@@ -85,3 +85,12 @@
   - `GET /admin/config/releases/:id/export` → 下载 JSON 快照
   - `GET /admin/config/releases/:id/snapshot` → 在线查看快照
   - ReleaseRecord 新增 Title / Type(canary/full/hotfix) / Notes / Snapshot / ReleasedAt 字段
+- 动态管理（2026-06-29）：
+  - `UserDynamic.Type`: `image`（图文）/ `text`（纯文字），创建/编辑时自动判定
+  - `GET /api/v1/admin/dynamics/unified`: 三表 UNION（videos+articles+user_dynamics），支持 `user_id` / `kind`(video|article|image|text) / `q` 过滤
+  - 前端 `DynamicManage.vue` 对接统一端点，类别标签用不同颜色：视频(primary) / 专栏(warning) / 图文(success) / 文字(info)
+  - 删除仅支持图文动态（kind=image/text），video/article 需走对应审核模块
+- BI 报表（2026-06-29）：
+  - 图表库：ECharts 5，通用封装 `BiChart.vue`（深监听 option + resize）
+  - 卡片：`BiCard.vue`（label/value/trend/color，左侧彩色边框）
+  - BIReport.vue：全部手写 SVG → ECharts（柱状/饼图/折线面积/多系列），代码量减少 ~40%

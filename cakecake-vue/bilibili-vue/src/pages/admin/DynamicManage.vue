@@ -8,7 +8,7 @@
     </div>
 
     <p class="adm-hint">
-      用户发布的图文动态即时公开，不在此审核。运营可查看内容并删除违规动态（同步删除数据库记录与 OSS 图片）。
+      统一动态信息流：聚合视频投稿、专栏文章、图文动态。可按用户 ID 和内容类别筛选，支持查看详情与删除（仅图文动态）。
     </p>
 
     <div class="adm-table-wrap">
@@ -27,13 +27,40 @@
             v-model="keyword"
             placeholder="搜索标题或正文"
             clearable
-            style="width: 240px"
+            style="width: 200px"
             @keyup.enter="onSearch"
           />
+          <el-input
+            v-model="filterUid"
+            placeholder="用户 ID"
+            clearable
+            style="width: 120px"
+            @keyup.enter="onSearch"
+          />
+          <el-select
+            v-model="filterKind"
+            placeholder="内容类别"
+            clearable
+            style="width: 120px"
+            @change="onSearch"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="视频" value="video" />
+            <el-option label="专栏" value="article" />
+            <el-option label="图文" value="image" />
+            <el-option label="纯文字" value="text" />
+          </el-select>
           <el-button type="primary" @click="onSearch">搜索</el-button>
         </template>
 
         <el-table-column prop="id" label="ID" width="64" />
+        <el-table-column label="类别" width="72" align="center">
+          <template #default="{ row }">
+            <el-tag :type="kindTagType(row.kind)" size="small" effect="plain">
+              {{ kindLabel(row.kind) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="图片" width="108">
           <template #default="{ row }">
             <img v-if="row.cover_url" :src="row.cover_url" class="adm-thumb" alt="" />
@@ -73,6 +100,7 @@
           <div class="adm-review__meta">
             <h3>{{ detail.title || "（无标题）" }}</h3>
             <p><strong>作者：</strong>{{ detail.uploader_name || detail.user_id }}</p>
+            <p><strong>类别：</strong>{{ kindLabel(detail.kind) }}</p>
             <p><strong>点赞 / 评论：</strong>{{ detail.like_count || 0 }} / {{ detail.comment_count || 0 }}</p>
             <p><strong>发布时间：</strong>{{ formatTime(detail.created_at) }}</p>
             <p v-if="publicLink">
@@ -81,21 +109,15 @@
             </p>
             <p class="adm-review__content"><strong>正文：</strong>{{ detail.content || "（无）" }}</p>
           </div>
-          <div v-if="detail.images && detail.images.length" class="adm-dyn-images">
-            <img
-              v-for="(url, i) in detail.images"
-              :key="i"
-              :src="url"
-              class="adm-dyn-img"
-              alt=""
-            />
+          <div v-if="detail.cover_url" class="adm-dyn-cover">
+            <img :src="detail.cover_url" class="adm-dyn-img" alt="" />
           </div>
         </div>
       </template>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
         <el-button
-          v-if="detail"
+          v-if="detail && (detail.kind === 'image' || detail.kind === 'text')"
           type="danger"
           :loading="acting"
           @click="onDelete(detail)"
@@ -110,8 +132,7 @@
 <script>
 import {
   adminDeleteDynamic,
-  adminGetDynamic,
-  adminListDynamics
+  adminListUnifiedDynamics
 } from "@/api/admin";
 import { ElMessage, ElMessageBox } from "element-plus";
 import AdminDataTable from "@/components/admin/AdminDataTable.vue";
@@ -127,6 +148,8 @@ export default {
       pageSize: 20,
       total: 0,
       keyword: "",
+      filterUid: "",
+      filterKind: "",
       detailVisible: false,
       detail: null
     };
@@ -135,6 +158,9 @@ export default {
     publicLink() {
       if (!this.detail || !this.detail.id) return "";
       const base = window.location.origin + window.location.pathname;
+      const kind = this.detail.kind;
+      if (kind === "video") return `${base}#/minibili/video/${this.detail.id}`;
+      if (kind === "article") return `${base}#/minibili/article/${this.detail.id}`;
       return `${base}#/minibili/dynamic/${this.detail.id}`;
     }
   },
@@ -145,10 +171,12 @@ export default {
     async load() {
       this.loading = true;
       try {
-        const body = await adminListDynamics({
+        const body = await adminListUnifiedDynamics({
           page: this.page,
           page_size: this.pageSize,
-          q: this.keyword.trim()
+          q: this.keyword.trim(),
+          user_id: this.filterUid.trim(),
+          kind: this.filterKind
         });
         const d = body.data || {};
         this.rows = d.items || [];
@@ -170,13 +198,21 @@ export default {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     },
     async openDetail(row) {
-      const body = await adminGetDynamic(row.id);
-      this.detail = body.data;
+      this.detail = row;
       this.detailVisible = true;
     },
+    kindLabel(k) {
+      const map = { video: "视频", article: "专栏", image: "图文", text: "纯文字" };
+      return map[k] || k || "—";
+    },
+    kindTagType(k) {
+      const map = { video: "primary", article: "warning", image: "success", text: "info" };
+      return map[k] || "info";
+    },
     async onDelete(row) {
+      const label = this.kindLabel(row.kind);
       await ElMessageBox.confirm(
-        `确定删除动态 #${row.id}？将同步删除数据库记录、评论、点赞及 OSS 上的全部图片，且不可恢复。`,
+        `确定删除${label}动态 #${row.id}？将同步删除数据库记录、评论、点赞及 OSS 上的全部图片，且不可恢复。`,
         "确认删除",
         { type: "warning" }
       );
@@ -233,7 +269,7 @@ export default {
 }
 .adm-dyn-table {
   width: 100%;
-  min-width: 880px;
+  min-width: 1080px;
 }
 .adm-thumb {
   width: 96px;
@@ -279,6 +315,9 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 16px;
+}
+.adm-dyn-cover {
   margin-top: 16px;
 }
 .adm-dyn-img {

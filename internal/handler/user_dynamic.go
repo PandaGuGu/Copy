@@ -29,6 +29,14 @@ const (
 	maxDynamicImages       = 9
 )
 
+// dynamicTypeFromImages returns "image" if count >= 1, else "text".
+func dynamicTypeFromImages(n int) string {
+	if n >= 1 {
+		return "image"
+	}
+	return "text"
+}
+
 func parseDynamicImagesJSON(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {
@@ -99,6 +107,7 @@ func userDynamicPayload(d *model.UserDynamic, likedByMe bool) gin.H {
 		"title":            d.Title,
 		"content":          d.Content,
 		"images":           imgs,
+		"type":             d.Type,
 		"like_count":       d.LikeCount,
 		"comment_count":    d.CommentCount,
 		"liked_by_me":      likedByMe,
@@ -261,6 +270,7 @@ func (a *API) PostUserDynamic(c *gin.Context) {
 		Title:      title,
 		Content:    content,
 		ImagesJSON: string(imgsJSON),
+		Type:       dynamicTypeFromImages(len(imageURLs)),
 	}
 	if err := a.DB.Create(&dyn).Error; err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -358,6 +368,7 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 	dyn.Title = title
 	dyn.Content = content
 	dyn.ImagesJSON = string(imgsJSON)
+	dyn.Type = dynamicTypeFromImages(len(imageURLs))
 	if err := a.DB.Save(&dyn).Error; err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

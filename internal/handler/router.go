@@ -110,6 +110,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.GET("/articles", a.AdminListArticles)
 		admin.GET("/articles/:id", a.AdminGetArticle)
 		admin.GET("/dynamics", a.AdminListDynamics)
+		admin.GET("/dynamics/unified", a.AdminListUnifiedDynamics)
 		admin.GET("/dynamics/:id", a.AdminGetDynamic)
 
 		// BI read-only (all authenticated admins — no special permission needed)

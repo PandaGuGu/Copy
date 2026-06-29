@@ -19,7 +19,7 @@ export {
   adminListArticles, adminGetArticle, adminApproveArticle,
   adminRejectArticle, adminDeleteArticle,
 } from "./admin/article";
-export { adminListDynamics, adminGetDynamic, adminDeleteDynamic } from "./admin/dynamic";
+export { adminListDynamics, adminListUnifiedDynamics, adminGetDynamic, adminDeleteDynamic } from "./admin/dynamic";
 export {
   adminGetAgentSettings, adminPutAgentSettings, adminUploadAgentAvatar,
   adminListAgentProfiles, adminCreateAgentProfile, adminUpdateAgentProfile,
