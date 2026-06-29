@@ -15,5 +15,7 @@ type UserDynamic struct {
 	CommentsClosed bool `gorm:"not null;default:0"`
 	// CommentsCurated：开启评论精选后，新评论需作者确认才对所有人可见。
 	CommentsCurated bool `gorm:"not null;default:0"`
-	CreatedAt     time.Time `gorm:"index:idx_dyn_user_created"`
+	// Type：动态类型。image=图文(image is optional), text=纯文字
+	Type      string    `gorm:"size:20;not null;default:'image'"`
+	CreatedAt time.Time `gorm:"index:idx_dyn_user_created"`
 }

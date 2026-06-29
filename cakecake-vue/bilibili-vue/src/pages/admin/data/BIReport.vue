@@ -8,11 +8,14 @@
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 总览仪表盘 -->
       <el-tab-pane label="总览" name="summary">
-        <div class="bi-summary-cards" v-if="summaryCards.length">
-          <div v-for="c in summaryCards" :key="c.key" class="bi-summary-card">
-            <span class="bi-summary-card__value">{{ fmtNum(c.value) }}</span>
-            <span class="bi-summary-card__label">{{ c.label }}</span>
-          </div>
+        <div class="bi-cards" v-if="summaryCards.length">
+          <BiCard
+            v-for="(c, idx) in summaryCards"
+            :key="c.key"
+            :label="c.label"
+            :value="fmtNum(c.value)"
+            :color="cardColors[idx % cardColors.length]"
+          />
         </div>
         <div class="bi-summary-update" v-if="summaryUpdated">数据更新于 {{ summaryUpdated }}</div>
       </el-tab-pane>
@@ -22,15 +25,13 @@
         <div class="bi-toolbar">
           <el-button type="primary" size="small" @click="exportCSV('zone')">导出 CSV</el-button>
         </div>
-        <div class="bi-zone-chart" v-if="zoneData.length > 0">
-          <svg :viewBox="`0 0 ${chartW} ${zoneChartH}`" class="bi-zone-svg">
-            <line v-for="i in 5" :key="'gl'+i" :x1="60" :y1="10 + (i-1)*zoneBarStep" :x2="chartW" :y2="10 + (i-1)*zoneBarStep" stroke="#e8e9eb" stroke-width="1" />
-            <g v-for="(z, idx) in zoneData" :key="idx" :transform="`translate(0, ${10 + idx * zoneBarStep})`">
-              <text :x="56" :y="zoneBarH/2 + 2" text-anchor="end" font-size="11" fill="#61666d">{{ z.zone_name }}</text>
-              <rect :x="60" :y="4" :width="barWidth(z.video_count)" :height="zoneBarH - 4" :fill="zoneBarColor(idx)" rx="3" />
-              <text :x="60 + barWidth(z.video_count) + 6" :y="zoneBarH/2 + 2" font-size="11" fill="#9499a0">{{ z.video_count }}</text>
-            </g>
-          </svg>
+        <div class="bi-charts-row" v-if="zoneData.length > 0">
+          <div class="bi-charts-row__main">
+            <BiChart :option="zoneBarOption" :height="zoneData.length * 36 + 60" />
+          </div>
+          <div class="bi-charts-row__side">
+            <BiChart :option="zonePieOption" :height="240" />
+          </div>
         </div>
         <el-table :data="zoneData" stripe size="default" empty-text="暂无数据" style="margin-top: 14px">
           <el-table-column prop="zone_name" label="分区" min-width="120" />
@@ -50,14 +51,15 @@
       <!-- 创作者统计 -->
       <el-tab-pane label="创作者排行" name="creator">
         <div class="bi-toolbar">
-          <el-select v-model="creatorMetric" size="small" style="width: 140px">
+          <el-select v-model="creatorMetric" size="small" style="width: 140px" @change="updateCreatorOption">
             <el-option label="按总播放" value="total_plays" />
             <el-option label="按投币数" value="total_coins" />
             <el-option label="按粉丝数" value="fans_count" />
           </el-select>
           <el-button type="primary" size="small" @click="exportCSV('creator')">导出 CSV</el-button>
         </div>
-        <el-table :data="creatorData" stripe size="default" empty-text="暂无数据">
+        <BiChart v-if="creatorData.length > 0" :option="creatorBarOption" :height="Math.max(200, creatorData.length * 32 + 40)" />
+        <el-table :data="creatorData" stripe size="default" empty-text="暂无数据" style="margin-top: 14px">
           <el-table-column label="排名" width="60">
             <template #default="{ $index }">{{ $index + 1 }}</template>
           </el-table-column>
@@ -98,7 +100,7 @@
             style="width: 280px"
             @change="fetchTimeSeries"
           />
-          <el-select v-model="tsMetric" size="small" style="width: 140px">
+          <el-select v-model="tsMetric" size="small" style="width: 140px" @change="updateTimeSeriesOption">
             <el-option label="每日播放量" value="daily_plays" />
             <el-option label="每日新用户" value="daily_users" />
             <el-option label="每日新视频" value="daily_videos" />
@@ -106,30 +108,7 @@
           <el-button type="primary" size="small" @click="exportCSV('timeseries')">导出 CSV</el-button>
           <el-button size="small" @click="serverExport('plays')">服务端导出</el-button>
         </div>
-        <div class="bi-ts-chart" v-if="tsData.length > 0">
-          <svg :viewBox="`0 0 ${chartW} ${tsChartH}`" class="bi-ts-svg">
-            <line v-for="i in 5" :key="'gl'+i" :x1="40" :y1="tsPad + (i-1)*tsStepH" :x2="chartW" :y2="tsPad + (i-1)*tsStepH" stroke="#e8e9eb" stroke-width="1" />
-            <polyline
-              :points="tsLinePoints"
-              fill="none"
-              stroke="#00a1d6"
-              stroke-width="2"
-            />
-            <g v-for="(pt, idx) in tsData" :key="'pt'+idx">
-              <circle
-                v-if="idx % Math.ceil(tsData.length / 15) === 0 || idx === tsData.length - 1"
-                :cx="tsX(idx)" :cy="tsY(pt[tsMetric])" r="3" fill="#00a1d6"
-              />
-              <text
-                v-if="idx % Math.ceil(tsData.length / 7) === 0 || idx === tsData.length - 1"
-                :x="tsX(idx)" :y="tsChartH - 4" text-anchor="middle" font-size="10" fill="#9499a0"
-              >{{ pt.date }}</text>
-            </g>
-          </svg>
-          <div class="bi-ts-legend">
-            <span class="bi-ts-leg"><i style="background:#00a1d6"></i> {{ tsMetricLabel }}</span>
-          </div>
-        </div>
+        <BiChart v-if="tsData.length > 0" :option="tsLineOption" :height="280" />
         <el-table :data="tsData" stripe size="default" empty-text="暂无数据" style="margin-top: 14px" max-height="300">
           <el-table-column prop="date" label="日期" width="120" />
           <el-table-column label="播放量" width="110">
@@ -150,27 +129,24 @@
           <el-button type="primary" size="small" @click="exportCSV('manuscript')">导出 CSV</el-button>
         </div>
 
-        <!-- 视频稿件卡片 -->
         <h4 class="bi-subtitle">视频稿件</h4>
-        <div class="bi-engage-cards">
-          <div class="bi-engage-card">📹 视频总量 <b>{{ fmtNum(msVideoSummary.total || 0) }}</b></div>
-          <div class="bi-engage-card">✅ 已发布 <b>{{ fmtNum(msVideoSummary.published || 0) }}</b></div>
-          <div class="bi-engage-card">▶ 总播放 <b>{{ fmtNum(msVideoSummary.total_plays || 0) }}</b></div>
-          <div class="bi-engage-card">🪙 总投币 <b>{{ fmtNum(msVideoSummary.total_coins || 0) }}</b></div>
-          <div class="bi-engage-card">⭐ 总收藏 <b>{{ fmtNum(msVideoSummary.total_favs || 0) }}</b></div>
+        <div class="bi-cards">
+          <BiCard label="视频总量" :value="fmtNum(msVideoSummary.total || 0)" color="blue" />
+          <BiCard label="已发布" :value="fmtNum(msVideoSummary.published || 0)" color="teal" />
+          <BiCard label="总播放" :value="fmtNum(msVideoSummary.total_plays || 0)" color="purple" />
+          <BiCard label="总投币" :value="fmtNum(msVideoSummary.total_coins || 0)" color="amber" />
+          <BiCard label="总收藏" :value="fmtNum(msVideoSummary.total_favs || 0)" color="pink" />
         </div>
 
-        <!-- 图文稿件卡片 -->
         <h4 class="bi-subtitle">图文稿件</h4>
-        <div class="bi-engage-cards">
-          <div class="bi-engage-card">📝 图文总量 <b>{{ fmtNum(msArticleSummary.total || 0) }}</b></div>
-          <div class="bi-engage-card">✅ 已发布 <b>{{ fmtNum(msArticleSummary.published || 0) }}</b></div>
-          <div class="bi-engage-card">👁 总阅读 <b>{{ fmtNum(msArticleSummary.total_views || 0) }}</b></div>
-          <div class="bi-engage-card">🪙 总投币 <b>{{ fmtNum(msArticleSummary.total_coins || 0) }}</b></div>
-          <div class="bi-engage-card">⭐ 总收藏 <b>{{ fmtNum(msArticleSummary.total_favs || 0) }}</b></div>
+        <div class="bi-cards">
+          <BiCard label="图文总量" :value="fmtNum(msArticleSummary.total || 0)" color="blue" />
+          <BiCard label="已发布" :value="fmtNum(msArticleSummary.published || 0)" color="teal" />
+          <BiCard label="总阅读" :value="fmtNum(msArticleSummary.total_views || 0)" color="purple" />
+          <BiCard label="总投币" :value="fmtNum(msArticleSummary.total_coins || 0)" color="amber" />
+          <BiCard label="总收藏" :value="fmtNum(msArticleSummary.total_favs || 0)" color="pink" />
         </div>
 
-        <!-- 双栏 TOP 榜 -->
         <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px">
           <div style="flex: 1; min-width: 340px">
             <h4 class="bi-subtitle">热门视频 TOP10</h4>
@@ -208,23 +184,13 @@
         <div class="bi-toolbar">
           <el-button type="primary" size="small" @click="exportCSV('engagement')">导出 CSV</el-button>
         </div>
-        <div class="bi-engage-cards">
-          <div class="bi-engage-card">👍 累计点赞 <b>{{ fmtNum(engageTotals.total_likes) }}</b></div>
-          <div class="bi-engage-card">⭐ 累计收藏 <b>{{ fmtNum(engageTotals.total_favs) }}</b></div>
-          <div class="bi-engage-card">🪙 视频投币 <b>{{ fmtNum(engageTotals.total_video_coins) }}</b></div>
-          <div class="bi-engage-card">📝 文章投币 <b>{{ fmtNum(engageTotals.total_article_coins) }}</b></div>
+        <div class="bi-cards">
+          <BiCard label="累计点赞" :value="fmtNum(engageTotals.total_likes)" color="pink" />
+          <BiCard label="累计收藏" :value="fmtNum(engageTotals.total_favs)" color="amber" />
+          <BiCard label="视频投币" :value="fmtNum(engageTotals.total_video_coins)" color="purple" />
+          <BiCard label="文章投币" :value="fmtNum(engageTotals.total_article_coins)" color="teal" />
         </div>
-        <div class="bi-ts-chart" v-if="engagementTS.length > 0">
-          <svg :viewBox="`0 0 ${chartW} ${tsChartH}`" class="bi-ts-svg">
-            <line v-for="i in 5" :key="'egl'+i" :x1="40" :y1="tsPad + (i-1)*tsStepH" :x2="chartW" :y2="tsPad + (i-1)*tsStepH" stroke="#e8e9eb" stroke-width="1" />
-            <g v-for="(series, si) in engagementTS" :key="'es'+si">
-              <polyline :points="series.points.map((p, i) => `${engX(i)},${engY(p.value, series.maxVal)}`).join(' ')" fill="none" :stroke="series.color" stroke-width="2" />
-            </g>
-          </svg>
-          <div class="bi-ts-legend">
-            <span v-for="s in engagementTS" :key="s.key" class="bi-ts-leg"><i :style="{background: s.color}"></i> {{ s.label }}</span>
-          </div>
-        </div>
+        <BiChart v-if="engagementTS.length > 0" :option="engagementOption" :height="280" />
       </el-tab-pane>
     </el-tabs>
 
@@ -261,9 +227,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import http from '@/utils/adminHttp'
 import { ElMessage } from 'element-plus'
+import BiChart from '@/components/admin/BiChart.vue'
+import BiCard from '@/components/admin/BiCard.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 const ADMIN_API = API_BASE.replace('/api/v1', '/api/v1/admin')
@@ -281,6 +249,7 @@ async function api(path, opts = {}) {
 
 const loading = ref(false)
 const activeTab = ref('zone')
+const cardColors = ['blue', 'teal', 'purple', 'amber', 'pink', 'coral']
 
 // Zone data
 const zoneData = ref([])
@@ -293,9 +262,6 @@ const creatorMetric = ref('total_plays')
 const tsData = ref([])
 const tsRange = ref([])
 const tsMetric = ref('daily_plays')
-const chartW = 680
-const tsChartH = 240
-const tsPad = 20
 
 // Saved reports
 const savedReports = ref([])
@@ -315,54 +281,130 @@ const msTopArticles = ref([])
 const engagementTS = ref([])
 const engageTotals = ref({})
 
-const zoneChartH = computed(() => Math.max(120, zoneData.value.length * 36 + 20))
-const zoneBarStep = 36
-const zoneBarH = 28
+// ── ECharts options ──
 
-const tsStepH = computed(() => (tsChartH - tsPad - 20) / 4)
+const zoneBarOption = computed(() => ({
+  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  grid: { left: 90, right: 60, top: 10, bottom: 20 },
+  xAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#9499a0' } },
+  yAxis: {
+    type: 'category',
+    data: zoneData.value.map(z => z.zone_name),
+    axisLabel: { fontSize: 11, color: '#61666d' },
+    inverse: true
+  },
+  series: [{
+    type: 'bar',
+    data: zoneData.value.map((z, i) => ({
+      value: z.video_count,
+      itemStyle: { color: ['#378add', '#1d9e75', '#7f77dd', '#ba7517', '#d4537e', '#d85a30'][i % 6], borderRadius: [0, 4, 4, 0] }
+    })),
+    barMaxWidth: 28,
+    label: { show: true, position: 'right', fontSize: 11, color: '#61666d' }
+  }]
+}))
 
-const tsMax = computed(() => {
-  let m = 1
-  for (const p of tsData.value) {
-    if (p[tsMetric.value] > m) m = p[tsMetric.value]
+const zonePieOption = computed(() => ({
+  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+  legend: {
+    orient: 'vertical',
+    right: 0,
+    top: 'center',
+    itemGap: 12,
+    itemWidth: 8,
+    itemHeight: 8,
+    textStyle: { fontSize: 12, color: '#61666d' }
+  },
+  series: [{
+    type: 'pie',
+    radius: ['42%', '68%'],
+    center: ['38%', '50%'],
+    data: zoneData.value.map((z, i) => ({
+      name: z.zone_name,
+      value: z.video_count,
+      itemStyle: { color: ['#378add', '#1d9e75', '#7f77dd', '#ba7517', '#d4537e', '#d85a30'][i % 6] }
+    })),
+    label: { show: false },
+    emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } }
+  }]
+}))
+
+const creatorBarOption = computed(() => {
+  const top10 = [...creatorData.value].sort((a, b) => b[creatorMetric.value] - a[creatorMetric.value]).slice(0, 10).reverse()
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 100, right: 60, top: 10, bottom: 20 },
+    xAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#9499a0' } },
+    yAxis: {
+      type: 'category',
+      data: top10.map(c => (c.nickname || c.username || `ID:${c.user_id}`)),
+      axisLabel: { fontSize: 11, color: '#61666d' },
+      inverse: true
+    },
+    series: [{
+      type: 'bar',
+      data: top10.map(c => ({ value: c[creatorMetric.value], itemStyle: { color: '#378add', borderRadius: [0, 4, 4, 0] } })),
+      barMaxWidth: 22,
+      label: { show: true, position: 'right', fontSize: 11, color: '#61666d', formatter: p => fmtNum(p.value) }
+    }]
   }
-  return m
 })
 
-const tsLinePoints = computed(() => {
-  return tsData.value.map((p, i) => `${tsX(i)},${tsY(p[tsMetric.value])}`).join(' ')
-})
+const tsLineOption = computed(() => ({
+  tooltip: { trigger: 'axis' },
+  grid: { left: 50, right: 20, top: 20, bottom: 30 },
+  xAxis: {
+    type: 'category',
+    data: tsData.value.map(t => t.date),
+    axisLabel: { fontSize: 10, color: '#9499a0', rotate: 30 }
+  },
+  yAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#9499a0' } },
+  series: [{
+    type: 'line',
+    data: tsData.value.map(t => t[tsMetric.value] || 0),
+    smooth: true,
+    symbol: 'circle',
+    symbolSize: 4,
+    lineStyle: { color: '#378add', width: 2 },
+    itemStyle: { color: '#378add' },
+    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(55,138,221,0.2)' }, { offset: 1, color: 'rgba(55,138,221,0.02)' }] } }
+  }]
+}))
 
-function tsX(idx) {
-  const n = tsData.value.length || 1
-  const w = chartW - 40
-  return 40 + (idx / (n - 1 || 1)) * w
+const engagementOption = computed(() => ({
+  tooltip: { trigger: 'axis' },
+  legend: { data: engagementTS.value.map(s => s.label), bottom: 0, textStyle: { fontSize: 11 } },
+  grid: { left: 50, right: 20, top: 20, bottom: 40 },
+  xAxis: {
+    type: 'category',
+    data: engagementTS.value[0]?.points?.map(p => p.date) || [],
+    axisLabel: { fontSize: 10, color: '#9499a0', rotate: 30 }
+  },
+  yAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#9499a0' } },
+  series: engagementTS.value.map(s => ({
+    name: s.label,
+    type: 'line',
+    data: s.points.map(p => p.value || 0),
+    smooth: true,
+    symbol: 'none',
+    lineStyle: { color: s.color, width: 2 }
+  }))
+}))
+
+function updateCreatorOption() {
+  // triggers computed re-evaluation
 }
 
-function tsY(val) {
-  const ratio = val / (tsMax.value || 1)
-  return tsPad + (tsChartH - tsPad - 20) * (1 - ratio)
+function updateTimeSeriesOption() {
+  // triggers computed re-evaluation
 }
 
-function barWidth(count) {
-  const max = Math.max(1, ...zoneData.value.map(z => z.video_count || 0))
-  return (count / max) * (chartW - 120) + 2
-}
-
-function zoneBarColor(idx) {
-  const colors = ['#00a1d6', '#fb7299', '#02b340', '#e6a23c', '#909399']
-  return colors[idx % colors.length]
-}
-
-const tsMetricLabel = computed(() => ({
-  daily_plays: '每日播放量', daily_users: '每日新用户', daily_videos: '每日新视频',
-}[tsMetric.value] || tsMetric.value))
+// ── Data fetching ──
 
 async function fetchZones() {
   loading.value = true
   try {
     const d = await api('/bi/zone-stats')
-    // Backend returns { zones: [{ zone, video_count, play_count, avg_plays_per_video }] }
     const raw = d.zones || d.items || d || []
     zoneData.value = raw.map(z => ({
       zone_name: z.zone || z.zone_name,
@@ -380,8 +422,7 @@ async function fetchZones() {
 async function fetchCreators() {
   loading.value = true
   try {
-    const d = await api(`/bi/creator-stats?limit=20`)
-    // Backend returns all dimensions at once: { creators: [{ user_id, username, total_plays, total_coins, fans_count, video_count, article_count }] }
+    const d = await api('/bi/creator-stats?limit=20')
     const raw = d.creators || d.items || d || []
     creatorData.value = raw.map(c => ({
       user_id: c.user_id,
@@ -404,14 +445,11 @@ async function fetchCreators() {
 async function fetchTimeSeries() {
   loading.value = true
   try {
-    // Map frontend metric to backend metric name
     const metricMap = { daily_plays: 'plays', daily_users: 'new_users', daily_videos: 'new_videos' }
-    // Fetch all three metrics in parallel and merge by date
     const fetches = ['plays', 'new_users', 'new_videos'].map(m =>
       api(`/bi/time-series?metric=${m}&days=30`)
     )
     const results = await Promise.all(fetches)
-    // results: [{ metric, granularity, points: [{date, value}] }, ...]
     const dateMap = {}
     results.forEach((res, idx) => {
       const fieldName = ['daily_plays', 'daily_users', 'daily_videos'][idx]
@@ -425,7 +463,7 @@ async function fetchTimeSeries() {
     })
     tsData.value = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date))
     if (tsData.value.length > 0) {
-      tsMetric.value = 'daily_plays' // set active metric for chart
+      tsMetric.value = 'daily_plays'
     }
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
@@ -476,35 +514,40 @@ async function fetchEngagementStats() {
       total_video_coins: d.total_video_coins || 0,
       total_article_coins: d.total_article_coins || 0,
     }
-    const series = [
-      { key: 'comments', label: '评论', color: '#00a1d6', data: d.comments_ts || [] },
-      { key: 'danmaku', label: '弹幕', color: '#fb7299', data: d.danmaku_ts || [] },
-      { key: 'likes', label: '点赞', color: '#02b340', data: d.likes_ts || [] },
-      { key: 'favs', label: '收藏', color: '#e6a23c', data: d.favs_ts || [] },
-      { key: 'coins', label: '投币', color: '#909399', data: d.coins_ts || [] },
+    const seriesDefs = [
+      { key: 'comments', label: '评论', color: '#378add', raw: d.comments_ts || [] },
+      { key: 'danmaku', label: '弹幕', color: '#d4537e', raw: d.danmaku_ts || [] },
+      { key: 'likes', label: '点赞', color: '#1d9e75', raw: d.likes_ts || [] },
+      { key: 'favs', label: '收藏', color: '#ba7517', raw: d.favs_ts || [] },
+      { key: 'coins', label: '投币', color: '#7f77dd', raw: d.coins_ts || [] },
     ]
-    engagementTS.value = series.map(s => ({
-      ...s,
-      points: s.data,
-      maxVal: Math.max(1, ...s.data.map(p => p.value || 0)),
+
+    // Build unified date axis from all series
+    const dateSet = new Set()
+    seriesDefs.forEach(s => s.raw.forEach(p => { if (p.date) dateSet.add(p.date) }))
+    const allDates = Array.from(dateSet).sort()
+
+    // Align each series to the unified date axis (fill 0 for missing dates)
+    const pointsByDate = seriesDefs.map(() => {
+      const valMap = {}
+      return { valMap }
+    })
+    seriesDefs.forEach((s, si) => {
+      s.raw.forEach(p => { if (p.date) pointsByDate[si].valMap[p.date] = p.value || 0 })
+    })
+
+    engagementTS.value = seriesDefs.map((s, si) => ({
+      key: s.key,
+      label: s.label,
+      color: s.color,
+      points: allDates.map(d => ({ date: d, value: pointsByDate[si].valMap[d] || 0 })),
+      maxVal: Math.max(1, ...s.raw.map(p => p.value || 0)),
     }))
   } catch (e) {
     ElMessage.error(e.message || '加载互动统计失败')
   } finally {
     loading.value = false
   }
-}
-
-function engX(idx) {
-  const s = engagementTS.value[0]
-  const n = (s?.points?.length) || 1
-  const w = chartW - 40
-  return 40 + (idx / (n - 1 || 1)) * w
-}
-
-function engY(val, max) {
-  const ratio = val / (max || 1)
-  return tsPad + (tsChartH - tsPad - 20) * (1 - ratio)
 }
 
 function onTabChange(tab) {
@@ -626,11 +669,9 @@ function exportCSV(type) {
   URL.revokeObjectURL(url)
 }
 
-// Server-side export (with TaskLog tracking)
 async function serverExport(metric) {
   try {
     const res = await http.post(ADMIN_API + '/bi/export', { metric, days: 30 }, { responseType: 'blob' })
-    // responseType: 'blob' 时 res 是完整的 axios response（经过拦截器返回 body，即 Blob）
     const blob = res instanceof Blob ? res : new Blob([res], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -649,7 +690,6 @@ async function serverExport(metric) {
 function fmtNum(n) {
   if (n == null) return '0'
   if (n >= 10000) return (n / 10000).toFixed(1) + '万'
-  // Floats: round to 1 decimal; integers: keep as-is
   if (typeof n === 'number' && !Number.isInteger(n)) return n.toFixed(1)
   return String(n)
 }
@@ -684,29 +724,33 @@ onMounted(() => {
 .bi-page__head { margin-bottom: 14px; }
 .bi-page__title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #18191c; }
 .bi-page__desc { margin: 0; font-size: 13px; color: #9499a0; }
-.bi-toolbar { margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+.bi-toolbar { margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .bi-muted { color: #9499a0; font-size: 12px; }
-.bi-zone-svg, .bi-ts-svg { width: 100%; height: auto; }
-.bi-ts-chart { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px 20px; }
-.bi-ts-legend { display: flex; gap: 20px; margin-top: 8px; font-size: 12px; color: #61666d; }
-.bi-ts-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.bi-saved { margin-top: 20px; background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px 20px; }
-.bi-saved__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.bi-saved__title { margin: 0; font-size: 14px; font-weight: 600; color: #18191c; }
-.bi-saved__actions { display: flex; gap: 8px; align-items: center; }
-
-/* Summary cards */
-.bi-summary-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 12px; }
-.bi-summary-card { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px; text-align: center; }
-.bi-summary-card__value { display: block; font-size: 24px; font-weight: 700; color: #18191c; }
-.bi-summary-card__label { display: block; margin-top: 4px; font-size: 12px; color: #9499a0; }
-.bi-summary-update { font-size: 12px; color: #c9ccd0; margin-bottom: 8px; }
-
-/* Subtitle */
 .bi-subtitle { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #18191c; }
 
-/* Engagement cards */
-.bi-engage-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.bi-engage-card { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #61666d; }
-.bi-engage-card b { font-size: 18px; color: #18191c; margin-left: 6px; }
+/* Cards grid */
+.bi-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* Charts row */
+.bi-charts-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bi-charts-row__main { flex: 1 1 55%; min-width: 360px; }
+.bi-charts-row__side { flex: 0 0 300px; min-width: 260px; }
+
+/* Summary */
+.bi-summary-update { font-size: 12px; color: #c9ccd0; margin-bottom: 8px; }
+
+/* Saved */
+.bi-saved { margin-top: 20px; background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; padding: 16px 20px; }
+.bi-saved__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.bi-saved__title { margin: 0; font-size: 14px; font-weight: 600; color: #18191c; }
+.bi-saved__actions { display: flex; gap: 8px; align-items: center; }
 </style>
