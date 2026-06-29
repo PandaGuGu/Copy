@@ -135,30 +135,43 @@ func (TicketSatisfaction) TableName() string { return "ticket_satisfactions" }
 
 // RiskRule is a configurable rule for automatic risk detection.
 type RiskRule struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Name        string    `gorm:"size:80;not null"`
-	Category    string    `gorm:"size:32;not null;index"` // keyword / rate_limit / device_fingerprint / behavior
-	RuleType    string    `gorm:"size:32;not null"` // block / flag / throttle
-	Pattern     string    `gorm:"type:text;not null"` // regex / threshold / config JSON
-	Action      string    `gorm:"size:32;not null"` // reject / quarantine / notify_admin / auto_ban
-	DurationSec int       `gorm:"not null;default:0"` // ban duration in seconds (0 = permanent)
-	Enabled     bool      `gorm:"not null;default:1;index"`
-	Priority    int       `gorm:"not null;default:0"` // higher = first match
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uint64    `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:80;not null" json:"name"`
+	Category    string    `gorm:"size:32;not null;index" json:"category"` // keyword / rate_limit / device_fingerprint / behavior
+	RuleType    string    `gorm:"size:32;not null" json:"rule_type"` // keyword / regex / threshold / rate_limit
+	Pattern     string    `gorm:"type:text;not null" json:"pattern"` // regex / threshold / config JSON
+	Action      string    `gorm:"size:32;not null" json:"action"` // reject / quarantine / notify_admin / auto_ban
+	DurationSec int       `gorm:"not null;default:0" json:"duration_sec"` // ban duration in seconds (0 = permanent)
+	Enabled     bool      `gorm:"not null;default:1;index" json:"enabled"`
+	Priority    int       `gorm:"not null;default:0" json:"priority"` // higher = first match
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (RiskRule) TableName() string { return "risk_rules" }
 
+// RiskRateCounter tracks per-user rate limit window counts.
+type RiskRateCounter struct {
+	ID          uint64    `gorm:"primaryKey"`
+	RuleID      uint64    `gorm:"index;not null"`
+	UserID      uint64    `gorm:"index;not null"`
+	WindowStart time.Time `gorm:"not null;index"`
+	Count       int       `gorm:"not null;default:0"`
+	UpdatedAt   time.Time
+}
+
+func (RiskRateCounter) TableName() string { return "risk_rate_counters" }
+
 // BlackWhiteList stores black/white list entries for risk control.
 type BlackWhiteList struct {
-	ID        uint64    `gorm:"primaryKey"`
-	ListType  string    `gorm:"size:16;not null;index"` // blacklist / whitelist
-	Target    string    `gorm:"size:200;not null"` // user_id / ip / device_id / keyword
-	Reason    string    `gorm:"size:200"`
-	ExpiresAt *time.Time `gorm:"index"` // null = permanent
-	CreatedBy uint64    `gorm:"not null"`
-	CreatedAt time.Time
+	ID         uint64     `gorm:"primaryKey"`
+	ListType   string     `gorm:"size:16;not null;index"` // blacklist / whitelist
+	TargetType string     `gorm:"size:16;not null;default:user"` // user / ip / device / content
+	Target     string     `gorm:"size:200;not null"` // user_id / ip / device_id / keyword
+	Reason     string     `gorm:"size:200"`
+	ExpiresAt  *time.Time `gorm:"index"` // null = permanent
+	CreatedBy  uint64     `gorm:"not null"`
+	CreatedAt  time.Time
 }
 
 func (BlackWhiteList) TableName() string { return "black_white_lists" }

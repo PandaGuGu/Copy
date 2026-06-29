@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -333,26 +335,28 @@ func (a *API) AdminListBWList(c *gin.Context) {
 	creatorBriefs := loadUserBriefs(a.DB, creatorSet)
 
 	type item struct {
-		ID        uint64     `json:"id"`
-		ListType  string     `json:"list_type"`
-		Target    string     `json:"target"`
-		Reason    string     `json:"reason"`
-		ExpiresAt *time.Time `json:"expires_at"`
-		CreatedBy uint64     `json:"created_by"`
-		Creator   gin.H      `json:"creator"`
-		CreatedAt time.Time  `json:"created_at"`
+		ID         uint64     `json:"id"`
+		ListType   string     `json:"list_type"`
+		TargetType string     `json:"target_type"`
+		Target     string     `json:"target"`
+		Reason     string     `json:"reason"`
+		ExpiresAt  *time.Time `json:"expires_at"`
+		CreatedBy  uint64     `json:"created_by"`
+		Creator    gin.H      `json:"creator"`
+		CreatedAt  time.Time  `json:"created_at"`
 	}
 	items := make([]item, 0, len(entries))
 	for _, e := range entries {
 		items = append(items, item{
-			ID:        e.ID,
-			ListType:  e.ListType,
-			Target:    e.Target,
-			Reason:    e.Reason,
-			ExpiresAt: e.ExpiresAt,
-			CreatedBy: e.CreatedBy,
-			Creator:   creatorBriefs[e.CreatedBy],
-			CreatedAt: e.CreatedAt,
+			ID:         e.ID,
+			ListType:   e.ListType,
+			TargetType: e.TargetType,
+			Target:     e.Target,
+			Reason:     e.Reason,
+			ExpiresAt:  e.ExpiresAt,
+			CreatedBy:  e.CreatedBy,
+			Creator:    creatorBriefs[e.CreatedBy],
+			CreatedAt:  e.CreatedAt,
 		})
 	}
 
@@ -376,10 +380,11 @@ func (a *API) AdminCreateBWEntry(c *gin.Context) {
 	adminID, _ := middleware.AdminID(c)
 
 	var req struct {
-		ListType  string `json:"list_type"`
-		Target    string `json:"target"`
-		Reason    string `json:"reason"`
-		ExpiresAt *time.Time `json:"expires_at"`
+		ListType   string     `json:"list_type"`
+		TargetType string     `json:"target_type"`
+		Target     string     `json:"target"`
+		Reason     string     `json:"reason"`
+		ExpiresAt  *time.Time `json:"expires_at"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -389,6 +394,15 @@ func (a *API) AdminCreateBWEntry(c *gin.Context) {
 	req.ListType = strings.TrimSpace(req.ListType)
 	req.Target = strings.TrimSpace(req.Target)
 	req.Reason = strings.TrimSpace(req.Reason)
+	targetType := strings.TrimSpace(req.TargetType)
+	if targetType == "" {
+		targetType = "user"
+	}
+	targetTypeValid := map[string]bool{"user": true, "ip": true, "device": true, "content": true}
+	if !targetTypeValid[targetType] {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
 
 	if req.ListType != "blacklist" && req.ListType != "whitelist" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -404,11 +418,12 @@ func (a *API) AdminCreateBWEntry(c *gin.Context) {
 	}
 
 	entry := model.BlackWhiteList{
-		ListType:  req.ListType,
-		Target:    req.Target,
-		Reason:    req.Reason,
-		ExpiresAt: req.ExpiresAt,
-		CreatedBy: adminID,
+		ListType:   req.ListType,
+		TargetType: targetType,
+		Target:     req.Target,
+		Reason:     req.Reason,
+		ExpiresAt:  req.ExpiresAt,
+		CreatedBy:  adminID,
 	}
 	if err := a.DB.Create(&entry).Error; err != nil {
 		a.Log.Error("create bw entry", zap.Error(err))
@@ -424,13 +439,14 @@ func (a *API) AdminCreateBWEntry(c *gin.Context) {
 	)
 
 	resp.OK(c, gin.H{
-		"id":         entry.ID,
-		"list_type":  entry.ListType,
-		"target":     entry.Target,
-		"reason":     entry.Reason,
-		"expires_at": entry.ExpiresAt,
-		"created_by": entry.CreatedBy,
-		"created_at": entry.CreatedAt,
+		"id":          entry.ID,
+		"list_type":   entry.ListType,
+		"target_type": entry.TargetType,
+		"target":      entry.Target,
+		"reason":      entry.Reason,
+		"expires_at":  entry.ExpiresAt,
+		"created_by":  entry.CreatedBy,
+		"created_at":  entry.CreatedAt,
 	})
 }
 
@@ -466,39 +482,321 @@ func (a *API) AdminDeleteBWEntry(c *gin.Context) {
 	resp.OK(c, nil)
 }
 
+// AdminUpdateBWEntry PUT /api/v1/admin/risk/bw-list/:id
+func (a *API) AdminUpdateBWEntry(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	adminID, _ := middleware.AdminID(c)
+
+	var req struct {
+		ListType   string     `json:"list_type"`
+		TargetType string     `json:"target_type"`
+		Target     string     `json:"target"`
+		Reason     string     `json:"reason"`
+		ExpiresAt  *time.Time `json:"expires_at"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
+	var entry model.BlackWhiteList
+	if err := a.DB.First(&entry, id).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if v := strings.TrimSpace(req.ListType); v != "" {
+		if v != "blacklist" && v != "whitelist" {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+			return
+		}
+		updates["list_type"] = v
+	}
+	if v := strings.TrimSpace(req.TargetType); v != "" {
+		targetTypeValid := map[string]bool{"user": true, "ip": true, "device": true, "content": true}
+		if !targetTypeValid[v] {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+			return
+		}
+		updates["target_type"] = v
+	}
+	if v := strings.TrimSpace(req.Target); v != "" {
+		updates["target"] = v
+	}
+	if v := strings.TrimSpace(req.Reason); v != "" {
+		updates["reason"] = v
+	}
+	if req.ExpiresAt != nil {
+		updates["expires_at"] = req.ExpiresAt
+	}
+
+	if len(updates) > 0 {
+		if err := a.DB.Model(&entry).Updates(updates).Error; err != nil {
+			a.Log.Error("update bw entry", zap.Error(err))
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+	}
+
+	a.Log.Info("admin updated bw entry",
+		zap.Uint64("entry_id", id),
+		zap.Uint64("admin_id", adminID),
+	)
+
+	a.DB.First(&entry, id)
+	resp.OK(c, gin.H{
+		"id":          entry.ID,
+		"list_type":   entry.ListType,
+		"target_type": entry.TargetType,
+		"target":      entry.Target,
+		"reason":      entry.Reason,
+		"expires_at":  entry.ExpiresAt,
+		"created_by":  entry.CreatedBy,
+		"created_at":  entry.CreatedAt,
+	})
+}
+
 // ─── P0: 风控执行引擎 ───
 
-// ScanContentRisk checks text against all enabled risk rules and logs hits.
+// ScanContentRisk checks text against all enabled risk rules, black/white lists,
+// and executes corresponding actions. Returns true if the content should be blocked.
 func (a *API) ScanContentRisk(targetType string, targetID uint64, text string) bool {
-	if text == "" { return false }
+	if text == "" {
+		return false
+	}
+
+	// 1. Resolve owner user ID for black/white list lookups.
+	ownerID := a.resolveContentOwner(targetType, targetID)
+
+	// 2. Check whitelist — whitelisted users bypass ALL rules.
+	if ownerID > 0 && a.isWhitelisted(ownerID) {
+		return false
+	}
+
+	// 3. Check blacklist — if owner is blacklisted, apply blocking action immediately.
+	if ownerID > 0 && a.isBlacklisted(ownerID) {
+		a.DB.Create(&model.RiskHitLog{
+			RuleID: 0, RuleName: "blacklist",
+			TargetID: targetID, TargetType: targetType,
+			MatchText: text[:min(len(text), 200)], Action: "reject",
+		})
+		a.notifyRiskHit(targetType, targetID, "黑名单规则", "reject")
+		return true
+	}
+
+	// 4. Load enabled rules ordered by priority.
 	var rules []model.RiskRule
 	if err := a.DB.Where("enabled = 1").Order("priority DESC").Find(&rules).Error; err != nil {
 		return false
 	}
+
+	// 5. Compile regex patterns once (cache keyed by rule ID).
+	regexCache := make(map[uint64]*regexp.Regexp)
+
 	blocked := false
 	for _, r := range rules {
-		if r.Pattern == "" { continue }
-		matched := strings.Contains(strings.ToLower(text), strings.ToLower(r.Pattern))
-		if !matched { continue }
+		if r.Pattern == "" {
+			continue
+		}
+
+		matched := false
+
+		switch r.Category {
+		case "rate_limit":
+			matched = a.checkRateLimit(r, ownerID)
+		default:
+			// keyword / behavior / device_fingerprint — all use pattern matching
+			matched = a.matchPattern(r, text, regexCache)
+		}
+
+		if !matched {
+			continue
+		}
+
+		// Log the hit.
 		a.DB.Create(&model.RiskHitLog{
 			RuleID: r.ID, RuleName: r.Name,
 			TargetID: targetID, TargetType: targetType,
 			MatchText: text[:min(len(text), 200)], Action: r.Action,
 		})
-		if r.Action == "reject" || r.Action == "auto_ban" {
-			a.notifyRiskHit(targetType, targetID, r.Name, r.Action)
+
+		switch r.Action {
+		case "reject":
+			a.notifyRiskHit(targetType, targetID, r.Name, "reject")
 			blocked = true
-		}
-		if r.Action == "quarantine" && targetType == "comment" {
-			a.DB.Model(&model.Comment{}).Where("id = ?", targetID).Update("approved", false)
+		case "auto_ban":
+			a.notifyRiskHit(targetType, targetID, r.Name, "auto_ban")
+			if ownerID > 0 {
+				a.banUser(ownerID, r.Name, time.Duration(r.DurationSec)*time.Second)
+			}
+			blocked = true
+		case "quarantine":
+			if targetType == "comment" {
+				a.DB.Model(&model.Comment{}).Where("id = ?", targetID).Update("approved", false)
+			}
+			if targetType == "article_comment" {
+				a.DB.Model(&model.ArticleComment{}).Where("id = ?", targetID).Update("approved", false)
+			}
+			if targetType == "dynamic_comment" {
+				a.DB.Model(&model.DynamicComment{}).Where("id = ?", targetID).Update("approved", false)
+			}
 			a.notifyRiskHit(targetType, targetID, r.Name, "quarantine")
-		}
-		// notify_admin: push alert to connected admin Dashboards
-		if r.Action == "notify_admin" {
+		case "notify_admin":
 			a.notifyAdminRiskAlert(r.Name, text[:min(len(text), 100)], targetType, targetID)
 		}
 	}
 	return blocked
+}
+
+// matchPattern determines whether a rule's pattern matches the given text.
+// Patterns delimited by / are treated as regex; otherwise plain substring.
+func (a *API) matchPattern(r model.RiskRule, text string, cache map[uint64]*regexp.Regexp) bool {
+	pattern := strings.TrimSpace(r.Pattern)
+	if len(pattern) >= 2 && pattern[0] == '/' && pattern[len(pattern)-1] == '/' {
+		// Regex pattern: /pattern/
+		expr := pattern[1 : len(pattern)-1]
+		re, ok := cache[r.ID]
+		if !ok {
+			var err error
+			re, err = regexp.Compile("(?i)" + expr)
+			if err != nil {
+				// Fall back to substring match on the raw expression.
+				return strings.Contains(strings.ToLower(text), strings.ToLower(expr))
+			}
+			cache[r.ID] = re
+		}
+		return re.MatchString(text)
+	}
+	// Plain substring match (case-insensitive).
+	return strings.Contains(strings.ToLower(text), strings.ToLower(pattern))
+}
+
+// checkRateLimit checks whether the user has exceeded the rate limit defined by the rule.
+// Pattern format: {"max_count": 5, "window_sec": 3600}
+func (a *API) checkRateLimit(r model.RiskRule, userID uint64) bool {
+	if userID == 0 {
+		return false
+	}
+
+	type rateConfig struct {
+		MaxCount  int `json:"max_count"`
+		WindowSec int `json:"window_sec"`
+	}
+	var cfg rateConfig
+	if err := json.Unmarshal([]byte(r.Pattern), &cfg); err != nil {
+		return false
+	}
+	if cfg.MaxCount <= 0 || cfg.WindowSec <= 0 {
+		return false
+	}
+
+	windowDur := time.Duration(cfg.WindowSec) * time.Second
+	now := time.Now()
+	windowStart := now.Add(-windowDur)
+
+	// Count actions in the current window.
+	var count int64
+	a.DB.Model(&model.RiskHitLog{}).
+		Where("rule_id = ? AND target_id = ? AND created_at >= ?", r.ID, userID, windowStart).
+		Count(&count)
+
+	return int(count) >= cfg.MaxCount
+}
+
+// resolveContentOwner resolves the owner user ID for a given content target.
+func (a *API) resolveContentOwner(targetType string, targetID uint64) uint64 {
+	switch targetType {
+	case "comment":
+		var c model.Comment
+		if err := a.DB.Select("user_id").First(&c, targetID).Error; err == nil {
+			return c.UserID
+		}
+	case "article_comment":
+		var ac model.ArticleComment
+		if err := a.DB.Select("user_id").First(&ac, targetID).Error; err == nil {
+			return ac.UserID
+		}
+	case "dynamic_comment":
+		var dc model.DynamicComment
+		if err := a.DB.Select("user_id").First(&dc, targetID).Error; err == nil {
+			return dc.UserID
+		}
+	case "video":
+		var v model.Video
+		if err := a.DB.Select("user_id").First(&v, targetID).Error; err == nil {
+			return v.UserID
+		}
+	case "danmaku":
+		var d model.Danmaku
+		if err := a.DB.Select("user_id").First(&d, targetID).Error; err == nil {
+			return d.UserID
+		}
+	}
+	return 0
+}
+
+// isWhitelisted returns true if the user is in the whitelist and not expired.
+func (a *API) isWhitelisted(userID uint64) bool {
+	var count int64
+	a.DB.Model(&model.BlackWhiteList{}).
+		Where("list_type = 'whitelist' AND target_type = 'user' AND target = ?", strconv.FormatUint(userID, 10)).
+		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
+		Count(&count)
+	return count > 0
+}
+
+// isBlacklisted returns true if the user is in the blacklist and not expired.
+func (a *API) isBlacklisted(userID uint64) bool {
+	var count int64
+	a.DB.Model(&model.BlackWhiteList{}).
+		Where("list_type = 'blacklist' AND target_type = 'user' AND target = ?", strconv.FormatUint(userID, 10)).
+		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
+		Count(&count)
+	return count > 0
+}
+
+// banUser sets the user status to banned with optional expiry.
+func (a *API) banUser(userID uint64, reason string, duration time.Duration) {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":        "banned",
+		"banned_at":     now,
+		"banned_reason": reason,
+	}
+	if duration > 0 {
+		exp := now.Add(duration)
+		updates["ban_expires_at"] = exp
+	} else {
+		updates["ban_expires_at"] = nil // permanent
+	}
+	if err := a.DB.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+		a.Log.Error("ban user failed", zap.Uint64("user_id", userID), zap.Error(err))
+		return
+	}
+	a.Log.Info("user banned by risk engine",
+		zap.Uint64("user_id", userID),
+		zap.String("reason", reason),
+		zap.Duration("duration", duration),
+	)
+}
+
+// CleanExpiredBWEntries removes expired black/white list entries.
+func (a *API) CleanExpiredBWEntries() error {
+	res := a.DB.Where("expires_at IS NOT NULL AND expires_at <= ?", time.Now()).
+		Delete(&model.BlackWhiteList{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		a.Log.Info("cleaned expired bw-list entries", zap.Int64("count", res.RowsAffected))
+	}
+	return nil
 }
 
 // notifyRiskHit sends a notification to the content creator when risk hits.

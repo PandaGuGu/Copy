@@ -249,6 +249,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		riskOps.POST("/risk/rules/:id/toggle", a.AdminToggleRiskRule)
 		riskOps.GET("/risk/bw-list", a.AdminListBWList)
 		riskOps.POST("/risk/bw-list", a.AdminCreateBWEntry)
+		riskOps.PUT("/risk/bw-list/:id", a.AdminUpdateBWEntry)
 		riskOps.DELETE("/risk/bw-list/:id", a.AdminDeleteBWEntry)
 		riskOps.GET("/risk/hits", a.AdminListRiskHitLogs)
 		riskOps.GET("/risk/stats", a.AdminGetRiskStats)
