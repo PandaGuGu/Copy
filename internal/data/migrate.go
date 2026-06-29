@@ -669,6 +669,14 @@ func ensurePlaybackAndCommentColumns(db *gorm.DB, lg *zap.Logger) error {
 				}
 			}
 		}
+		if !m.HasColumn(&model.UserDynamic{}, "Type") {
+			if err := m.AddColumn(&model.UserDynamic{}, "Type"); err != nil {
+				return err
+			}
+			// 回填：有图片 → image，无图片 → text
+			_ = db.Model(&model.UserDynamic{}).Where("images_json IS NULL OR images_json = '' OR images_json = '[]'").Update("type", "text").Error
+			_ = db.Model(&model.UserDynamic{}).Where("type = '' OR type IS NULL").Update("type", "image").Error
+		}
 	}
 	if m.HasTable(&model.DynamicComment{}) {
 		for _, col := range []string{"Approved", "CuratedIgnored"} {
