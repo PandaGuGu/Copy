@@ -565,8 +565,8 @@ go test -tags=integration ./internal/handler/... -count=1
     <td align="center"><b>首页导航 · 历史悬浮窗</b><br><img src="docs/images/nav-history-popover.png" alt="历史悬浮窗" width="400"/></td>
   </tr>
   <tr>
-    <td align="center"><b>直播广场</b><br><img src="docs/images/live-room-list.png" alt="直播广场" width="400"/></td>
-    <td align="center"><b>直播间（弹幕 + 礼物 + 聊天）</b><br><img src="docs/images/video-player.png" alt="直播间" width="400"/></td>
+    <td align="center"><b>直播广场</b><br><img src="docs/images/live-square-page.png" alt="直播广场" width="400"/></td>
+    <td align="center"><b>直播间（弹幕 + 礼物 + 聊天）</b><br><img src="docs/images/live-room-viewer.png" alt="直播间" width="400"/></td>
   </tr>
 </table>
 
