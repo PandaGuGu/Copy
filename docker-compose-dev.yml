@@ -66,6 +66,7 @@ services:
     env_file:
       - .env
     environment:
+      - APP_ENV=${APP_ENV:-development}
       - HTTP_ADDR=:8080
       - MYSQL_DSN=${MYSQL_USER:-minibili}:${MYSQL_PASSWORD:-cakecake123}@tcp(mysql:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local
       - REDIS_ADDR=redis:6379
@@ -96,6 +97,12 @@ services:
       - ./logs:/app/logs
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       mysql:
         condition: service_healthy
@@ -115,6 +122,12 @@ services:
       - uploads_data:/usr/share/nginx/html/uploads:ro
     ports:
       - "${FRONTEND_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - backend
     networks:

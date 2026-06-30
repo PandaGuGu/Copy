@@ -16,7 +16,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o mini-bili ./cmd/mini-b
 # ─── Stage 2: Runtime ───
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates ffmpeg tzdata
+RUN apk add --no-cache ca-certificates ffmpeg tzdata curl
+
+# Create non-root user
+RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -D appuser
 
 WORKDIR /app
 
@@ -26,8 +29,10 @@ COPY --from=builder /build/mini-bili .
 # Runtime config files
 COPY configs/ ./configs/
 
-# Create writable directories
-RUN mkdir -p /app/data/tmp /app/logs
+# Create writable directories & set ownership
+RUN mkdir -p /app/data/tmp /app/logs && chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8080
 

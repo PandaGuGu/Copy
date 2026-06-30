@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
@@ -9,8 +10,9 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// NewDB opens MySQL and runs AutoMigrate (Skill S-002).
-func NewDB(dsn string, lg *zap.Logger) (*gorm.DB, error) {
+// NewDB opens MySQL and optionally runs AutoMigrate (Skill S-002).
+// AutoMigrate is automatically skipped when APP_ENV is not "development".
+func NewDB(dsn string, lg *zap.Logger, appEnv string) (*gorm.DB, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("MYSQL_DSN is empty")
 	}
@@ -20,8 +22,18 @@ func NewDB(dsn string, lg *zap.Logger) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := AutoMigrateAll(db, lg); err != nil {
-		return nil, err
+
+	// SAFETY: AutoMigrate modifies schema automatically — only safe for local
+	// development. In staging/production, use explicit versioned migrations
+	// (e.g. golang-migrate / goose) instead.
+	if strings.ToLower(strings.TrimSpace(appEnv)) == "development" {
+		if err := AutoMigrateAll(db, lg); err != nil {
+			return nil, err
+		}
+	} else {
+		lg.Info("skipping AutoMigrate: APP_ENV is not development; use explicit migrations for this environment",
+			zap.String("app_env", appEnv),
+		)
 	}
 	return db, nil
 }
