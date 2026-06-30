@@ -37,6 +37,11 @@ configs/ip2region_v4.xdb
 .idea/
 .vscode/
 .cursor/
+.claude/
+.codebuddy/
+.workbuddy/
+.playwright/
+.playwright-cli/
 *.log
 *.swp
 *.swo
