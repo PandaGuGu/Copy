@@ -329,9 +329,6 @@ docker compose up -d
     <td align="center"><b>直播广场</b><br><img src="docs/images/live-square-page.png" alt="直播广场" width="400"/></td>
     <td align="center"><b>直播间（弹幕 + 礼物 + 聊天）</b><br><img src="docs/images/live-room-viewer.png" alt="直播间" width="400"/></td>
   </tr>
-    <td align="center"><b>历史记录</b><br><img src="docs/images/history-page.png" alt="历史记录" width="400"/></td>
-    <td align="center"><b>直播 · 弹幕 + 礼物 + 聊天</b><br><img src="docs/images/live-room-viewer.png" alt="直播间" width="400"/></td>
-  </tr>
 </table>
 
 ---
