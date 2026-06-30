@@ -69,6 +69,17 @@
 
 86 张数据表，15 个业务模块，GORM AutoMigrate 首次启动自动建表。
 
+### 数据库架构总览
+
+<table>
+  <tr>
+    <td align="center"><b>核心模块（upper）</b><br><img src="docs/images/db-arch-bento-top.png" alt="数据库架构-上" width="600"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>扩展模块（lower）</b><br><img src="docs/images/db-arch-bento-bottom.png" alt="数据库架构-下" width="600"/></td>
+  </tr>
+</table>
+
 ### E-R 图
 
 | E-R 图 | 说明 |
@@ -260,14 +271,21 @@ docker compose up -d
 
 ## 数据流
 
-| 流程 | 图示 | 详述 |
-|------|------|------|
-| 视频上传与转码 | — | 用户上传 → FFmpeg 转码 → OSS → 发布 |
-| 弹幕实时推送 | — | WebSocket → 5s冷却 + 敏感词 → 广播 |
-| 私信 | — | 创建会话 → INSERT → WS 推送 → 未读计数 |
-| 硬币投币 | — | INSERT coins → UPDATE balance → INSERT ledger（事务） |
-| 直播推流 | — | OBS RTMP → SRS 回调 → flv.js 播放 → WS 聊天 |
-| 风控检测 | — | 白名单→黑名单→keyword/regex/rate→Action 分流 |
+<table>
+  <tr>
+    <td align="center"><b>Context Diagram（顶层）</b><br><img src="docs/images/dataflow-context.png" alt="顶层数据流图" width="500"/></td>
+    <td align="center"><b>Level-0 FFD（分解）</b><br><img src="docs/images/dataflow-level0.png" alt="0层数据流图" width="500"/></td>
+  </tr>
+</table>
+
+| 流程 | 详述 |
+|------|------|
+| 视频上传与转码 | 用户上传 → FFmpeg 转码 → OSS → 发布 |
+| 弹幕实时推送 | WebSocket → 5s冷却 + 敏感词 → 广播 |
+| 私信 | 创建会话 → INSERT → WS 推送 → 未读计数 |
+| 硬币投币 | INSERT coins → UPDATE balance → INSERT ledger（事务） |
+| 直播推流 | OBS RTMP → SRS 回调 → flv.js 播放 → WS 聊天 |
+| 风控检测 | 白名单→黑名单→keyword/regex/rate→Action 分流 |
 
 > 完整数据流图、架构详图、算法细节见 [bmad-output/architecture.md](./bmad-output/architecture.md)。
 
@@ -304,6 +322,13 @@ docker compose up -d
     <td align="center"><b>运营后台 BI</b><br><img src="docs/images/admin-bi.png" alt="运营后台BI" width="400"/></td>
   </tr>
   <tr>
+    <td align="center"><b>历史记录</b><br><img src="docs/images/history-page.png" alt="历史记录" width="400"/></td>
+    <td align="center"><b>导航 · 历史悬浮窗</b><br><img src="docs/images/nav-history-popover.png" alt="历史悬浮窗" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>直播广场</b><br><img src="docs/images/live-square-page.png" alt="直播广场" width="400"/></td>
+    <td align="center"><b>直播间（弹幕 + 礼物 + 聊天）</b><br><img src="docs/images/live-room-viewer.png" alt="直播间" width="400"/></td>
+  </tr>
     <td align="center"><b>历史记录</b><br><img src="docs/images/history-page.png" alt="历史记录" width="400"/></td>
     <td align="center"><b>直播 · 弹幕 + 礼物 + 聊天</b><br><img src="docs/images/live-room-viewer.png" alt="直播间" width="400"/></td>
   </tr>
