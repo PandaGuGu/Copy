@@ -18,6 +18,7 @@ import (
 	"minibili/internal/ffmpeg"
 	"minibili/internal/handler"
 	"minibili/internal/logger"
+	"minibili/internal/model"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/sensitive"
@@ -159,6 +160,31 @@ func main() {
 				db.Exec("UPDATE tickets SET priority = 'urgent' WHERE status = 'open' AND updated_at < ?", time.Now().Add(-2*time.Hour))
 				// open > 48h → auto close
 				db.Exec("UPDATE tickets SET status = 'closed' WHERE status = 'open' AND updated_at < ?", time.Now().Add(-48*time.Hour))
+			}
+		}
+	}()
+
+	// P0: Risk cleanup — expire bw-list & unbans every 60s
+	riskAPI := &handler.API{Dependencies: &handler.Dependencies{DB: db, Log: log}}
+	go func() {
+		t := time.NewTicker(60 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done(): return
+			case <-t.C:
+				if err := riskAPI.CleanExpiredBWEntries(); err != nil {
+					log.Warn("risk clean bw-list", zap.Error(err))
+				}
+				// Unban users whose ban has expired
+				res := db.Model(&model.User{}).
+					Where("status = 'banned' AND ban_expires_at IS NOT NULL AND ban_expires_at <= ?", time.Now()).
+					Updates(map[string]interface{}{"status": "active", "banned_at": nil, "banned_reason": ""})
+				if res.Error != nil {
+					log.Warn("risk unban expired", zap.Error(res.Error))
+				} else if res.RowsAffected > 0 {
+					log.Info("risk unban expired users", zap.Int64("count", res.RowsAffected))
+				}
 			}
 		}
 	}()

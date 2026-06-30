@@ -54,7 +54,8 @@ const GROUPS = [
     { name:"adminHotSearch", label:"热搜运营",    perm:"hotsearch:manage" },
     { name:"adminSpecialManage", label:"专题活动", perm:"special:manage" },
     { name:"adminDynamicManage", label:"动态管理", perm:"dynamic:manage" },
-    { name:"adminSubtitleManage", label:"字幕管理", perm:"subtitle:manage" }
+    { name:"adminSubtitleManage", label:"字幕管理", perm:"subtitle:manage" },
+    { name:"adminPlayerAdvanced", label:"播放器高级", perm:"video:approve" }
   ]},
   { key:"audit", title:"审核", items:[
     { name:"adminVideoReview", label:"视频审核",      perm:"video:approve" },
