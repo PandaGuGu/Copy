@@ -1,3 +1,11 @@
+// Package handler contains HTTP handlers for the REST API.
+//
+// File naming convention:
+//   admin_*.go  — 运营后台 handler（需 Admin JWT + RBAC 权限）
+//   *_test.go   — 测试
+//   其余 *.go    — 用户端 / 公开端点 handler
+//
+// Root-level files (router.go, deps.go, ws.go, health.go) are shared infrastructure.
 package handler
 
 import (
