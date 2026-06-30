@@ -235,7 +235,11 @@ func (a *API) UploadVideo(c *gin.Context) {
 		return
 	}
 	// P0: 风控扫描视频标题+简介
-	a.ScanContentRisk("video", v.ID, v.Title+" "+v.Description)
+	if a.ScanContentRisk("video", v.ID, v.Title+" "+v.Description) {
+		_ = a.DB.Delete(&v).Error
+		resp.Err(c, http.StatusForbidden, errcode.CodeParamError)
+		return
+	}
 
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)

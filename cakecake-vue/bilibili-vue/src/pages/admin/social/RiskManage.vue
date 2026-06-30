@@ -116,8 +116,8 @@
           <el-select v-model="ruleForm.category" style="width: 100%">
             <el-option label="关键词匹配" value="keyword" />
             <el-option label="频率限制" value="rate_limit" />
-            <el-option label="设备指纹" value="device_fingerprint" />
-            <el-option label="行为分析" value="behavior" />
+            <el-option label="设备指纹（即将上线）" value="device_fingerprint" />
+            <el-option label="行为分析（即将上线）" value="behavior" />
           </el-select>
         </el-form-item>
         <el-form-item label="规则类型">

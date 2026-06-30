@@ -20,6 +20,10 @@
           <el-option label="文章评论" value="article" />
           <el-option label="动态评论" value="dynamic" />
         </el-select>
+        <el-select v-model="filterStatus" placeholder="审核状态" clearable size="default" style="width:110px" @change="search">
+          <el-option label="全部状态" value="" />
+          <el-option label="待审" value="pending" />
+        </el-select>
         <el-input
           v-model="filterQ"
           placeholder="搜索评论内容..."
@@ -119,6 +123,7 @@ export default {
       page: 1,
       pageSize: 20,
       filterType: "",
+      filterStatus: "",
       filterQ: "",
       detail: null,
       detailVisible: false,
@@ -135,6 +140,7 @@ export default {
           page: this.page,
           page_size: this.pageSize,
           type: this.filterType || undefined,
+          status: this.filterStatus || undefined,
           q: this.filterQ || undefined,
         });
         const d = (body && body.data) || {};

@@ -68,6 +68,7 @@ func (a *API) AdminListComments(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	q := strings.TrimSpace(c.Query("q"))
 	typ := strings.TrimSpace(c.Query("type")) // video / article / dynamic / empty=all
+	status := strings.TrimSpace(c.Query("status")) // pending / approved / empty=all
 
 	if page < 1 {
 		page = 1
@@ -87,6 +88,11 @@ func (a *API) AdminListComments(c *gin.Context) {
 	if doVideo {
 		var comments []model.Comment
 		tx := a.DB.Model(&model.Comment{})
+		if status == "pending" {
+			tx = tx.Where("approved = ?", false)
+		} else if status == "approved" {
+			tx = tx.Where("approved = ?", true)
+		}
 		if q != "" {
 			like := "%" + q + "%"
 			tx = tx.Where("content LIKE ?", like)
@@ -112,6 +118,11 @@ func (a *API) AdminListComments(c *gin.Context) {
 	if doArticle {
 		var comments []model.ArticleComment
 		tx := a.DB.Model(&model.ArticleComment{})
+		if status == "pending" {
+			tx = tx.Where("approved = ?", false)
+		} else if status == "approved" {
+			tx = tx.Where("approved = ?", true)
+		}
 		if q != "" {
 			like := "%" + q + "%"
 			tx = tx.Where("content LIKE ?", like)
@@ -137,6 +148,11 @@ func (a *API) AdminListComments(c *gin.Context) {
 	if doDynamic {
 		var comments []model.DynamicComment
 		tx := a.DB.Model(&model.DynamicComment{})
+		if status == "pending" {
+			tx = tx.Where("approved = ?", false)
+		} else if status == "approved" {
+			tx = tx.Where("approved = ?", true)
+		}
 		if q != "" {
 			like := "%" + q + "%"
 			tx = tx.Where("content LIKE ?", like)

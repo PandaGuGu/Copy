@@ -493,6 +493,12 @@ const routes = [
         meta: { title: "字幕管理 - 运营后台", perm: "subtitle:manage" }
       },
       {
+        path: "player-advanced",
+        name: "adminPlayerAdvanced",
+        component: () => import("@/pages/admin/media/PlayerAdvanced.vue"),
+        meta: { title: "播放器高级 - 运营后台", perm: "video:approve" }
+      },
+      {
         path: "specials",
         name: "adminSpecialManage",
         component: () => import("@/pages/admin/content/SpecialManage.vue"),
