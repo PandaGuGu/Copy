@@ -40,7 +40,18 @@ configs/ip2region_v4.xdb
 *.log
 *.swp
 *.swo
+.vite/
 
 # ── Air live-reload temp ──
 tmp/
 nul
+
+# ── Crash dumps & build artifacts（勿提交）──
+erl_crash.dump
+*.dump
+mini-bili.exe.bak
+*.exe.bak
+mini-bili.exe~
+compiled-index.txt
+snapshot.txt
+*.bak
