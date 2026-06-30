@@ -354,5 +354,6 @@ docker compose up -d
 ## 其他
 
 - 勿提交 `.env`、密钥与数据库密码。
+- `.gitignore` 只拦截未跟踪文件，已入库的不会自动忽略；提交前 `git status` 确认无意外大文件/二进制。
 - 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
 - 后端基于 [earthcake2233/cakecake](https://github.com/earthcake2233) 二次开发，遵循开源协议。
