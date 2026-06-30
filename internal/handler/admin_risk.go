@@ -679,6 +679,7 @@ func (a *API) matchPattern(r model.RiskRule, text string, cache map[uint64]*rege
 
 // checkRateLimit checks whether the user has exceeded the rate limit defined by the rule.
 // Pattern format: {"max_count": 5, "window_sec": 3600}
+// Uses risk_rate_counters table for accurate per-window tracking.
 func (a *API) checkRateLimit(r model.RiskRule, userID uint64) bool {
 	if userID == 0 {
 		return false
@@ -698,15 +699,32 @@ func (a *API) checkRateLimit(r model.RiskRule, userID uint64) bool {
 
 	windowDur := time.Duration(cfg.WindowSec) * time.Second
 	now := time.Now()
-	windowStart := now.Add(-windowDur)
 
-	// Count actions in the current window.
-	var count int64
-	a.DB.Model(&model.RiskHitLog{}).
-		Where("rule_id = ? AND target_id = ? AND created_at >= ?", r.ID, userID, windowStart).
-		Count(&count)
+	// Find or create counter for this rule+user in current window
+	var counter model.RiskRateCounter
+	err := a.DB.Where("rule_id = ? AND user_id = ? AND window_start <= ?", r.ID, userID, now).
+		Order("window_start DESC").
+		First(&counter).Error
 
-	return int(count) >= cfg.MaxCount
+	if err != nil || counter.WindowStart.Add(windowDur).Before(now) {
+		// Start new window
+		windowStart := now.Truncate(windowDur)
+		counter = model.RiskRateCounter{
+			RuleID:      r.ID,
+			UserID:      userID,
+			WindowStart: windowStart,
+			Count:       0,
+		}
+		a.DB.Create(&counter)
+	}
+
+	if counter.Count >= cfg.MaxCount {
+		return true
+	}
+
+	// Increment
+	a.DB.Model(&counter).Update("count", counter.Count+1)
+	return false
 }
 
 // resolveContentOwner resolves the owner user ID for a given content target.

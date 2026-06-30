@@ -1,7 +1,7 @@
 # 运营后台 & 23 模块扩展状态
 
-> 最后更新：2026-06-29
-> 状态：统一动态视图上线 + UserDynamic Type 字段新增
+> 最后更新：2026-06-30
+> 状态：23模块前端全部补完
 
 ---
 
@@ -22,11 +22,11 @@
 
 | # | 模块 | 后端 | 前端 | 文件 |
 |---|------|------|------|------|
-| 2 | 播放器高级 | ✅ | 🟡 | `admin_player.go` / `feed.go` |
-| 3 | 字幕管理 | ✅ | 🟡 | `subtitle.go` |
-| 4 | 评论增强 | ✅ | 🟡 | `comment_enhance.go` |
+| 2 | 播放器高级 | ✅ | ✅ | `admin_player.go` / `PlayerAdvanced.vue` |
+| 3 | 字幕管理 | ✅ | ✅ | `subtitle.go` / `SubtitleManage.vue` |
+| 4 | 评论增强 | ✅ | ✅ | `comment_enhance.go` / ReportManage(举报) + 用户侧(图片评论) |
 | 5 | 创作者中心 | ✅ | ✅ | `creator_center.go` |
-| 7 | Feed推荐 | ✅ | 🟡 | `feed.go` |
+| 7 | Feed推荐 | ✅ | ✅ | `feed.go` — 公开只读API（推荐流/排行榜/订阅） |
 | 13 | 工单系统 | ✅ | ✅ | `admin_ticket.go` / `TicketManage.vue` |
 | 14 | 风控管理 | ✅ | ✅ | `admin_risk.go` / `RiskManage.vue` — 引擎重写：黑白名单+正则+频率限制+auto_ban真封号 |
 | 15 | 版权管理 | ✅ | ✅ | `admin_copyright.go` / `CopyrightManage.vue` |
