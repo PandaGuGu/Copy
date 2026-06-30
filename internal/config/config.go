@@ -70,6 +70,15 @@ type C struct {
 	AgentHistoryTTL    time.Duration
 	AgentDailyQuota    int
 	AgentRequestTimeout time.Duration
+
+	// Rate limiting
+	RateLimitEnabled     bool
+	RateLimitGuestMax    int
+	RateLimitUserMax     int
+	RateLimitAdminMax    int
+	RateLimitGuestWindow time.Duration
+	RateLimitUserWindow  time.Duration
+	RateLimitAdminWindow time.Duration
 }
 
 func getenv(key, def string) string {
@@ -168,6 +177,14 @@ func Load() *C {
 		AgentHistoryTTL:    mustParseDuration(os.Getenv("AGENT_HISTORY_TTL"), 30*24*time.Hour),
 		AgentDailyQuota:    atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
+
+		RateLimitEnabled:     parseBoolEnv("RATE_LIMIT_ENABLED", true),
+		RateLimitGuestMax:    atoi(os.Getenv("RATE_LIMIT_GUEST_MAX"), 60),
+		RateLimitUserMax:     atoi(os.Getenv("RATE_LIMIT_USER_MAX"), 300),
+		RateLimitAdminMax:    atoi(os.Getenv("RATE_LIMIT_ADMIN_MAX"), 1000),
+		RateLimitGuestWindow: mustParseDuration(os.Getenv("RATE_LIMIT_GUEST_WINDOW"), 60*time.Second),
+		RateLimitUserWindow:  mustParseDuration(os.Getenv("RATE_LIMIT_USER_WINDOW"), 60*time.Second),
+		RateLimitAdminWindow: mustParseDuration(os.Getenv("RATE_LIMIT_ADMIN_WINDOW"), 60*time.Second),
 	}
 }
 

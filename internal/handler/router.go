@@ -17,6 +17,19 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Use(logger.GinMiddleware(a.Log))
 	r.Use(middleware.TraceRecordMiddleware(a.DB))
 
+	// Rate limiting (after trace, before auth)
+	rlCfg := middleware.DefaultRateLimitConfig()
+	if a.Cfg != nil {
+		rlCfg.Enabled = a.Cfg.RateLimitEnabled
+		rlCfg.GuestMax = a.Cfg.RateLimitGuestMax
+		rlCfg.UserMax = a.Cfg.RateLimitUserMax
+		rlCfg.AdminMax = a.Cfg.RateLimitAdminMax
+		rlCfg.GuestWindow = a.Cfg.RateLimitGuestWindow
+		rlCfg.UserWindow = a.Cfg.RateLimitUserWindow
+		rlCfg.AdminWindow = a.Cfg.RateLimitAdminWindow
+	}
+	r.Use(middleware.RateLimiter(a.Redis, rlCfg))
+
 	r.GET("/api/v1/health", a.Health)
 
 	// ─── NocoBase Bridge: Internal API for NocoBase → Go actions ───
