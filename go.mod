@@ -1,6 +1,6 @@
 module minibili
 
-go 1.24.0
+go 1.22.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.33.0
