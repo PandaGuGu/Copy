@@ -1,17 +1,16 @@
 # ─── Stage 1: Build Go binary ───
-FROM golang:1.24-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
 WORKDIR /build
 
-# Cache dependencies
+# Use vendored dependencies (no network required during build)
 COPY go.mod go.sum ./
-RUN go mod download
-
-# Build
+COPY vendor/ ./vendor/
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o mini-bili ./cmd/mini-bili/
+
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o mini-bili ./cmd/mini-bili/
 
 # ─── Stage 2: Runtime ───
 FROM alpine:3.21
