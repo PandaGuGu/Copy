@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"go.uber.org/zap"
@@ -26,7 +27,9 @@ func NewDB(dsn string, lg *zap.Logger, appEnv string) (*gorm.DB, error) {
 	// SAFETY: AutoMigrate modifies schema automatically — only safe for local
 	// development. In staging/production, use explicit versioned migrations
 	// (e.g. golang-migrate / goose) instead.
-	if strings.ToLower(strings.TrimSpace(appEnv)) == "development" {
+	// Set FORCE_AUTO_MIGRATE=true to run it anyway (e.g. for free-tier deploys).
+	if strings.ToLower(strings.TrimSpace(appEnv)) == "development" ||
+		strings.ToLower(strings.TrimSpace(os.Getenv("FORCE_AUTO_MIGRATE"))) == "true" {
 		if err := AutoMigrateAll(db, lg); err != nil {
 			return nil, err
 		}
