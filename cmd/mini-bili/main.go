@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -282,6 +283,13 @@ func main() {
 	}
 	r := gin.New()
 	r.Use(gin.Recovery())
+
+	// Trust proxy headers (Fly.io / Nginx reverse proxy)
+	if cfg.TrustedProxies != "" {
+		r.SetTrustedProxies(strings.Split(cfg.TrustedProxies, ","))
+	} else if cfg.AppEnv != "development" {
+		r.ForwardedByClientIP = true
+	}
 	handler.RegisterRoutes(r, api, jm)
 
 	go func() {

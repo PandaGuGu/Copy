@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 // NewRedis creates a Redis client with explicit timeouts (Rule R-DEV-5).
 func NewRedis(cfg *config.C) (*redis.Client, error) {
-	rdb := redis.NewClient(&redis.Options{
+	opts := &redis.Options{
 		Addr:         cfg.RedisAddr,
 		Password:     cfg.RedisPassword,
 		DB:           cfg.RedisDB,
@@ -20,7 +21,11 @@ func NewRedis(cfg *config.C) (*redis.Client, error) {
 		ReadTimeout:  cfg.RedisRead,
 		WriteTimeout: cfg.RedisWrite,
 		PoolSize:     cfg.RedisPoolSize,
-	})
+	}
+	if cfg.RedisUseTLS {
+		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	rdb := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RedisDial)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {

@@ -1,0 +1,24 @@
+[build]
+  publish = "cakecake-vue/bilibili-vue/dist"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://YOUR-FLY-APP.fly.dev/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "https://YOUR-R2-BUCKET.r2.cloudflarestorage.com/uploads/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"

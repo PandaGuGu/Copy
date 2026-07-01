@@ -22,6 +22,7 @@ type C struct {
 	RedisRead     time.Duration
 	RedisWrite    time.Duration
 	RedisPoolSize int
+	RedisUseTLS   bool
 
 	RabbitMQURL string
 
@@ -79,6 +80,10 @@ type C struct {
 	RateLimitGuestWindow time.Duration
 	RateLimitUserWindow  time.Duration
 	RateLimitAdminWindow time.Duration
+
+	// Security
+	CORSAllowedOrigins string // comma-separated origins or "*"
+	TrustedProxies     string // comma-separated CIDRs, e.g. "10.0.0.0/8"
 }
 
 func getenv(key, def string) string {
@@ -126,11 +131,19 @@ func parseBoolEnv(key string, def bool) bool {
 	}
 }
 
+// renderHTTPAddr respects Render's PORT env var.
+func renderHTTPAddr() string {
+	if p := os.Getenv("PORT"); p != "" {
+		return "0.0.0.0:" + p
+	}
+	return getenv("HTTP_ADDR", ":8080")
+}
+
 // Load reads configuration from environment variables.
 func Load() *C {
 	return &C{
 		AppEnv:        getenv("APP_ENV", "development"),
-		HTTPAddr:      getenv("HTTP_ADDR", ":8080"),
+		HTTPAddr:      renderHTTPAddr(),
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		MySQLDSN:      os.Getenv("MYSQL_DSN"),
 		RedisAddr:     getenv("REDIS_ADDR", "127.0.0.1:6379"),
@@ -140,6 +153,7 @@ func Load() *C {
 		RedisRead:     mustParseDuration(os.Getenv("REDIS_READ_TIMEOUT"), 3*time.Second),
 		RedisWrite:    mustParseDuration(os.Getenv("REDIS_WRITE_TIMEOUT"), 3*time.Second),
 		RedisPoolSize: atoi(os.Getenv("REDIS_POOL_SIZE"), 20),
+		RedisUseTLS:   parseBoolEnv("REDIS_USE_TLS", false),
 
 		RabbitMQURL: getenv("RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/"),
 
@@ -185,6 +199,9 @@ func Load() *C {
 		RateLimitGuestWindow: mustParseDuration(os.Getenv("RATE_LIMIT_GUEST_WINDOW"), 60*time.Second),
 		RateLimitUserWindow:  mustParseDuration(os.Getenv("RATE_LIMIT_USER_WINDOW"), 60*time.Second),
 		RateLimitAdminWindow: mustParseDuration(os.Getenv("RATE_LIMIT_ADMIN_WINDOW"), 60*time.Second),
+
+		CORSAllowedOrigins: getenv("CORS_ALLOWED_ORIGINS", "*"),
+		TrustedProxies:     os.Getenv("TRUSTED_PROXIES"),
 	}
 }
 

@@ -13,7 +13,8 @@ import (
 
 // RegisterRoutes wires HTTP and WebSocket routes.
 func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
-	r.Use(corsMiddleware)
+	r.Use(corsMiddleware(a))
+	r.Use(securityHeadersMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
 	r.Use(middleware.TraceRecordMiddleware(a.DB))
 
@@ -571,14 +572,31 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Static("/uploads", "./data/uploads")
 }
 
-func corsMiddleware(c *gin.Context) {
-	h := c.Writer.Header()
-	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-	h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-	if c.Request.Method == http.MethodOptions {
-		c.AbortWithStatus(http.StatusNoContent)
-		return
+func corsMiddleware(a *API) gin.HandlerFunc {
+	origin := "*"
+	if a.Cfg != nil && a.Cfg.CORSAllowedOrigins != "" {
+		origin = a.Cfg.CORSAllowedOrigins
 	}
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("Access-Control-Allow-Origin", origin)
+		h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		h.Set("Access-Control-Max-Age", "86400")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
+
+func securityHeadersMiddleware(c *gin.Context) {
+	h := c.Writer.Header()
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("X-XSS-Protection", "1; mode=block")
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 	c.Next()
 }
