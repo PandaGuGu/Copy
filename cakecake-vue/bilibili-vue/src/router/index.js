@@ -320,7 +320,9 @@ const routes = [
     name: "customerService",
     path: "/customer-service",
     component: () => import("@/pages/minibili/CustomerService.vue"),
-    meta: { title: "客服中心 - cakecake", requireMinibiliAuth: true }
+    // 2026-08-17：移除 requireMinibiliAuth —— 客服中心为公开页面（游客可浏览问题类型），
+    // 仅提交工单/在线聊天时由后端 401 兜底提示登录，避免未登录点击被守卫静默弹回首页
+    meta: { title: "客服中心 - cakecake" }
   },
   {
     name: "csChat",
