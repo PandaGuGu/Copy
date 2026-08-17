@@ -6,7 +6,7 @@
       <h1 class="cs-hero__title">需要帮助吗？</h1>
       <p class="cs-hero__sub">选择您遇到的问题类型，我们会尽快处理</p>
       <div class="cs-hero__links">
-        <el-button type="primary" size="default" @click="$router.push('/cs-chat')">
+        <el-button type="primary" size="default" @click="goChat">
           💬 在线客服聊天
         </el-button>
       </div>
@@ -81,32 +81,41 @@
     <div class="cs-my-tickets">
       <h3 class="cs-my-tickets__title">
         我的工单
-        <el-button size="small" text type="primary" @click="fetchMyTickets" :loading="ticketsLoading">刷新</el-button>
+        <el-button v-if="hasSession" size="small" text type="primary" @click="fetchMyTickets" :loading="ticketsLoading">刷新</el-button>
       </h3>
 
-      <div v-if="myTickets.length === 0 && !ticketsLoading" class="cs-empty">
-        <span class="cs-empty__icon">📭</span>
-        <p>还没有提交过工单</p>
+      <!-- 游客态：引导登录（工单按用户存储，无法为游客持久化） -->
+      <div v-if="!hasSession" class="cs-login-hint">
+        <span class="cs-login-hint__icon">🔒</span>
+        <p>工单与你的账号绑定，登录后可查看、提交工单并与客服在线沟通</p>
+        <el-button type="primary" @click="requireLogin">立即登录</el-button>
       </div>
 
-      <div v-else class="cs-ticket-list">
-        <div
-          v-for="t in myTickets"
-          :key="t.id"
-          class="cs-ticket-item"
-          :class="'cs-ticket-item--' + t.status"
-          @click="openTicketDetail(t)"
-        >
-          <div class="cs-ticket-item__left">
-            <span class="cs-ticket-item__id">#{{ t.id }}</span>
-            <span class="cs-ticket-item__subject">{{ t.subject }}</span>
-          </div>
-          <div class="cs-ticket-item__right">
-            <el-tag :type="statusTag(t.status)" size="small">{{ statusLabel(t.status) }}</el-tag>
-            <span class="cs-ticket-item__time">{{ fmtTime(t.created_at) }}</span>
+      <template v-else>
+        <div v-if="myTickets.length === 0 && !ticketsLoading" class="cs-empty">
+          <span class="cs-empty__icon">📭</span>
+          <p>还没有提交过工单</p>
+        </div>
+
+        <div v-else class="cs-ticket-list">
+          <div
+            v-for="t in myTickets"
+            :key="t.id"
+            class="cs-ticket-item"
+            :class="'cs-ticket-item--' + t.status"
+            @click="openTicketDetail(t)"
+          >
+            <div class="cs-ticket-item__left">
+              <span class="cs-ticket-item__id">#{{ t.id }}</span>
+              <span class="cs-ticket-item__subject">{{ t.subject }}</span>
+            </div>
+            <div class="cs-ticket-item__right">
+              <el-tag :type="statusTag(t.status)" size="small">{{ statusLabel(t.status) }}</el-tag>
+              <span class="cs-ticket-item__time">{{ fmtTime(t.created_at) }}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 工单详情弹窗 -->
@@ -184,9 +193,20 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import http from '@/utils/http'
+import {
+  isLoggedIn,
+  getRefreshToken,
+  setMinibiliPostLoginRedirect
+} from '@/utils/authTokens'
+import { openMinibiliLoginModal } from '@/utils/minibiliLoginModal'
+
+const router = useRouter()
+const store = useStore()
 
 const ticketTypes = [
   {
@@ -235,6 +255,39 @@ const form = reactive({
   description: ''
 })
 
+/** 是否有可用会话（access 或 refresh 任一存在；过期续期由 http 层自动兜底） */
+const hasSession = ref(false)
+function syncSession() {
+  hasSession.value = isLoggedIn() || !!getRefreshToken()
+}
+syncSession()
+
+// 登录弹窗关闭（含登录/注册成功）后重新同步登录态并拉取工单
+watch(
+  () => store.state.login.loginShow,
+  (visible, prev) => {
+    if (prev && !visible) {
+      syncSession()
+      if (hasSession.value) fetchMyTickets()
+    }
+  }
+)
+
+/** 未登录引导：打开登录弹窗，登录成功后自动回到本页 */
+function requireLogin() {
+  setMinibiliPostLoginRedirect('/customer-service')
+  openMinibiliLoginModal({ tab: 0, redirect: '/customer-service' })
+}
+
+/** 在线客服聊天：/cs-chat 需登录，未登录先引导 */
+function goChat() {
+  if (!hasSession.value) {
+    requireLogin()
+    return
+  }
+  router.push('/cs-chat')
+}
+
 const rules = {
   subject: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   description: [{ required: true, message: '请输入详情', trigger: 'blur' }]
@@ -263,6 +316,10 @@ function fmtTime(t) {
 }
 
 async function submit() {
+  if (!hasSession.value) {
+    requireLogin()
+    return
+  }
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -294,6 +351,8 @@ async function fetchMyTickets() {
     myTickets.value = res.data.items || []
   } catch {
     myTickets.value = []
+    // 401 且续期失败时 http 层已清 token，这里同步游客态
+    syncSession()
   } finally {
     ticketsLoading.value = false
   }
@@ -349,7 +408,10 @@ async function submitRating(score) {
   }
 }
 
-fetchMyTickets()
+// 游客不拉取个人工单（避免 401 噪音），登录后由 watch 触发加载
+if (hasSession.value) {
+  fetchMyTickets()
+}
 </script>
 
 <style scoped>
@@ -493,6 +555,24 @@ fetchMyTickets()
   font-size: 40px;
   display: block;
   margin-bottom: 8px;
+}
+
+/* 游客态：登录引导 */
+.cs-login-hint {
+  text-align: center;
+  padding: 40px 16px;
+  background: #f6f7f8;
+  border-radius: 12px;
+  color: #61666d;
+}
+.cs-login-hint__icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 8px;
+}
+.cs-login-hint p {
+  margin: 0 0 16px;
+  font-size: 14px;
 }
 .cs-ticket-list {
   display: flex;
