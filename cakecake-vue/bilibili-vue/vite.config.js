@@ -78,7 +78,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
-    base: "./",
+    base: "/",
     resolve: {
       extensions: [".vue", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"],
       alias: {

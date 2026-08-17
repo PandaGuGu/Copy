@@ -15,7 +15,7 @@ const baseURL =
 
 const adminHttp = axios.create({
   baseURL,
-  timeout: 20000
+  timeout: 60000
 });
 
 adminHttp.interceptors.request.use(config => {

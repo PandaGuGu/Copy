@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 import { nextTick } from "vue";
 import { ElMessageBox } from "element-plus";
 import { clearStuckPageOverlays } from "@/utils/clearPageOverlays";
@@ -527,7 +527,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) {

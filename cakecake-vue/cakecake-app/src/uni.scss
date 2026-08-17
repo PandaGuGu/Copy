@@ -1,0 +1,38 @@
+/**
+ * 全局 SCSS 变量
+ * 主色调：B 站粉 #FB7299
+ */
+
+/* uni-app 主题色 */
+$uni-color-primary: #FB7299;
+$uni-color-success: #67C23A;
+$uni-color-warning: #E6A23C;
+$uni-color-error:   #F56C6C;
+
+$uni-text-color:        #303133;
+$uni-text-color-inverse:#FFFFFF;
+$uni-text-color-grey:   #999999;
+$uni-text-color-placeholder: #C0C4CC;
+$uni-text-color-disable: #C0C4CC;
+
+$uni-bg-color:        #FFFFFF;
+$uni-bg-color-grey:   #F8F8F8;
+$uni-bg-color-hover:  #F1F1F1;
+$uni-bg-color-mask:   rgba(0, 0, 0, 0.4);
+
+$uni-border-color:    #EBEEF5;
+
+/* 字号 */
+$uni-font-size-sm:  24rpx;
+$uni-font-size-base: 28rpx;
+$uni-font-size-lg:  32rpx;
+
+/* 自定义变量 */
+$brand-pink:        #FB7299;
+$brand-pink-light:  #FFE4EC;
+$text-primary:      #181818;
+$text-secondary:    #666666;
+$text-tertiary:     #999999;
+$bg-page:           #F8F8F8;
+$bg-card:           #FFFFFF;
+$divider:           #F1F1F1;

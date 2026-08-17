@@ -1,0 +1,128 @@
+#!/bin/bash
+# ============================================================
+# commit-msg hook — 提交信息格式校验
+# 强制使用 Conventional Commits 规范
+#
+# 格式: <type>(<scope>): <description>
+#
+# type 列表:
+#   feat     新功能
+#   fix      修复 Bug
+#   docs     文档变更
+#   style    代码格式（不影响功能）
+#   refactor 重构
+#   perf     性能优化
+#   test     测试相关
+#   build    构建/依赖变更
+#   ci       CI 配置变更
+#   chore    杂项（不修改 src 或 test）
+#   revert   回滚提交
+#   hotfix   紧急修复
+#   wip      开发中（仅限非 main 分支）
+#
+# 示例:
+#   feat(video): 添加弹幕发送功能
+#   fix(auth): 修复 JWT 刷新 Token 过期逻辑
+#   docs(api): 更新 API 文档
+#   refactor(user): 重构用户服务层
+# ============================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file" | head -1)
+
+# ------------------------------------------------------------
+# 合法 type 列表
+# ------------------------------------------------------------
+valid_types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|wip"
+
+# 合法 scope 列表（根据项目实际情况）
+valid_scopes="video|auth|user|comment|danmaku|upload|transcode|admin|api|config|deploy|frontend|backend|db|cache|mq|oss|llm|feed|subtitle|ticket|risk|copyright|bi|cs|ops|rbac|player|creator|report|dynamic|dashboard|settings|llm_config"
+
+# ------------------------------------------------------------
+# 正则校验
+# ------------------------------------------------------------
+# 格式: type(scope): description  或  type: description
+pattern="^(${valid_types})(\((${valid_scopes})\))?!?: .{1,100}$"
+
+# ------------------------------------------------------------
+# 特殊情况：允许 merge / revert / init
+# ------------------------------------------------------------
+if echo "$commit_msg" | grep -qE '^Merge (branch|pull request|remote-tracking)'; then
+    echo -e "${GREEN}[commit-msg] ✓ Merge 提交，跳过校验${NC}"
+    exit 0
+fi
+
+if echo "$commit_msg" | grep -qE '^Revert "' ; then
+    echo -e "${GREEN}[commit-msg] ✓ Revert 提交，跳过校验${NC}"
+    exit 0
+fi
+
+if echo "$commit_msg" | grep -qE '^Initial commit'; then
+    echo -e "${GREEN}[commit-msg] ✓ 初始提交，跳过校验${NC}"
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# 执行校验
+# ------------------------------------------------------------
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+    echo ""
+    echo -e "${RED}[commit-msg] ✗ 提交信息格式不符合规范${NC}"
+    echo ""
+    echo -e "${YELLOW}当前提交信息:${NC}"
+    echo -e "  $commit_msg"
+    echo ""
+    echo -e "${YELLOW}要求格式:${NC}"
+    echo -e "  <type>(<scope>): <description>"
+    echo ""
+    echo -e "${YELLOW}合法 type:${NC}"
+    echo -e "  feat  fix  docs  style  refactor  perf  test"
+    echo -e "  build  ci  chore  revert  hotfix  wip"
+    echo ""
+    echo -e "${YELLOW}合法 scope:${NC}"
+    echo -e "  video auth user comment danmaku upload transcode"
+    echo -e "  admin api config deploy frontend backend db cache"
+    echo -e "  mq oss llm feed subtitle ticket risk copyright bi"
+    echo -e "  cs ops rbac player creator report dynamic"
+    echo -e "  dashboard settings llm_config"
+    echo ""
+    echo -e "${YELLOW}示例:${NC}"
+    echo -e "  feat(video): 添加弹幕发送功能"
+    echo -e "  fix(auth): 修复 JWT 刷新 Token 过期逻辑"
+    echo -e "  docs(api): 更新 API 文档"
+    echo -e "  refactor(user): 重构用户服务层"
+    echo -e "  perf(transcode): 优化转码队列并发性能"
+    echo ""
+    echo -e "${YELLOW}scope 可省略:${NC}"
+    echo -e "  chore: 更新依赖版本"
+    echo ""
+    echo -e "${YELLOW}如需跳过（不推荐）: git commit --no-verify${NC}"
+    echo ""
+    exit 1
+fi
+
+# ------------------------------------------------------------
+# 检查描述长度
+# ------------------------------------------------------------
+desc=$(echo "$commit_msg" | sed -E 's/^([^:]+: )//')
+desc_len=${#desc}
+
+if [ "$desc_len" -lt 5 ]; then
+    echo -e "${RED}[commit-msg] ✗ 描述过短（${desc_len} 字符），至少 5 个字符${NC}"
+    exit 1
+fi
+
+if [ "$desc_len" -gt 100 ]; then
+    echo -e "${RED}[commit-msg] ✗ 描述过长（${desc_len} 字符），最多 100 个字符${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[commit-msg] ✓ 提交信息格式正确${NC}"
+exit 0

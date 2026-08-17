@@ -1,0 +1,72 @@
+# ============================================================
+# CODEOWNERS — 代码所有者定义
+# 配合 GitHub Branch Protection 使用：
+#   Settings → Branches → main → Require review from Code Owners
+#
+# 格式: <目录/文件模式> <@用户名 / @团队名>
+# 修改该目录下的文件时，对应 owner 会自动被请求 review
+# ============================================================
+
+# ============================================================
+# 全局默认 owner（所有未匹配的文件）
+# ============================================================
+*                           @PandaGuGu
+
+# ============================================================
+# 后端 Go 代码
+# ============================================================
+/cmd/                       @PandaGuGu
+/internal/handler/          @PandaGuGu
+/internal/service/          @PandaGuGu
+/internal/dao/              @PandaGuGu
+/internal/model/            @PandaGuGu
+/internal/middleware/       @PandaGuGu
+/internal/config/           @PandaGuGu
+
+# ============================================================
+# 前端 Vue 代码
+# ============================================================
+/cakecake-vue/              @PandaGuGu
+/cakecake-vue/bilibili-vue/src/views/      @PandaGuGu
+/cakecake-vue/bilibili-vue/src/components/ @PandaGuGu
+/cakecake-vue/bilibili-vue/src/api/        @PandaGuGu
+/cakecake-vue/bilibili-vue/src/router/     @PandaGuGu
+/cakecake-vue/bilibili-vue/src/store/      @PandaGuGu
+
+# ============================================================
+# 基础设施 & 部署（高敏感，需严格 review）
+# ============================================================
+/.github/workflows/         @PandaGuGu
+/.githooks/                 @PandaGuGu
+/deploy/                    @PandaGuGu
+/Dockerfile                 @PandaGuGu
+/docker-compose.yml         @PandaGuGu
+/docker-compose-dev.yml     @PandaGuGu
+
+# ============================================================
+# 配置文件（高敏感）
+# ============================================================
+/configs/                   @PandaGuGu
+/go.mod                     @PandaGuGu
+/go.sum                     @PandaGuGu
+
+# ============================================================
+# 文档（宽松 review）
+# ============================================================
+/docs/                      @PandaGuGu
+/README.md                  @PandaGuGu
+/RULE.md                    @PandaGuGu
+/SPEC.md                    @PandaGuGu
+
+# ============================================================
+# 数据库迁移（高敏感）
+# ============================================================
+# /migrations/               @PandaGuGu
+
+# ============================================================
+# 使用说明：
+# 1. 将 @PandaGuGu 替换为实际的 GitHub 用户名或团队名
+# 2. 新增模块时在对应区域添加 owner
+# 3. 多个 owner 用空格分隔: /path/ @user1 @user2
+# 4. 团队格式: @org/team-name
+# ============================================================

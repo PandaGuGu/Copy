@@ -25,6 +25,25 @@
 
 <script>
 import http from "../../../utils/http";
+import mockPoster from "../../../assets/akari.jpg";
+
+const MOCK_TITLES = [
+  "静态演示 · 春日踏青 Vlog",
+  "静态演示 · 美食探店之旅",
+  "静态演示 · 城市夜景延时摄影",
+  "静态演示 · 装机分享与跑分",
+  "静态演示 · 吉他弹唱翻奏",
+  "静态演示 · 编程学习笔记",
+  "静态演示 · 旅行攻略合集",
+  "静态演示 · 周末露营实录",
+  "静态演示 · 桌面改造记录",
+  "静态演示 · 咖啡拉花教程",
+  "静态演示 · 旧物翻新挑战",
+  "静态演示 · 深夜食堂故事",
+  "静态演示 · 宠物日常合集",
+  "静态演示 · 健身打卡记录",
+  "静态演示 · 手绘插画过程"
+];
 
 export default {
   name: "VideoFeed",
@@ -158,7 +177,19 @@ export default {
 
         this.cursor = (data.next_cursor || "").toString();
       } catch (e) {
-        console.error("加载推荐视频失败", e);
+        console.warn("加载推荐视频失败，使用本地静态数据", e);
+        if (this.isFirstLoad) {
+          const mockItems = this.buildMockVideos();
+          this.baseVideos = mockItems;
+          this.videos = [...mockItems];
+          while (this.videos.length < 15 && this.baseVideos.length > 0) {
+            const copy = this.shuffle([...this.baseVideos]);
+            this.videos = this.videos.concat(copy);
+          }
+          this.videos = this.videos.slice(0, 15);
+          this.isFirstLoad = false;
+          this.loopMode = true;
+        }
       }
       this.loading = false;
       setTimeout(() => { this.loadLock = false; }, 500);
@@ -195,6 +226,16 @@ export default {
         author: v.uploader || "未知UP主",
         play: v.play_count || 0,
       };
+    },
+
+    buildMockVideos() {
+      return Array.from({ length: 15 }, (_, i) => ({
+        aid: 500000 + i,
+        title: MOCK_TITLES[i % MOCK_TITLES.length],
+        pic: mockPoster,
+        author: "本地演示 UP 主",
+        play: 12000 + i * 1314
+      }));
     },
 
     formatPlay(n) {
