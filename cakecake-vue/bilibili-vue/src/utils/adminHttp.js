@@ -37,15 +37,21 @@ async function refreshAdminToken() {
   if (!rt) {
     return false;
   }
-  const res = await axios.post(`${baseURL}/api/v1/admin/auth/refresh`, {
-    refresh_token: rt
-  });
-  const body = res.data;
-  if (!body || body.code !== 0 || !body.data) {
+  try {
+    const res = await axios.post(`${baseURL}/api/v1/admin/auth/refresh`, {
+      refresh_token: rt
+    });
+    const body = res.data;
+    if (!body || body.code !== 0 || !body.data) {
+      return false;
+    }
+    setAdminTokens(body.data.access_token, body.data.refresh_token);
+    return true;
+  } catch (e) {
+    // refresh 本身也可能 401/网络失败 —— 必须吞掉异常，否则外层 await 会抛错
+    // 导致 clearAdminTokens() 与登录页跳转永远执行不到（401 死循环）
     return false;
   }
-  setAdminTokens(body.data.access_token, body.data.refresh_token);
-  return true;
 }
 
 adminHttp.interceptors.response.use(
@@ -67,7 +73,7 @@ adminHttp.interceptors.response.use(
           refreshPromise = null;
         });
       }
-      const ok = await refreshPromise;
+      const ok = await refreshPromise.catch(() => false);
       if (ok) {
         cfg._adminRetry = true;
         cfg.headers = cfg.headers || {};
@@ -76,7 +82,8 @@ adminHttp.interceptors.response.use(
       }
       clearAdminTokens();
       if (typeof window !== "undefined") {
-        window.location.hash = "#/admin/login";
+        // 路由为 history 模式（createWebHistory），hash 跳转无效，必须用 href 整页跳转
+        window.location.href = "/admin/login";
       }
     }
     const msg =
