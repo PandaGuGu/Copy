@@ -92,6 +92,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		pub.GET("/feed/recommendation", a.GetRecommendationFeed)
 		pub.GET("/leaderboard", a.GetLeaderboard)
 		pub.GET("/zones/:zone/recommendation", a.GetZoneRecommendation)
+		pub.GET("/zones", a.ListZones) // 移动端全部分区页：分区列表（含视频数）
 		// Module 21: Feature flag check (public)
 		pub.GET("/config/feature-flags/:key", a.AdminCheckFeatureFlag)
 		// Module 9: Special pages (public)
@@ -410,6 +411,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.PUT("/users/me/follow-groups/:groupId", a.UpdateFollowGroup)
 		authd.DELETE("/users/me/follow-groups/:groupId", a.DeleteFollowGroup)
 		authd.GET("/users/me/following/:followeeId/groups", a.ListFolloweeGroupIDs)
+		authd.GET("/users/me/followings", a.ListMyFollowing)               // 移动端关注页：我的关注列表
+		authd.GET("/dynamics/following", a.ListFollowingDynamics)          // 移动端关注页：关注动态流
 		authd.POST("/users/me/follow-groups/:groupId/members", a.AddFollowGroupMember)
 		authd.DELETE("/users/me/follow-groups/:groupId/members/:followeeId", a.RemoveFollowGroupMember)
 		authd.PUT("/users/me/password", a.UpdateMePassword)

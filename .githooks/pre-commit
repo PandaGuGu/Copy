@@ -1,0 +1,201 @@
+#!/bin/bash
+# ============================================================
+# pre-commit hook — 提交前拦截
+# 检查项：
+#   1. 敏感信息扫描（token / 密钥 / 密码硬编码）
+#   2. Go 代码静态检查（go vet）
+#   3. 调试代码扫描（fmt.Println 残留）
+#   4. 大文件检查（防止误提交二进制/视频）
+# ============================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+fail_count=0
+
+echo -e "${YELLOW}[pre-commit] 开始检查...${NC}"
+
+# ------------------------------------------------------------
+# 1. 敏感信息扫描
+# ------------------------------------------------------------
+scan_secrets() {
+    local staged_files
+    staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -vE '^vendor/' || true)
+
+    if [ -z "$staged_files" ]; then
+        return 0
+    fi
+
+    # 敏感信息正则模式
+    local patterns=(
+        'ghp_[0-9a-zA-Z]{36}'           # GitHub Personal Access Token
+        'gho_[0-9a-zA-Z]{36}'           # GitHub OAuth Token
+        'github_pat_[0-9a-zA-Z_]{82}'   # GitHub Fine-grained PAT
+        'AIza[0-9A-Za-z\-_]{35}'        # Google API Key
+        'sk-[0-9a-zA-Z]{48}'            # OpenAI API Key
+        'AKIA[0-9A-Z]{16}'              # AWS Access Key
+        '-----BEGIN (RSA |EC |)PRIVATE KEY-----'  # Private Key
+        'password\s*[:=]\s*["\x27][^"\x27]{6,}'   # password = "xxx"
+        'secret\s*[:=]\s*["\x27][^"\x27]{6,}'     # secret = "xxx"
+    )
+
+    local pattern_names=(
+        "GitHub Token (ghp_)"
+        "GitHub OAuth Token (gho_)"
+        "GitHub Fine-grained PAT"
+        "Google API Key"
+        "OpenAI API Key"
+        "AWS Access Key"
+        "Private Key"
+        "硬编码密码 (password=)"
+        "硬编码密钥 (secret=)"
+    )
+
+    local found=0
+    while IFS= read -r file; do
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        # 跳过 .env.example 和文档中的示例
+        if echo "$file" | grep -qE '\.env\.example$|\.env\.production\.example$|README|GUIDE|\.md$'; then
+            continue
+        fi
+
+        local content
+        content=$(git diff --cached -- "$file" 2>/dev/null || true)
+        # 只检查新增行（+ 开头）
+        local added_lines
+        added_lines=$(echo "$content" | grep '^[+-]' | grep '^\+' || true)
+
+        for i in "${!patterns[@]}"; do
+            if echo "$added_lines" | grep -qE "${patterns[$i]}" 2>/dev/null; then
+                echo -e "${RED}  [敏感信息] ${pattern_names[$i]}${NC}"
+                echo -e "${RED}    文件: $file${NC}"
+                echo -e "${RED}    匹配: $(echo "$added_lines" | grep -oE "${patterns[$i]}" | head -1)${NC}"
+                found=1
+                fail_count=$((fail_count + 1))
+            fi
+        done
+    done <<< "$staged_files"
+
+    if [ $found -eq 0 ]; then
+        echo -e "  ${GREEN}✓ 敏感信息扫描通过${NC}"
+    fi
+}
+
+# ------------------------------------------------------------
+# 2. Go 代码静态检查
+# ------------------------------------------------------------
+check_go_vet() {
+    local has_go
+    has_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/' || true)
+
+    if [ -z "$has_go" ]; then
+        return 0
+    fi
+
+    if ! command -v go &>/dev/null; then
+        echo -e "  ${YELLOW}⚠ go 命令不可用，跳过 go vet${NC}"
+        return 0
+    fi
+
+    local vet_output
+    vet_output=$(go vet ./... 2>&1 || true)
+
+    if [ -n "$vet_output" ]; then
+        echo -e "${RED}  [go vet] 发现问题:${NC}"
+        echo "$vet_output" | head -20 | sed 's/^/    /'
+        fail_count=$((fail_count + 1))
+    else
+        echo -e "  ${GREEN}✓ go vet 通过${NC}"
+    fi
+}
+
+# ------------------------------------------------------------
+# 3. 调试代码扫描（fmt.Println 残留）
+# ------------------------------------------------------------
+check_debug_code() {
+    local staged_go
+    staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/' | grep -v '_test\.go$' || true)
+
+    if [ -z "$staged_go" ]; then
+        return 0
+    fi
+
+    local found=0
+    while IFS= read -r file; do
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        # 只检查新增的行
+        local added
+        added=$(git diff --cached -- "$file" | grep '^\+' | grep -v '^+++' || true)
+
+        if echo "$added" | grep -qE 'fmt\.Println\(' 2>/dev/null; then
+            echo -e "${RED}  [调试代码] fmt.Println 残留: $file${NC}"
+            echo -e "${RED}    规则 R-OBS-1: 严禁使用 fmt.Println 打印日志${NC}"
+            found=1
+            fail_count=$((fail_count + 1))
+        fi
+    done <<< "$staged_go"
+
+    if [ $found -eq 0 ]; then
+        echo -e "  ${GREEN}✓ 调试代码扫描通过${NC}"
+    fi
+}
+
+# ------------------------------------------------------------
+# 4. 大文件检查（> 5MB）
+# ------------------------------------------------------------
+check_large_files() {
+    local max_size=$((5 * 1024 * 1024))  # 5MB
+    local found=0
+
+    while IFS= read -r file; do
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        local size
+        size=$(git diff --cached -- "$file" | grep '^\+' | grep -v '^+++' | wc -c || echo 0)
+        # 检查暂存区文件大小
+        local staged_size
+        staged_size=$(git cat-file -s ":$file" 2>/dev/null || echo 0)
+
+        if [ "$staged_size" -gt "$max_size" ]; then
+            echo -e "${RED}  [大文件] $file (${staged_size} bytes > ${max_size} bytes)${NC}"
+            echo -e "${RED}    请确认是否需要提交，或使用 Git LFS${NC}"
+            found=1
+            fail_count=$((fail_count + 1))
+        fi
+    done < <(git diff --cached --name-only --diff-filter=ACM || true)
+
+    if [ $found -eq 0 ]; then
+        echo -e "  ${GREEN}✓ 大文件检查通过${NC}"
+    fi
+}
+
+# ------------------------------------------------------------
+# 执行所有检查
+# ------------------------------------------------------------
+scan_secrets
+check_go_vet
+check_debug_code
+check_large_files
+
+# ------------------------------------------------------------
+# 汇总
+# ------------------------------------------------------------
+echo ""
+if [ $fail_count -gt 0 ]; then
+    echo -e "${RED}[pre-commit] ✗ 检查未通过，共 ${fail_count} 个问题${NC}"
+    echo -e "${YELLOW}修复后重新 git add + git commit${NC}"
+    echo -e "${YELLOW}如需跳过（不推荐）: git commit --no-verify${NC}"
+    exit 1
+else
+    echo -e "${GREEN}[pre-commit] ✓ 所有检查通过${NC}"
+    exit 0
+fi

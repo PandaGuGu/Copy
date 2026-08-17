@@ -1,0 +1,52 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue"
+    }
+  },
+
+  "pages": [
+    { "path": "pages/index/index",         "style": { "navigationStyle": "custom", "navigationBarTextStyle": "black", "navigationBarTitleText": "首页",    "enablePullDownRefresh": true } },
+    { "path": "pages/categories/index",    "style": { "navigationStyle": "custom", "navigationBarTitleText": "全部分区" } },
+    { "path": "pages/follow/index",        "style": { "navigationStyle": "custom", "navigationBarTitleText": "关注" } },
+    { "path": "pages/mine/index",          "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的" } },
+    { "path": "pages/mall/index",          "style": { "navigationStyle": "custom", "navigationBarTitleText": "会员购" } },
+
+    { "path": "pages/publish/index",       "style": { "navigationStyle": "custom", "navigationBarTitleText": "发布" } },
+    { "path": "pages/video-detail/index",  "style": { "navigationStyle": "custom", "navigationBarTitleText": "视频详情" } },
+    { "path": "pages/search/index",        "style": { "navigationStyle": "custom", "navigationBarTitleText": "搜索" } },
+    { "path": "pages/login/index",         "style": { "navigationStyle": "custom", "navigationBarTitleText": "登录" } },
+    { "path": "pages/my-videos/index",     "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的投稿", "enablePullDownRefresh": true } },
+    { "path": "pages/space/index",         "style": { "navigationStyle": "custom", "navigationBarTitleText": "个人空间", "enablePullDownRefresh": true } },
+    { "path": "pages/notifications/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "消息" } },
+    { "path": "pages/my-dynamics/index",  "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的动态" } },
+    { "path": "pages/dm/index",            "style": { "navigationStyle": "custom", "navigationBarTitleText": "私信" } },
+    { "path": "pages/dm-chat/index",      "style": { "navigationStyle": "custom", "navigationBarTitleText": "会话" } },
+    { "path": "pages/live-room/index",    "style": { "navigationStyle": "custom", "navigationBarTitleText": "直播" } },
+    { "path": "pages/favorites/index",    "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的收藏" } },
+    { "path": "pages/view-history/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "观看历史" } },
+    { "path": "pages/zone/index",         "style": { "navigationStyle": "custom", "navigationBarTitleText": "分区视频", "enablePullDownRefresh": true } }
+  ],
+
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "CakeCake",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F8F8F8"
+  },
+
+  "tabBar": {
+    "custom": true,
+    "color": "#999999",
+    "selectedColor": "#FB7299",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index",      "text": "首页" },
+      { "pagePath": "pages/follow/index",     "text": "关注" },
+      { "pagePath": "pages/mall/index",       "text": "会员购" },
+      { "pagePath": "pages/mine/index",       "text": "我的" }
+    ]
+  }
+}

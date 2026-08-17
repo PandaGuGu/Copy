@@ -31,7 +31,7 @@ const defaultBase = isMinibili ? remoteTrim || "" : remoteTrim || "";
 const service = axios.create({
   withCredentials: false,
   baseURL: defaultBase,
-  timeout: 15000
+  timeout: 60000
 });
 
 function shouldInvalidateMinibiliSession(err) {

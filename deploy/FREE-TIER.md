@@ -2,6 +2,9 @@
 
 > 月费：¥0 | 适用：Demo 展示 / 小范围测试（< 50 DAU）
 >
+> ⚠️ 实际部署已偏离此文档：Fly.io 换 Render，PlanetScale 换 RDS，R2 跳过
+> 真实部署记录：`.workbuddy/memory/2026-07-01.md` | 前端 `stellular-youtiao-b4a40b.netlify.app` | 后端 `cakecake-api.onrender.com`
+>
 > 最后更新：2026-07-01
 
 ---

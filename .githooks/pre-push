@@ -1,0 +1,130 @@
+#!/bin/bash
+# ============================================================
+# pre-push hook — 推送前拦截
+# 检查项：
+#   1. 禁止直接 push 到 main/master 分支
+#   2. Go 编译检查（go build）
+#   3. Go 单元测试（go test）
+#   4. 前端构建检查（可选）
+# ============================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+fail_count=0
+
+echo -e "${YELLOW}[pre-push] 开始推送前检查...${NC}"
+
+# 读取推送的分支信息
+# stdin 格式: <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    remote_branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+
+    # --------------------------------------------------------
+    # 1. 禁止直接 push 到保护分支
+    # --------------------------------------------------------
+    protected_branches="main master release/* prod production"
+
+    for pattern in $protected_branches; do
+        # 支持 glob 匹配（如 release/*）
+        if [[ "$remote_branch" == $pattern ]]; then
+            echo ""
+            echo -e "${RED}[pre-push] ✗ 禁止直接推送到保护分支: $remote_branch${NC}"
+            echo ""
+            echo -e "${YELLOW}正确流程:${NC}"
+            echo -e "  1. git checkout -b feature/your-feature"
+            echo -e "  2. git push origin feature/your-feature"
+            echo -e "  3. 在 GitHub 上创建 Pull Request"
+            echo -e "  4. 通过 Code Review 后合并到 main"
+            echo ""
+            echo -e "${YELLOW}如为紧急修复需强制推送（不推荐）:${NC}"
+            echo -e "  BYPASS_PUSH=1 git push"
+            echo ""
+            fail_count=$((fail_count + 1))
+        fi
+    done
+
+    # --------------------------------------------------------
+    # 2. 检查是否有未合并的 develop 分支变更（提醒）
+    # --------------------------------------------------------
+    if [ "$remote_branch" != "main" ] && [ "$remote_branch" != "master" ]; then
+        echo -e "  ${GREEN}→ 推送分支: $remote_branch${NC}"
+    fi
+done
+
+# 允许通过环境变量绕过（紧急情况）
+if [ "${BYPASS_PUSH:-0}" = "1" ]; then
+    echo -e "${YELLOW}[pre-push] ⚠ BYPASS_PUSH=1，跳过所有检查${NC}"
+    echo -e "${YELLOW}请确保你知道自己在做什么${NC}"
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# 3. Go 编译检查
+# ------------------------------------------------------------
+check_go_build() {
+    if ! command -v go &>/dev/null; then
+        echo -e "  ${YELLOW}⚠ go 命令不可用，跳过编译检查${NC}"
+        return 0
+    fi
+
+    echo -e "  ${YELLOW}→ go build...${NC}"
+    local build_output
+    build_output=$(go build ./... 2>&1 || true)
+
+    if [ -n "$build_output" ]; then
+        echo -e "${RED}  [go build] 编译失败:${NC}"
+        echo "$build_output" | head -30 | sed 's/^/    /'
+        fail_count=$((fail_count + 1))
+    else
+        echo -e "  ${GREEN}✓ go build 通过${NC}"
+    fi
+}
+
+# ------------------------------------------------------------
+# 4. Go 单元测试
+# ------------------------------------------------------------
+check_go_test() {
+    if ! command -v go &>/dev/null; then
+        return 0
+    fi
+
+    echo -e "  ${YELLOW}→ go test...${NC}"
+    local test_output
+    test_output=$(go test ./... -count=1 -timeout 60s 2>&1 || true)
+
+    # 检查是否有 FAIL
+    if echo "$test_output" | grep -q "FAIL"; then
+        echo -e "${RED}  [go test] 测试失败:${NC}"
+        echo "$test_output" | grep -E "FAIL|---" | head -20 | sed 's/^/    /'
+        fail_count=$((fail_count + 1))
+    else
+        echo -e "  ${GREEN}✓ go test 通过${NC}"
+    fi
+}
+
+# 只在有 Go 代码变更时检查
+has_go_changes=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep '\.go$' | grep -v '^vendor/' || true)
+if [ -n "$has_go_changes" ]; then
+    check_go_build
+    check_go_test
+else
+    echo -e "  ${YELLOW}⚠ 无 Go 代码变更，跳过编译/测试检查${NC}"
+fi
+
+# ------------------------------------------------------------
+# 汇总
+# ------------------------------------------------------------
+echo ""
+if [ $fail_count -gt 0 ]; then
+    echo -e "${RED}[pre-push] ✗ 检查未通过，共 ${fail_count} 个问题，推送已阻止${NC}"
+    echo -e "${YELLOW}修复后重新 git push${NC}"
+    exit 1
+else
+    echo -e "${GREEN}[pre-push] ✓ 所有检查通过，允许推送${NC}"
+    exit 0
+fi
