@@ -57,7 +57,7 @@
 
     <!-- 快捷入口 4 个 -->
     <view class="quick-row">
-      <view class="quick-cell" @tap="goService('离线缓存')">
+      <view class="quick-cell" @tap="goOfflineDemo">
         <view class="quick-icon-wrap" style="background: #E1F5EE;">
           <text>📥</text>
         </view>
@@ -239,6 +239,7 @@ function goService(item: { label: string; path?: string }) {
 }
 
 function goPublish()  { uni.navigateTo({ url: '/pages/publish/index' }) }
+function goOfflineDemo() { uni.navigateTo({ url: '/pages/offline-demo/index' }) }
 function goLogin()    { uni.navigateTo({ url: '/pages/login/index' }) }
 function goFavorites() { uni.navigateTo({ url: '/pages/favorites/index' }) }
 function goHistory() { uni.navigateTo({ url: '/pages/view-history/index' }) }

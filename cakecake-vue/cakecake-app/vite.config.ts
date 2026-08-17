@@ -4,7 +4,8 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiBase = env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+  // 代理目标（服务端转发）：显式 VITE_PROXY_TARGET 优先，其次 VITE_API_BASE_URL，最后本地后端
+  const apiBase = env.VITE_PROXY_TARGET || env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
 
   return {
     plugins: [uni()],

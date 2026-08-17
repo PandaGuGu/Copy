@@ -6,7 +6,9 @@ export const bannerApi = {
   async active(): Promise<Banner[]> {
     const data = await request<{ items?: Banner[]; items_legacy?: Banner[]; banners?: Banner[] }>({
       url: '/api/v1/home-banners',
-      method: 'GET'
+      method: 'GET',
+      cacheable: true,
+      cacheTTL: 300
     })
     return data?.items || data?.banners || data?.items_legacy || []
   }

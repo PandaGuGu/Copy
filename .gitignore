@@ -51,6 +51,17 @@ configs/ip2region_v4.xdb
 tmp/
 nul
 
+# ── uni-app 移动端调试残留（勿提交）──
+cakecake-vue/cakecake-app/dist/
+cakecake-vue/cakecake-app/.hbuilderx/
+cakecake-vue/cakecake-app/ui*.xml
+cakecake-vue/cakecake-app/*.cjs
+cakecake-vue/cakecake-app/*.py
+cakecake-vue/cakecake-app/*-qr.png
+cakecake-vue/cakecake-app/phone-screen.png
+cakecake-vue/cakecake-app/offline-demo-*.png
+cakecake-vue/cakecake-app/tab-test*.png
+
 # ── Crash dumps & build artifacts（勿提交）──
 erl_crash.dump
 *.dump
