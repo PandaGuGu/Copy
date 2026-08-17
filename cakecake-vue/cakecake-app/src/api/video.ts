@@ -17,21 +17,27 @@ export interface LeaderboardVideo {
 }
 
 export const videoApi = {
-  /** 推荐流（F17 ItemCF / F14 规则，真实：游标分页） */
+  /** 推荐流（F17 ItemCF / F14 规则，真实：游标分页；支持离线缓存 5 分钟） */
   recommendation(cursor?: string, limit = 20): Promise<CursorPageResp<Video>> {
-    return request({ url: '/api/v1/feed/recommendation', method: 'GET', params: { cursor, limit } })
+    return request({
+      url: '/api/v1/feed/recommendation',
+      method: 'GET',
+      params: { cursor, limit },
+      cacheable: true,
+      cacheTTL: 300
+    })
   },
-  /** 视频列表（与 PC 端 getHomeRecommendPool 完全同源：GET /api/v1/videos?limit=&cursor=） */
+  /** 视频列表（与 PC 端 getHomeRecommendPool 完全同源：GET /api/v1/videos?limit=&cursor=；支持离线缓存） */
   list(cursor?: string, limit = 50): Promise<CursorPageResp<Video>> {
-    return request({ url: '/api/v1/videos', method: 'GET', params: { limit, cursor } })
+    return request({ url: '/api/v1/videos', method: 'GET', params: { limit, cursor }, cacheable: true, cacheTTL: 300 })
   },
   /** 排行榜（真实 GET /leaderboard，返回数组；B站热门榜样式） */
   leaderboard(limit = 50): Promise<LeaderboardVideo[]> {
-    return request({ url: '/api/v1/leaderboard', method: 'GET', params: { limit } })
+    return request({ url: '/api/v1/leaderboard', method: 'GET', params: { limit }, cacheable: true, cacheTTL: 600 })
   },
-  /** 视频详情 */
+  /** 视频详情（支持离线缓存，5 分钟） */
   detail(id: number): Promise<Video> {
-    return request({ url: `/api/v1/videos/${id}`, method: 'GET' })
+    return request({ url: `/api/v1/videos/${id}`, method: 'GET', cacheable: true, cacheTTL: 300 })
   },
   /** 点赞/取消点赞 */
   toggleLike(id: number): Promise<{ liked: boolean; count: number }> {

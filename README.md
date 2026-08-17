@@ -184,10 +184,69 @@ minibili/
 ├── scripts/                   # 工具脚本
 ├── go.mod                     # module minibili
 ├── cakecake-vue/
-│   └── bilibili-vue/          # Vue 3 + Vite 前端（独立依赖隔离）
+│   ├── bilibili-vue/          # Vue 3 + Vite 前端（独立依赖隔离）
+│   └── cakecake-app/          # 移动端 App（uni-app + Vue3 + TS，含本地存储/离线缓存）
 ├── docs/                      # 截图、ER 图、API 文档、部署手册等
 └── bmad-output/               # BMAD 架构分析产出
 ```
+
+---
+
+## 移动端 App（cakecake-app）
+
+uni-app + Vue3 + TypeScript + Pinia 实现的移动端客户端，复用后端 180+ 端点，主色 `#FB7299`（B 站粉）。
+
+```bash
+cd cakecake-vue/cakecake-app
+npm install
+npm run dev:h5        # H5 调试（vite 代理 /api → 后端 8080）
+npm run build:h5      # H5 生产构建 → dist/build/h5
+npx uni build -p app  # App 资源编译 → dist/build/app
+```
+
+### 本地存储三件套（2026-08-17 新增）
+
+| 模块 | 文件 | 能力 |
+|------|------|------|
+| KV 持久化 | `src/utils/storage.ts` | 命名空间 `ckc:` + JSON + TTL 过期；登录态/偏好/草稿 |
+| 结构化数据库 | `src/utils/localDB.ts` | H5 端 IndexedDB（keyPath+autoIncrement 自动回填主键）；非 H5 自动降级 KV；增删改查 + 过滤/排序/分页 |
+| 离线缓存 | `src/utils/cache.ts` | `apiCache`（响应缓存 LRU200+TTL）、`netStatus`（在线监听）、`imgCache`（IndexedDB 存图 Blob） |
+
+- `request.ts` 支持 `{ cacheable, cacheTTL, forceRefresh }`，网络错误自动离线回退缓存
+- banner / 推荐流 / 视频列表 / 详情 / 排行榜已接入缓存
+- **App 端 axios 走 uni.request 原生网络适配器**（WebView XHR 会被混合内容策略拦截 http 明文；原生栈受 manifest `usesCleartextTraffic` 控制）
+- 演示页：「我的」→「离线缓存」（`pages/offline-demo`）
+
+### Android APK 云打包（HBuilderX CLI）
+
+```bash
+cd D:/HBuilderX/HBuilderX
+./cli project open --path <项目路径>                              # 导入项目（--path 不是 --project）
+./cli user login --username <账号> --password <密码>              # CLI 独立登录（GUI 登录态不同步）
+./cli installPlugin --name <插件> --force true                    # 缺插件时手动装
+./cli pack --project <路径> --platform android \
+  --android.packagename com.cakecake.app --android.androidpacktype 3 --ignoreWarnings true
+./cli pack status --project <路径>                                # 查状态 + 拿 APK 下载地址
+```
+
+**要点**：
+- HBuilderX 下载：`https://download1.dcloud.net.cn/download/HBuilderX.<ver>.zip`（**不带** full）
+- 云打包前置：账号需绑定手机号；manifest `appid` 必须真实（dev.dcloud.net.cn 创建）；Android 包名必填
+- 明文 HTTP 必需配置：manifest.json `app-plus.custom_config.config-metadata.androidManifestEditors` 注入 `android:usesCleartextTraffic=true`
+- 免费账号云打包每日限量（约 6 次），迭代期优先用本地 `build:app` + 真机运行验证
+- App 端后端地址：`.env.production` 的 `VITE_API_BASE_URL_APP`（局域网 IP，无 vite 代理）
+
+### 真机调试（adb）
+
+```bash
+D:/platform-tools/adb.exe install -r <apk>        # 覆盖安装
+D:/platform-tools/adb.exe shell am start -n com.cakecake.app/io.dcloud.PandoraEntry
+D:/platform-tools/adb.exe shell uiautomator dump /sdcard/ui.xml && adb pull ...
+D:/platform-tools/adb.exe exec-out screencap -p > screen.png
+```
+
+- 局域网分发：`python -m http.server 8866` 提供 APK 下载 + 二维码
+- 排查套路：手机 shell curl 后端 → 后端日志看请求是否到达 → App 进程 logcat（`pidof` 定位）→ APK 反编译（apktool）查 manifest/baseURL
 
 ---
 

@@ -306,7 +306,7 @@ function goRoom(r: LiveRoom) {
 function goSearch()      { uni.navigateTo({ url: '/pages/search/index' }) }
 function goMessages()    { uni.navigateTo({ url: '/pages/notifications/index' }) }
 function goCategories()  { uni.navigateTo({ url: '/pages/categories/index' }) }
-function goMine()        { uni.switchTab({ url: '/pages/mine/index' }) }
+function goMine()        { uni.reLaunch({ url: '/pages/mine/index' }) }
 function goVideoDetail(id: number) { uni.navigateTo({ url: `/pages/video-detail/index?id=${id}` }) }
 
 function onBannerTap(b: Banner) {

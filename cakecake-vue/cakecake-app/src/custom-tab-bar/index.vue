@@ -37,8 +37,9 @@ const appStore = useAppStore()
 const current = computed(() => appStore.currentTab)
 
 function switchTab(url: string, idx: number) {
+  // 页面未注册 tabBar（tabBar 已完全自定义），switchTab 不可用 → 用 reLaunch 切换
   appStore.currentTab = idx
-  uni.switchTab({ url })
+  uni.reLaunch({ url })
 }
 
 function goPublish() {

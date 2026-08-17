@@ -26,7 +26,8 @@
     { "path": "pages/live-room/index",    "style": { "navigationStyle": "custom", "navigationBarTitleText": "直播" } },
     { "path": "pages/favorites/index",    "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的收藏" } },
     { "path": "pages/view-history/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "观看历史" } },
-    { "path": "pages/zone/index",         "style": { "navigationStyle": "custom", "navigationBarTitleText": "分区视频", "enablePullDownRefresh": true } }
+    { "path": "pages/zone/index",         "style": { "navigationStyle": "custom", "navigationBarTitleText": "分区视频", "enablePullDownRefresh": true } },
+    { "path": "pages/offline-demo/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "本地存储" } }
   ],
 
   "globalStyle": {
@@ -42,11 +43,6 @@
     "selectedColor": "#FB7299",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "black",
-    "list": [
-      { "pagePath": "pages/index/index",      "text": "首页" },
-      { "pagePath": "pages/follow/index",     "text": "关注" },
-      { "pagePath": "pages/mall/index",       "text": "会员购" },
-      { "pagePath": "pages/mine/index",       "text": "我的" }
-    ]
+    "list": []
   }
 }

@@ -1,64 +1,85 @@
 {
-  "name": "CakeCake",
-  "appid": "__UNI__CAKECAKE",
-  "description": "CakeCake 移动客户端（uni-app + Vue3）",
-  "versionName": "0.1.0",
-  "versionCode": "1",
-  "transformPx": false,
-
-  "app-plus": {
-    "usingComponents": true,
-    "nvueStyleCompiler": "uni-app",
-    "compilerVersion": 3,
-    "splashscreen": {
-      "alwaysShowBeforeRender": true,
-      "waiting": true,
-      "autoclose": true,
-      "delay": 0
+    "name" : "CakeCake",
+    "appid" : "__UNI__30895C4",
+    "description" : "CakeCake 移动客户端（uni-app + Vue3）",
+    "versionName" : "0.1.0",
+    "versionCode" : "1",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "nvueStyleCompiler" : "uni-app",
+        "compilerVersion" : 3,
+        "splashscreen" : {
+            "alwaysShowBeforeRender" : true,
+            "waiting" : true,
+            "autoclose" : true,
+            "delay" : 0
+        },
+        "modules" : {},
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.cakecake.app",
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>",
+                    "<uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"/>",
+                    "<uses-permission android:name=\"android.permission.VIBRATE\"/>",
+                    "<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>"
+                ],
+                "minSdkVersion" : 21,
+                "targetSdkVersion" : 30
+            },
+            "ios" : {
+                "dSYMs" : false
+            },
+            "sdkConfigs" : {}
+        },
+        "custom_config" : {
+            "config-metadata" : {
+                "androidManifestEditors" : [
+                    {
+                        "type" : "application",
+                        "data" : [
+                            {
+                                "name" : "android:usesCleartextTraffic",
+                                "value" : "true"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
     },
-    "modules": {},
-    "distribute": {
-      "android": {
-        "permissions": [
-          "<uses-permission android:name=\"android.permission.INTERNET\"/>",
-          "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
-          "<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\"/>",
-          "<uses-permission android:name=\"android.permission.CAMERA\"/>",
-          "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>",
-          "<uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"/>",
-          "<uses-permission android:name=\"android.permission.VIBRATE\"/>",
-          "<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>"
-        ],
-        "minSdkVersion": 21,
-        "targetSdkVersion": 30
-      },
-      "ios": {},
-      "sdkConfigs": {}
+    "quickapp" : {},
+    "mp-weixin" : {
+        "appid" : "",
+        "setting" : {
+            "urlCheck" : false,
+            "es6" : true
+        },
+        "usingComponents" : true
+    },
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "vueVersion" : "3",
+    "h5" : {
+        "title" : "CakeCake",
+        "router" : {
+            "mode" : "hash",
+            "base" : "./"
+        },
+        "devServer" : {
+            "https" : false,
+            "port" : 5173
+        },
+        "optimization" : {
+            "treeShaking" : {
+                "enable" : true
+            }
+        }
     }
-  },
-
-  "quickapp": {},
-  "mp-weixin": {
-    "appid": "",
-    "setting": { "urlCheck": false, "es6": true },
-    "usingComponents": true
-  },
-
-  "uniStatistics": { "enable": false },
-  "vueVersion": "3",
-
-  "h5": {
-    "title": "CakeCake",
-    "router": {
-      "mode": "hash",
-      "base": "./"
-    },
-    "devServer": {
-      "https": false,
-      "port": 5173
-    },
-    "optimization": {
-      "treeShaking": { "enable": true }
-    }
-  }
 }
