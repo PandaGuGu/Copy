@@ -1,0 +1,50 @@
+# TruffleHog exclude paths — 正则表达式（每行一条）
+# .gitignore 用 glob 语法（如 *.exe），TruffleHog 需要 regex，直接用 .gitignore 会报错
+
+# Secrets & env
+\.env
+\.env\.
+
+# Binaries & build artifacts
+/bin/
+/mini-bili
+\.exe$
+\.exe~$
+\.exe\.bak$
+\.dump$
+\.bak$
+
+# Dependencies
+node_modules/
+vendor/
+
+# Frontend build output
+/dist/
+dist\.zip$
+
+# Runtime / upload data
+/data/
+
+# Large databases
+ip2region.*\.xdb$
+
+# IDE / OS / logs
+\.DS_Store
+\.idea/
+\.vscode/
+\.cursor/
+\.claude/
+\.codebuddy/
+\.workbuddy/
+\.playwright
+\.vite/
+\.log$
+\.swp$
+\.swo$
+
+# Crash dumps
+erl_crash\.dump
+
+# Misc temp
+compiled-index\.txt$
+snapshot\.txt$
