@@ -24,9 +24,11 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
 1. 在项目根目录下依次执行：
    ```go
    go mod tidy
-   go build -o ./bin/mini-bili ./cmd/
+   go build -o ./bin/mini-bili ./cmd/mini-bili
    ```
    `go mod tidy` 必须在 `go build` 之前执行，确保 `go.mod` 和 `go.sum` 与当前代码中的 import 一致。
+   > 注：项目含 `vendor/` 目录，依赖变更后须额外执行 `go mod vendor` 同步 vendor（否则 build 仍引用旧 vendor 代码）。
+   > 注：入口为 `./cmd/mini-bili/main.go`，`go build` 必须指向 `./cmd/mini-bili`，写 `./cmd/` 会报 "no Go files"。
 2. 检查编译输出：
    - 若 `go build` 退出码为 0 且无任何 error 级别 stderr 输出 → 编译通过。
    - 若退出码非 0 或有 error 级别输出 → 编译失败。
@@ -550,3 +552,38 @@ if !colorRegex.MatchString(color) {
   <el-table-column ... />
 </AdminDataTable>
 ```
+
+---
+
+### S-018：业务状态机（ADR-018）
+
+**对应架构**：ADR-018、`internal/pkg/statemachine/`
+
+**触发条件**：任何涉及业务状态（status 字段）的写入操作，必须执行本 Skill。
+
+**执行步骤**：
+
+1. 状态写入前调用对应域机器的 `Can(from, to)` 校验：
+   ```go
+   if !statemachine.Video.Can(v.Status, "published") {
+       // 返回 IllegalTransitionError 或业务错误
+   }
+   ```
+2. 已有域：`Video / Article / Ticket / Report / Copyright / ApprovalFlow / ApprovalStep / User`（定义于 `domains.go`）
+3. **新增状态或新增转移**：
+   - 先在 `internal/pkg/statemachine/domains.go` 对应域 `AllowMany(from, to...)` 注册
+   - 同步更新 `statemachine_test.go` 的用例
+   - 严禁直接在业务代码里写裸状态字符串绕过状态机
+4. **新增业务域状态机**：
+   - 在 `domains.go` 定义 `Xxx = New("xxx").AllowMany(...)`
+   - 在 `All()` 注册
+   - 在 `internal/service/state_transition.go` 的 `var` 块导出（如 `XxxMachine`）
+   - 在写状态处调用 `XxxMachine.Can(from, to)`
+5. **时间驱动状态变更**（SLA / 定时发布 / 自动解封等）统一放 `internal/worker/scheduler.go`，每 1min 扫描，走状态机校验后写入
+
+**禁止行为**：
+- 严禁绕过状态机直接 `Updates(map{"status": ...})`（历史遗留点正在收拢，新代码一律禁止）
+- 严禁新增状态不注册到 `domains.go`
+- 严禁修改 `domains.go` 后不同步测试
+
+---

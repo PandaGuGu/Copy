@@ -236,6 +236,8 @@ ES 全文检索（ik 中文分词）
 
 ### 状态管理策略
 
+**业务状态（后端）:** 2026-08-20 起由 `internal/pkg/statemachine` 统一治理（ADR-018）——8 个业务域的合法转移集中定义，散落的裸状态写入逐步收拢为 `machine.Can(from,to)` 校验 + 时间驱动执行器。
+
 **前端状态:** Vuex 4.x 集中式状态管理。
 - **服务端状态:** 管理后台数据通过 API 响应直接消费，不做客户端缓存。
 - **认证状态:** JWT Token 存储在 `localStorage`，通过 Axios 拦截器自动注入 `Authorization` header。
@@ -264,8 +266,9 @@ ES 全文检索（ik 中文分词）
 | ADR-008 | Feature Flag FNV-1a 灰度策略 | 已接受 | NFR-6 | 2026-06-25 |
 | ADR-009 | 审批流多级串行审核 | 已接受 | NFR-3 | 2026-06-25 |
 | ADR-015 | SRS + flv.js 直播技术选型 | **已实施** | FR-050 | 2026-06-28 |
-| ADR-016 | ItemCF 协同过滤推荐引擎 | 部分实施 | NFR-REC-1/2 | 2026-06-28 |
+| ADR-016 | ItemCF 协同过滤推荐引擎 | 部分实施（离线+在线召回已上线，冷启动待补） | NFR-REC-1/2 | 2026-06-28 |
 | ADR-017 | GORM 软删除（Video/Article 等核心实体） | 已接受 | 数据完整性 | 2026-06-28 |
+| ADR-018 | 轻量状态机治理（internal/pkg/statemachine） | 已实施 | 状态一致性/审计 | 2026-08-20 |
 
 ### ADR-001: REST + JSON 信封响应格式
 
@@ -437,19 +440,56 @@ ES 全文检索（ik 中文分词）
 
 ### ADR-016: ItemCF 协同过滤推荐引擎
 
-**状态:** 部分实施（MMR/DPP 重排序已落地，ItemCF 离线计算待上线）
+**状态:** 部分实施（MMR/DPP 重排序 + ItemCF 离线计算 + 在线召回已落地，冷启动提权待补）
 
 **Context（背景）:** SPEC F17 定义。当前在线服务已有 MMR 多样性重排序和四路召回。
 
 **已实施:**
 - 在线服务: `GET /api/v1/feed/recommendation` + 分区推荐 + 订阅源 + 排行榜
 - 重排序: MMR 算法（λ=0.7） + 类目打散 + 频控
-- 四路召回: 热门 + 内容 + 社交 + ItemCF（规划中）
+- 四路召回: 热门 + 内容 + 社交 + **ItemCF**（2026-08-20 落地）
+- 离线计算: `internal/service/itemcf.go` — 7 行为加权（赞1.0/币3.0/藏2.0/看0.5/评1.5/弹1.0）→ Cosine 相似度 → 阈值 0.15 → `video_similarities` 表（清表重建，chunk 2000 批量插入）
+- 调度: `worker/scheduler.go` `scheduleItemCF` — 启动即跑 + 每 24h 重算，`task_logs` 记录
+- 在线召回: `FeedService.itemCFRecall` — 登录用户按最近交互（like/coin/fav）查相似视频，与热池合并后进 MMR
 
 **待实施:**
-- 离线计算: Go 定时任务构建用户-视频交互矩阵（7 种行为加权）
-- Cosine 相似度 → `video_similarities` 表
-- 冷启动策略: 新用户热门兜底，新视频内容相似度提权×2.0
+- 冷启动策略: 新用户热门兜底（已有），新视频内容相似度提权×2.0 未实现
+- 相似度阈值与矩阵规模的自动裁剪（视频量 > 10 万时评估 Embedding 召回，见 §11）
+
+---
+
+### ADR-018: 轻量状态机治理（internal/pkg/statemachine）
+
+**状态:** 已实施（2026-08-20）   **驱动:** 状态一致性 / ADR-006 审计 / 时间驱动变迁
+
+**Context（背景）:** 全平台 10+ 业务域（视频/文章/工单/举报/版权/审批/用户等）的状态流转此前是"隐式状态机"——状态字符串散落 30+ 处、部分写入点无前置校验（如 `failed` 视频可被直接置 `published`）、时间驱动变迁（SLA/定时发布/自动解封）存在"无消费者"缺口（`scheduled_publishes` 有表无执行器、SLA worker 用 `updated_at` 而非 `sla_deadline`）。
+
+**Decision（决策）:**
+- 自研轻量状态机包 `internal/pkg/statemachine`（约 150 行，零第三方依赖）：`Machine{Name, Transitions}` + `Can(from,to)` + `Transition(from,to,actor)`（校验 + 可选 `OnChange` 审计钩子）+ `IllegalTransitionError`
+- 8 个域集中定义：Video / Article / Ticket / Report / Copyright / ApprovalFlow / ApprovalStep / User（见 `domains.go`）
+- 接入范围（2026-08-20）：
+  - `service/video_publish.go` `PublishVideo`：仅 processing/pending_review → published
+  - `service/video_service.go` `Publish/Reject`（原孤儿方法，补前置状态校验）
+  - `worker/transcode.go`：转码成功仅 processing → pending_review/published；失败仅 processing → failed
+  - `handler/admin_ticket.go` `AdminUpdateTicketStatus`：以转移表替代白名单（收紧 open 不得直跳 resolved/closed）
+  - `handler/admin_copyright.go` `AdminTakedownContent`/`AdminRestoreContent`：takedown/restore 前置校验
+  - `handler/admin_article.go` 审核、`handler/admin_rbac.go` 审批流：以状态机检查替代散落 if
+- 时间驱动执行器（`worker/scheduler.go`，每 1min）：
+  - `scheduleScheduledPublishes`：**补齐定时发布消费者**（PublishAt 到期 → draft → processing，原无消费者）
+  - `scheduleSLAEscalation`：按 `sla_deadline` 驱动升级 urgent（替代 main.go 按 updated_at 的旧逻辑；不再自动关单，人工审核优先）
+  - `scheduleAutoUnban`：到期解封走用户状态机（banned → active）
+
+**Consequences（后果）:**
+- 非法转移统一返回 `IllegalTransitionError`，调用方在写库前拦截
+- 状态定义集中一处，新增状态先改 `domains.go`
+- 审计钩子与 ADR-006 对接（OnChange 可写 audit_logs）
+- 未来转移图复杂化时，转移表可 1:1 映射到事件驱动 FSM（looplab/fsm），无需重构业务代码
+
+**替代方案:**
+- **looplab/fsm 等框架:** 事件驱动模型（State+Event+Callback），本项目转移以"操作→状态"线性流为主，框架能力用不上；引入需重写全部写状态点 + 学习成本
+- **维持现状（裸 if）:** 状态散落、非法转移无防护、时间驱动缺失——本次评审判定已失守
+
+**重新审视条件:** 某域出现复杂嵌套流转（如工单 SLA 多级升级 + 审批流嵌套）时，将对应域迁移到事件驱动 FSM。
 
 ---
 
@@ -879,11 +919,11 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 |----|------|------|------|
 | FR-032 | ASR 自动转写 | Worker 预留 `subtitle_asr` 但未实现 Whisper 集成 | 待实施 |
 | FR-031 | 字幕编辑器前端 | 后端就绪，用户端缺字幕时间轴编辑器 UI | 待实施 |
-| FR-035 | 创作者数据中心 | API 就绪（creator_center.go），缺前端独立数据中心页面 | 待实施 |
-| NFR-REL-1 | 每日备份 | 无自动备份脚本 | 待处理 |
-| NFR-REL-2 | 灾难恢复 | 无 DR 方案文档 | 待处理 |
-| NFR-SEC-4 | API 限流 | 未实现 Token Bucket | 推迟 |
-| NFR-REC-2 | ItemCF 离线计算 | 离线矩阵构建+相似度计算未上线 | 待处理 |
+| FR-035 | 创作者数据中心 | API + `CreatorDashboard.vue`（stats/video-stats/7日趋势/稿件表）均已就绪 | ✅ 已完成（2026-08-20 复核） |
+| NFR-REL-1 | 每日备份 | `scripts/backup.sh` 就绪（uploads 冷备 + mysqldump）；定时执行待挂 Windows 计划任务 | 部分实施 |
+| NFR-REL-2 | 灾难恢复 | `migrations/` 基线 + backup.sh 恢复说明 | 部分实施 |
+| NFR-SEC-4 | API 限流 | `ratelimit.go` 滑动窗口 + config 7 项 + 路由接入 + 错误码 42900 全链路落地 | ✅ 已完成（2026-08-20 复核） |
+| NFR-REC-2 | ItemCF 离线计算 | `itemcf.go` 离线计算 + scheduler 每日任务 + feed 在线召回已实现 | 部分实施（冷启动提权待补） |
 
 ---
 
@@ -1137,6 +1177,8 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 2.0 | 2026-06-28 | Winston | 重评估：Service层+WS+ES+组件补全，NFR全面覆盖 |
 | 3.0 | 2026-06-30 | Winston | 审计修正：RefreshToken时长(30d/3d)、RBAC权限(23→23保持一致)、API端点(~190 admin)、模型数(86)、ADR-016状态更新；新增 BI summary/engagement-stats、Dynamic统一端点、LLMProvider；补充风控引擎详述、MMR重排序 |
 | 4.0 | 2026-08-20 | Winston | 文档一致性对齐：§1 补移动端规模；§8 补移动端技术栈；§10 对齐公网通道停用（Render/Netlify/OSS/隧道 8/17 下线 → 本地单点）；§11 路线图标记移动端完成 + 触发条件更新；新增 §12 移动端架构（MD-ADR-001~003） |
+| 4.1 | 2026-08-20 | Winston | 缺口修复落地：ADR-016 状态更新（ItemCF 离线计算 itemcf.go + scheduler + 在线召回）；§7 覆盖缺口复核（NFR-SEC-4 限流与 FR-035 创作者中心标记已完成）；新增 `migrations/` 版本化迁移（DB_MIGRATE_TOOL 开关，零依赖，文件兼容 golang-migrate）；新增 `scripts/backup.sh` 冷备 |
+| 4.2 | 2026-08-20 | Winston | 新增 ADR-018 轻量状态机治理：statemachine 包（8 域）+ 6 域接入（视频/文章/工单/版权/审批）+ 3 时间驱动执行器（定时发布消费者补齐/SLA 按 sla_deadline/自动解封走状态机）；main.go 旧 SLA/unban 逻辑收敛入 scheduler |
 
 
 ---
