@@ -13,9 +13,15 @@
   --divider:           #F1F1F1;
 }
 
-/* 安全区适配 */
-.safe-area-top    { padding-top:    var(--status-bar-height, 0px); }
-.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+/* 安全区适配
+   注意:加 !important 是必须的。各页面 .home-header / .page-header / .top-bar 等
+   组件自身的 padding 简写 (padding: 12rpx 24rpx) 在 vue scoped 编译后会获得
+   [data-v-xxx] 属性选择器,权重 (0,2,0) > 全局 .safe-area-top 的 (0,1,0),
+   会把这里的 padding-top 静默覆盖成 0,导致状态栏穿透到导航栏内容(参看
+   user phone-screen.png 现场)。 !important 在这里属于"安全区适配"硬约束,
+   一处生效即可让 15 个页面同步正确。 */
+.safe-area-top    { padding-top:    var(--status-bar-height, 0px) !important; }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom) !important; }
 
 /* 通用布局工具类 */
 .page-container {
@@ -34,17 +40,18 @@
   overflow: hidden;
 }
 
-/* 视频卡片网格（flex 双列，全端兼容：H5/小程序/App 均可用） */
+/* 视频卡片网格（flex 双列，全端兼容：H5/小程序/App 均可用）
+   左右 padding 4rpx + 卡片 50%：几乎贴边全宽，对齐真实 B 站网格观感 */
 .video-grid {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  padding: 16rpx 24rpx;
-  gap: 16rpx 0;
+  padding: 16rpx 4rpx;
+  gap: 16rpx 2rpx;          /* 列间 2rpx 细缝(用户调参) */
 }
 
 .video-card {
-  width: 48.7%;
+  width: 50%;
   background-color: var(--bg-card);
   border-radius: 12rpx;
   overflow: hidden;

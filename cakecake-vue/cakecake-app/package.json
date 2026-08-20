@@ -6,6 +6,8 @@
   "scripts": {
     "dev:h5": "uni",
     "build:h5": "uni build",
+    "dev:app": "uni -p app",
+    "build:app": "uni build -p app",
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
     "type-check": "vue-tsc --noEmit",

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CakeCake 首页调参器</title>
+<style>
+  :root {
+    --bg: #1e1e2e; --panel: #2a2a3c; --panel2: #33334a; --text: #e8e8f0;
+    --sub: #9a9ab0; --accent: #FB7299; --border: #3d3d55;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header h1 span { color: var(--accent); }
+  header .hint { color: var(--sub); font-size: 12px; margin-left: 14px; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  main { display: flex; gap: 20px; padding: 20px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* 手机预览 */
+  #stage { flex: 1 1 360px; min-width: 320px; display: flex; justify-content: center; }
+  .phone { width: 300px; background: #fff; border-radius: 34px; border: 8px solid #111; box-shadow: 0 18px 50px rgba(0,0,0,.5); overflow: hidden; position: relative; }
+  .phone-screen { width: 100%; background: #fff; font-family: -apple-system, sans-serif; position: relative; }
+
+  /* 状态栏 */
+  .sb { height: 26px; background: #fff; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; font-size: 9px; color: #111; font-weight: 600; position: relative; z-index: 5; }
+  .sb .l, .sb .r { display: flex; gap: 4px; align-items: center; }
+
+  /* 顶部 header */
+  .home-header { display: flex; align-items: center; padding: var(--h-pad-v) var(--h-pad-h); gap: var(--h-gap); background: #fff; }
+  .avatar { width: var(--avatar); height: var(--avatar); border-radius: 50%; background: #F4F4F4; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--avatar) * .55); overflow: hidden; }
+  .search { flex: 1 1 auto; max-width: var(--search-w); min-width: 0; height: var(--search-h); background: #F4F4F4; border-radius: var(--search-r); display: flex; align-items: center; padding: 0 14px; gap: 6px; font-size: 13px; color: #999; }
+  .search .sicon { font-size: 14px; }
+  .actions { display: flex; align-items: center; gap: var(--a-gap); margin-left: auto; flex-shrink: 0; }
+  .game { font-size: var(--game); line-height: 1; }
+  .msg { position: relative; width: var(--env); height: var(--env); display: flex; align-items: center; justify-content: center; }
+  .env { position: relative; width: var(--env); height: calc(var(--env) * .86); }
+  .env .body { position: absolute; left: 0; right: 0; top: calc(var(--env) * .18); bottom: 0; background: #FB7299; border-radius: 2px; }
+  .env .ln { position: absolute; top: calc(var(--env) * .27); width: calc(var(--env) * .48); height: 2px; background: #fff; border-radius: 1px; }
+  .env .ln1 { left: calc(var(--env) * .14); transform: rotate(30deg); }
+  .env .ln2 { right: calc(var(--env) * .14); transform: rotate(-30deg); }
+  .badge { position: absolute; top: -4px; right: -7px; background: #FB7299; color: #fff; font-size: 8px; min-width: 13px; height: 13px; line-height: 13px; text-align: center; border-radius: 7px; padding: 0 3px; border: 1.5px solid #fff; }
+
+  /* tab 栏 */
+  .tabs { display: flex; align-items: center; background: #fff; height: var(--tab-h); border-bottom: 1px solid #F1F1F1; }
+  .tabs .t { padding: 0 12px; font-size: 13px; color: #666; line-height: var(--tab-h); }
+  .tabs .t.on { color: #181818; font-weight: 700; font-size: 15px; }
+  .tabs .more { margin-left: auto; padding: 0 14px; display: flex; flex-direction: column; gap: 4px; }
+  .tabs .more i { width: 16px; height: 2px; background: #181818; }
+
+  /* banner */
+  .banner { height: var(--banner-h); padding: 0 var(--banner-p); margin: 8px 0; position: relative; }
+  .banner .img { width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(120deg, #FB7299, #FF9DB5 45%, #a29bfe); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 600; }
+
+  /* 视频网格 */
+  .grid { display: flex; flex-wrap: wrap; justify-content: space-between; padding: 8px var(--g-pad); gap: var(--g-gap-v) var(--g-gap-h); }
+  .card { width: var(--card-w); background: #fff; border-radius: 6px; overflow: hidden; }
+  .card .cov { width: 100%; height: var(--card-h); background: linear-gradient(135deg, #dfe6e9, #b2bec3 60%, #fab1a0); display: flex; align-items: flex-end; padding: 4px; }
+  .card .cov .dur { background: rgba(0,0,0,.7); color: #fff; font-size: 8px; padding: 1px 4px; border-radius: 2px; }
+  .card .meta { padding: 6px 7px; }
+  .card .t1 { font-size: 11px; color: #181818; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 30px; }
+  .card .t2 { margin-top: 4px; font-size: 9px; color: #999; }
+  .card .t3 { margin-top: 3px; font-size: 9px; color: #999; display: flex; gap: 6px; }
+
+  /* 底部 tabbar */
+  .tabbar { display: flex; background: #fff; border-top: 1px solid #eee; height: 52px; align-items: center; justify-content: space-around; font-size: 10px; color: #999; position: relative; }
+  .tabbar .pi { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .tabbar .pi.on { color: #FB7299; }
+  .tabbar .mid { width: 44px; height: 44px; background: #FB7299; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 24px; margin-top: -18px; box-shadow: 0 4px 10px rgba(251,114,153,.4); }
+
+  /* 控制面板 */
+  #panel { flex: 0 0 320px; background: var(--panel); border-radius: 14px; padding: 16px 18px; max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 80px; }
+  #panel h2 { font-size: 13px; color: var(--accent); margin: 14px 0 4px; font-weight: 700; letter-spacing: .5px; }
+  #panel h2:first-child { margin-top: 0; }
+  .ctl { margin: 8px 0; }
+  .ctl .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+  .ctl .row .val { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .out { margin-top: 12px; }
+  .out textarea { width: 100%; height: 160px; background: #1a1a28; color: #7ee787; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 11px; font-family: Consolas, monospace; resize: vertical; }
+  .out .row2 { display: flex; gap: 8px; margin-top: 8px; }
+  .foot { text-align: center; color: var(--sub); font-size: 11px; padding: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:10px">
+    <h1>CakeCake <span>首页调参器</span></h1>
+    <span class="hint">拖动滑块调整 → 实时预览 → 复制参数 JSON 发给 AI 改代码（单位 rpx / %）</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn ghost" onclick="copyJson()">复制参数 JSON</button>
+    <button class="btn" onclick="resetAll()">恢复当前值</button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <div class="phone">
+      <div class="phone-screen" id="screen">
+        <div class="sb"><span class="l">17:00</span><span class="r">HD 4G 70%</span></div>
+        <div class="home-header">
+          <div class="avatar">👤</div>
+          <div class="search"><span class="sicon">🔍</span><span>美国为何接连发生…</span></div>
+          <div class="actions">
+            <span class="game">🎮</span>
+            <span class="msg"><span class="env"><span class="body"></span><span class="ln ln1"></span><span class="ln ln2"></span></span><span class="badge">3</span></span>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="t">直播</span><span class="t on">推荐</span><span class="t">热门</span><span class="t">动画</span><span class="t">影视</span><span class="t">新人</span>
+          <span class="more"><i></i><i></i><i></i></span>
+        </div>
+        <div class="banner"><div class="img">顶部大图 banner（流动轮播）</div></div>
+        <div class="grid">
+          <div class="card"><div class="cov"><span class="dur">08:25</span></div><div class="meta"><div class="t1">RTX 5090 首发评测：性能翻倍？</div><div class="t2">pandagugu</div><div class="t3"><span>▶ 15.6万</span><span>💬 891</span></div></div></div>
+          <div class="card"><div class="cov"><span class="dur">03:42</span></div><div class="meta"><div class="t1">美国为何接连发生野火灾害？</div><div class="t2">科技观察</div><div class="t3"><span>▶ 8.2万</span><span>💬 326</span></div></div></div>
+          <div class="card"><div class="cov"><span class="dur">12:07</span></div><div class="meta"><div class="t1">新手也能学会的 3 个剪辑技巧</div><div class="t2">UP主小明</div><div class="t3"><span>▶ 3.4万</span><span>💬 128</span></div></div></div>
+          <div class="card"><div class="cov"><span class="dur">05:18</span></div><div class="meta"><div class="t1">周末去哪儿：城市徒步路线分享</div><div class="t2">生活玩家</div><div class="t3"><span>▶ 1.2万</span><span>💬 64</span></div></div></div>
+        </div>
+        <div class="tabbar">
+          <div class="pi on"><span>🏠</span>首页</div>
+          <div class="pi"><span>⭐</span>关注</div>
+          <div class="mid">+</div>
+          <div class="pi"><span>🛍</span>会员购</div>
+          <div class="pi"><span>👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <h2>① 顶部 header</h2>
+    <div class="ctl"><div class="row"><span>状态栏下留白(安全区) px</span><span class="val" id="v-sb">28</span></div><input type="range" id="sb" min="0" max="60" value="28" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>header 垂直 padding</span><span class="val" id="v-hpv">16rpx</span></div><input type="range" id="hpv" min="0" max="40" value="16" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>header 水平 padding</span><span class="val" id="v-hph">24rpx</span></div><input type="range" id="hph" min="0" max="60" value="24" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>头像↔搜索框间距</span><span class="val" id="v-hgap">22rpx</span></div><input type="range" id="hgap" min="0" max="60" value="22" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>头像大小</span><span class="val" id="v-av">84rpx</span></div><input type="range" id="av" min="40" max="120" value="84" oninput="apply()"></div>
+
+    <h2>② 搜索框</h2>
+    <div class="ctl"><div class="row"><span>宽度(占屏)</span><span class="val" id="v-sw">58%</span></div><input type="range" id="sw" min="40" max="80" value="58" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>高度</span><span class="val" id="v-sh">84rpx</span></div><input type="range" id="sh" min="50" max="130" value="84" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>圆角</span><span class="val" id="v-sr">42rpx</span></div><input type="range" id="sr" min="10" max="65" value="42" oninput="apply()"></div>
+
+    <h2>③ 右侧图标</h2>
+    <div class="ctl"><div class="row"><span>游戏图标大小</span><span class="val" id="v-gm">40rpx</span></div><input type="range" id="gm" min="20" max="80" value="40" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>信封大小</span><span class="val" id="v-en">44rpx</span></div><input type="range" id="en" min="20" max="80" value="44" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>游戏↔信封间距</span><span class="val" id="v-ag">28rpx</span></div><input type="range" id="ag" min="0" max="60" value="28" oninput="apply()"></div>
+
+    <h2>④ tab 栏</h2>
+    <div class="ctl"><div class="row"><span>tab 高度</span><span class="val" id="v-tab">80rpx</span></div><input type="range" id="tab" min="50" max="120" value="80" oninput="apply()"></div>
+
+    <h2>⑤ banner</h2>
+    <div class="ctl"><div class="row"><span>高度</span><span class="val" id="v-bh">280rpx</span></div><input type="range" id="bh" min="150" max="420" value="280" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>左右留白</span><span class="val" id="v-bp">8rpx</span></div><input type="range" id="bp" min="0" max="40" value="8" oninput="apply()"></div>
+
+    <h2>⑥ 视频网格</h2>
+    <div class="ctl"><div class="row"><span>卡片列间距</span><span class="val" id="v-gg">12rpx</span></div><input type="range" id="gg" min="0" max="40" value="12" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>网格左右留白</span><span class="val" id="v-gp">4rpx</span></div><input type="range" id="gp" min="0" max="40" value="4" oninput="apply()"></div>
+    <div class="ctl"><div class="row"><span>卡片封面高度</span><span class="val" id="v-ch">220rpx</span></div><input type="range" id="ch" min="150" max="320" value="220" oninput="apply()"></div>
+
+    <div class="out">
+      <textarea id="json" readonly spellcheck="false"></textarea>
+      <div class="row2">
+        <button class="btn" style="flex:1" onclick="copyJson()">复制 JSON</button>
+        <button class="btn ghost" style="flex:1" onclick="resetAll()">恢复当前值</button>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="foot">当前值 = 真机 dev-v7 版实测参数 · 滑块调整后点"复制 JSON"，把 JSON 发给 AI 即可改代码</div>
+
+<script>
+const DEFAULTS = { sb:28, hpv:16, hph:24, hgap:22, av:84, sw:58, sh:84, sr:42, gm:40, en:44, ag:28, tab:80, bh:280, bp:8, gg:12, gp:4, ch:220 };
+const IDS = Object.keys(DEFAULTS);
+function read() { const o = {}; IDS.forEach(k => o[k] = parseInt(document.getElementById(k).value)); return o; }
+function apply() {
+  const p = read();
+  const s = document.getElementById('screen').style;
+  // 状态栏在手机模拟里用 padding-top 模拟 safe-area
+  document.querySelector('.home-header').style.paddingTop = (p.hpv + p.sb) + 'px';
+  s.setProperty('--h-pad-v', p.hpv + 'px');
+  s.setProperty('--h-pad-h', p.hph + 'px');
+  s.setProperty('--h-gap', p.hgap + 'px');
+  s.setProperty('--avatar', p.av + 'px');
+  s.setProperty('--search-w', p.sw + '%');
+  s.setProperty('--search-h', p.sh + 'px');
+  s.setProperty('--search-r', p.sr + 'px');
+  s.setProperty('--game', p.gm + 'px');
+  s.setProperty('--env', p.en + 'px');
+  s.setProperty('--a-gap', p.ag + 'px');
+  s.setProperty('--tab-h', p.tab + 'px');
+  s.setProperty('--banner-h', p.bh + 'px');
+  s.setProperty('--banner-p', p.bp + 'px');
+  s.setProperty('--g-gap-v', '8px');
+  s.setProperty('--g-gap-h', p.gg + 'px');
+  s.setProperty('--g-pad', p.gp + 'px');
+  s.setProperty('--card-w', '50%');
+  s.setProperty('--card-h', p.ch + 'px');
+  // 数值标签
+  const u = { sb:'px', hpv:'rpx', hph:'rpx', hgap:'rpx', av:'rpx', sw:'%', sh:'rpx', sr:'rpx', gm:'rpx', en:'rpx', ag:'rpx', tab:'rpx', bh:'rpx', bp:'rpx', gg:'rpx', gp:'rpx', ch:'rpx' };
+  IDS.forEach(k => document.getElementById('v-' + k).textContent = p[k] + u[k]);
+  renderJson(p);
+}
+function renderJson(p) {
+  const j = {
+    header: {
+      safeAreaTop: p.sb + 'px(运行时注入)',
+      padding: p.hpv + 'rpx ' + p.hph + 'rpx',
+      gap_头像搜索: p.hgap + 'rpx',
+      avatar: p.av + 'rpx'
+    },
+    searchBar: { width: p.sw + '%', height: p.sh + 'rpx', radius: p.sr + 'rpx' },
+    rightIcons: { game: p.gm + 'rpx', envelope: p.en + 'rpx', gap: p.ag + 'rpx' },
+    tabBar: { height: p.tab + 'rpx' },
+    banner: { height: p.bh + 'rpx', padding: '0 ' + p.bp + 'rpx' },
+    videoGrid: { columnGap: p.gg + 'rpx', padding: '16rpx ' + p.gp + 'rpx', cardWidth: '50%', coverHeight: p.ch + 'rpx' }
+  };
+  document.getElementById('json').value = JSON.stringify(j, null, 2);
+}
+function copyJson() { const t = document.getElementById('json'); t.select(); navigator.clipboard.writeText(t.value).then(()=>{ alert('JSON 已复制，发给 AI 即可'); }).catch(()=>{}); }
+function resetAll() { IDS.forEach(k => document.getElementById(k).value = DEFAULTS[k]); apply(); }
+apply();
+</script>
+</body>
+</html>

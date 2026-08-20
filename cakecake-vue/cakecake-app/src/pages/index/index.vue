@@ -12,10 +12,12 @@
       <view class="header-actions">
         <text class="action-icon">🎮</text>
         <view class="msg-btn" @tap="goMessages">
-          <!-- B站风格信封（SVG） -->
-          <svg viewBox="0 0 24 24" class="envelope-svg">
-            <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4.5-8 5.5-8-5.5V6l8 5.5L20 6v2.5z" fill="#FB7299"/>
-          </svg>
+          <!-- B站风格信封：纯 CSS 绘制（App 端 WebView 对 svg/emoji 图标渲染不可靠，CSS 颜色可控、必渲染） -->
+          <view class="envelope-css">
+            <view class="env-body" />
+            <view class="env-line env-line-l" />
+            <view class="env-line env-line-r" />
+          </view>
           <view v-if="unreadTotal > 0" class="msg-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</view>
         </view>
       </view>
@@ -345,70 +347,102 @@ function formatCount(n: number): string {
 .home-header {
   display: flex;
   align-items: center;
-  padding: 12rpx 24rpx;
-  gap: 16rpx;
+  padding: 21rpx 36rpx 21rpx 54rpx;   /* 左端间隙 = 1.5 × 右端(用户示意 1.5*均分) */
+  gap: 0;
   background-color: #FFF;
   border-bottom: 1rpx solid #F1F1F1;
 }
 
-/* 搜索框左侧：账号头像 */
+/* 搜索框左侧：账号头像（左栏 flex:1，内容靠左） */
 .header-avatar {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: #F4F4F4;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 
   .avatar-img {
-    width: 100%;
-    height: 100%;
+    width: 51rpx;
+    height: 51rpx;
+    border-radius: 50%;
     object-fit: cover;
     display: block;
+    background: #F4F4F4;
   }
 }
 
 .search-bar {
-  flex: 1;
-  height: 64rpx;
+  flex: 0 1 auto;
+  width: 50%;            /* 搜索框固定在中央 */
+  max-width: 50%;
+  min-width: 0;
+  height: 54rpx;
   background-color: #F4F4F4;
-  border-radius: 32rpx;
+  border-radius: 42rpx;
   display: flex;
   align-items: center;
-  padding: 0 24rpx;
+  padding: 0 22rpx;
   gap: 12rpx;
   font-size: 24rpx;
   color: #999;
 
-  .search-placeholder { flex: 1; }
-  .search-icon { font-size: 28rpx; }
+  .search-placeholder { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .search-icon { font-size: 26rpx; }
 }
 
 .header-actions {
+  flex: 1.15;            /* 略大于左栏, 补偿左 padding 大导致的搜索框右偏(保持正中) */
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  justify-content: space-evenly;  /* 游戏↔信封之间及右栏两端均分间隙 */
 
   .action-icon {
-    font-size: 40rpx;
+    font-size: 31rpx;
   }
 }
 
 /* B站风格信封消息按钮 + 未读红点 */
 .msg-btn {
   position: relative;
-  width: 48rpx;
-  height: 48rpx;
+  width: 31rpx;
+  height: 31rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+}
 
-  .envelope-svg {
-    width: 48rpx;
-    height: 48rpx;
-    display: block;
+/* 纯 CSS 信封：粉色圆角矩形 + 白色 V 形折线 */
+.envelope-css {
+  position: relative;
+  width: 31rpx;
+  height: 27rpx;
+
+  .env-body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 5rpx;
+    bottom: 0;
+    background: #FB7299;
+    border-radius: 3rpx;
   }
 
+  .env-line {
+    position: absolute;
+    top: 8rpx;
+    width: 15rpx;
+    height: 2rpx;
+    background: #FFF;
+    border-radius: 2rpx;
+    transform-origin: center;
+  }
+
+  .env-line-l { left: 4rpx; transform: rotate(30deg); }
+  .env-line-r { right: 4rpx; transform: rotate(-30deg); }
+}
+
+.msg-btn {
   .msg-badge {
     position: absolute;
     top: -6rpx;
@@ -438,38 +472,38 @@ function formatCount(n: number): string {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
-  height: 80rpx;
+  height: 50rpx;
 
   .tab-item {
     display: inline-block;
-    padding: 0 24rpx;
-    line-height: 80rpx;
-    font-size: 28rpx;
+    padding: 0 20rpx;
+    line-height: 50rpx;
+    font-size: 26rpx;
     color: #666;
     transition: all 0.2s;
 
     &.active {
       color: #181818;
       font-weight: 600;
-      font-size: 32rpx;
+      font-size: 30rpx;
     }
   }
 }
 
 /* 三横杆（更多）按钮 */
 .tab-more {
-  width: 72rpx;
-  height: 80rpx;
+  width: 64rpx;
+  height: 50rpx;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
+  gap: 6rpx;
 
   .line {
-    width: 34rpx;
-    height: 4rpx;
+    width: 30rpx;
+    height: 3rpx;
     border-radius: 2rpx;
     background: #181818;
   }
@@ -490,7 +524,7 @@ function formatCount(n: number): string {
   display: inline-block;
   width: 100%;
   height: 280rpx;
-  padding: 0 24rpx;
+  padding: 0 8rpx;
   box-sizing: border-box;
   vertical-align: top;
 }
