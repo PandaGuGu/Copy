@@ -16,6 +16,7 @@ import (
 	"minibili/internal/model"
 	"minibili/internal/pkg/markdown"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/statemachine"
 	"minibili/internal/service"
 )
 
@@ -169,7 +170,8 @@ func (a *API) AdminApproveArticle(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if art.Status != articleStatusPendingReview {
+	// State machine (ADR-018): only pending_review may be approved.
+	if !statemachine.Article.Can(art.Status, "published") {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -211,7 +213,8 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if art.Status != articleStatusPendingReview {
+	// State machine (ADR-018): only pending_review may be rejected.
+	if !statemachine.Article.Can(art.Status, "rejected") {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

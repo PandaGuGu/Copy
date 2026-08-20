@@ -4,6 +4,7 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/model"
+	"minibili/internal/pkg/statemachine"
 )
 
 // VideoService encapsulates video-domain business rules.
@@ -54,14 +55,33 @@ func (s *VideoService) ListByUser(uid uint64, page, pageSize int) ([]model.Video
 }
 
 // Publish transitions a video from processing/draft to published.
+// Guarded by the video state machine (ADR-018): only processing / pending_review
+// may become published (idempotent when already published).
 func (s *VideoService) Publish(id uint64) error {
+	var v model.Video
+	if err := s.DB.First(&v, id).Error; err != nil {
+		return err
+	}
+	if v.Status == "published" {
+		return nil
+	}
+	if !statemachine.Video.Can(v.Status, "published") {
+		return &statemachine.IllegalTransitionError{Domain: "video", From: v.Status, To: "published"}
+	}
 	return s.DB.Model(&model.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "published",
 	}).Error
 }
 
-// Reject marks a video as rejected.
+// Reject marks a video as rejected (pending_review → rejected only).
 func (s *VideoService) Reject(id uint64) error {
+	var v model.Video
+	if err := s.DB.First(&v, id).Error; err != nil {
+		return err
+	}
+	if !statemachine.Video.Can(v.Status, "rejected") {
+		return &statemachine.IllegalTransitionError{Domain: "video", From: v.Status, To: "rejected"}
+	}
 	return s.DB.Model(&model.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "rejected",
 	}).Error

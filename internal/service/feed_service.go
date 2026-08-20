@@ -70,9 +70,128 @@ type RecommendationResult struct {
 func (fs *FeedService) GetRecommendation(ctx context.Context, uid uint64, limit int) *RecommendationResult {
 	candidates := fs.getCandidates(uid)
 
+	// ItemCF recall: for logged-in users, prepend videos similar to
+	// the ones they interacted with (from offline video_similarities).
+	if uid != 0 {
+		if itemcf := fs.itemCFRecall(ctx, uid, limit); len(itemcf) > 0 {
+			candidates = mergeCandidates(itemcf, candidates)
+		}
+	}
+
 	lambda := fs.getUserLambda(ctx, uid)
 	result := fs.rerank(candidates, limit, lambda)
 	return &RecommendationResult{Items: result}
+}
+
+// itemCFRecall fetches videos similar to the user's recent interactions
+// from the offline-computed video_similarities table (SPEC F17, NFR-REC-2).
+// Falls back to empty when the table is not yet populated (cold start).
+func (fs *FeedService) itemCFRecall(ctx context.Context, uid uint64, limit int) []VideoFeatures {
+	// 1. Gather the user's most recent interacted video IDs (across 3 tables).
+	type idRow struct{ VideoID uint64 }
+	var interacted []uint64
+	seen := make(map[uint64]bool)
+	collect := func(table string) {
+		var rows []idRow
+		if err := fs.DB.WithContext(ctx).Table(table).
+			Select("video_id").
+			Where("user_id = ?", uid).
+			Order("id DESC").
+			Limit(50).Find(&rows).Error; err != nil {
+			return
+		}
+		for _, r := range rows {
+			if !seen[r.VideoID] {
+				seen[r.VideoID] = true
+				interacted = append(interacted, r.VideoID)
+			}
+		}
+	}
+	collect("video_likes")
+	collect("video_coins")
+	collect("video_favorites")
+
+	if len(interacted) == 0 {
+		return nil
+	}
+
+	// 2. Look up similar videos from the offline table.
+	var sims []model.VideoSimilarity
+	if err := fs.DB.WithContext(ctx).
+		Where("video_id IN ?", interacted).
+		Order("score DESC").
+		Limit(limit * 2).Find(&sims).Error; err != nil || len(sims) == 0 {
+		return nil
+	}
+
+	// 3. Resolve candidate videos (published only).
+	similarIDs := make([]uint64, 0, len(sims))
+	simSeen := make(map[uint64]bool)
+	for _, s := range sims {
+		if !simSeen[s.SimilarID] && !seen[s.SimilarID] {
+			simSeen[s.SimilarID] = true
+			similarIDs = append(similarIDs, s.SimilarID)
+		}
+	}
+	if len(similarIDs) == 0 {
+		return nil
+	}
+
+	var videos []model.Video
+	if err := fs.DB.WithContext(ctx).
+		Where("id IN ? AND status = ?", similarIDs, "published").
+		Find(&videos).Error; err != nil || len(videos) == 0 {
+		return nil
+	}
+
+	// Rank by similarity score (sims are already score DESC, preserve order).
+	scoreRank := make(map[uint64]int, len(sims))
+	for i, s := range sims {
+		if _, ok := scoreRank[s.SimilarID]; !ok {
+			scoreRank[s.SimilarID] = i
+		}
+	}
+	byID := make(map[uint64]*model.Video, len(videos))
+	for i := range videos {
+		byID[videos[i].ID] = &videos[i]
+	}
+	ordered := make([]*model.Video, 0, len(videos))
+	for _, sid := range similarIDs {
+		if v, ok := byID[sid]; ok {
+			ordered = append(ordered, v)
+		}
+	}
+	// Secondary sort by similarity rank for stability.
+	for i := 1; i < len(ordered); i++ {
+		for j := i; j > 0 && scoreRank[ordered[j].ID] < scoreRank[ordered[j-1].ID]; j-- {
+			ordered[j], ordered[j-1] = ordered[j-1], ordered[j]
+		}
+	}
+
+	features := make([]VideoFeatures, 0, len(ordered))
+	for _, v := range ordered {
+		features = append(features, ExtractFeatures(v))
+	}
+	return features
+}
+
+// mergeCandidates prepends itemCF candidates to the base pool,
+// deduplicating by video ID (base pool wins on duplicates).
+func mergeCandidates(itemCF, base []VideoFeatures) []VideoFeatures {
+	seen := make(map[uint64]bool, len(base))
+	for _, f := range base {
+		if f.Video != nil {
+			seen[f.Video.ID] = true
+		}
+	}
+	merged := make([]VideoFeatures, 0, len(itemCF)+len(base))
+	for _, f := range itemCF {
+		if f.Video != nil && !seen[f.Video.ID] {
+			seen[f.Video.ID] = true
+			merged = append(merged, f)
+		}
+	}
+	return append(merged, base...)
 }
 
 // GetZoneRecommendation returns diversity-ranked videos within a zone.

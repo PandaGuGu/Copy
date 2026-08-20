@@ -8,10 +8,12 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/model"
+	"minibili/internal/pkg/statemachine"
 	"minibili/internal/search"
 )
 
 // PublishVideo marks a video published and indexes search (post-review or direct publish).
+// Legal source states: processing / pending_review (ADR-018 state machine).
 func PublishVideo(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error {
 	var v model.Video
 	if err := db.First(&v, videoID).Error; err != nil {
@@ -19,6 +21,10 @@ func PublishVideo(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap
 	}
 	if v.Status == "published" {
 		return nil
+	}
+	// State-machine guard: only processing/pending_review may go published.
+	if !statemachine.Video.Can(v.Status, "published") {
+		return &statemachine.IllegalTransitionError{Domain: "video", From: v.Status, To: "published"}
 	}
 	now := time.Now()
 	updates := map[string]any{
