@@ -81,3 +81,6 @@ mini-bili.exe~
 compiled-index.txt
 snapshot.txt
 *.bak
+
+# ── Netlify 本地状态（勿提交）──
+.netlify/state.json
