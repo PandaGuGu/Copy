@@ -75,6 +75,7 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 | WebSocket 通道 | **3** 套（弹幕/私信/直播聊天） |
 | 总路由注册 | **~380** 行 |
 | Vue 3 前端页面 | **24+** 个 admin 页面 + 用户端全栈 |
+| 移动端 App 页面 | **19** 个（uni-app，2026-08 新增，见 §12） |
 
 ### 利益相关者与约束
 
@@ -912,6 +913,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 搜索引擎 | Elasticsearch | 8.x（可选） | ik 中文分词全文搜索 | — |
 | Markdown | bluemonday + goldmark | — | 文章安全渲染 | — |
 | IP 定位 | ip2region | — | IP 归属地查询 | — |
+| 移动端框架 | uni-app + Vue 3 + TS + Pinia | 3.x | 复用现有 180+ 端点；主色 #FB7299；2026-08 立项 | — |
 
 **考虑的替代方案:**
 - **PostgreSQL:** 团队不熟悉，阿里云 MySQL 生态更成熟
@@ -966,7 +968,9 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 - **开发:** Windows 本地 — `go build` + `npm run dev`
 - **容器化:** `docker-compose.yml`（MySQL + Redis + RabbitMQ + SRS + Go后端 + Nginx前端，6 服务）
-- **生产:** 单台 Linux 服务器（阿里云 ECS）— systemd + Nginx
+- **生产（2026-07-01 ~ 08-17 实际形态）:** Render（Go 后端）+ Netlify（前端 SPA）+ 阿里云 RDS（MySQL）+ Upstash（Redis）；Render 冷启动 ~30s，UptimeRobot 保活
+- **生产（2026-08-17 至今，当前现实）:** ⚠️ 公网通道全部停用（Render 后端 / Netlify 前端 / 阿里云 OSS / cloudflared 隧道均过期或下线）→ **回退本地单点**：Windows + MySQL80 本机服务 + Redis Windows 服务 + `mini-bili.exe`（:8080）；移动端真机经 `192.168.1.100:8080` 局域网访问；启动脚本已内置内部连接兜底
+- **目标形态（设计基线，恢复公网时复用）:** 单台 Linux 服务器（阿里云 ECS）— systemd + Nginx，见下方拓扑图
 
 ### 拓扑
 
@@ -1001,6 +1005,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 - **回滚:** 保留上一版本二进制；`systemctl restart` 即可回滚
 - **扩缩容:** 当前单实例，未来水平扩展需引入 Redis session 共享 + MySQL 读写分离
 - **文件存储:** 无需云存储即可运行（本地文件系统 Docker 卷）；配置 `OSS_*` 环境变量后自动切换
+- **公网恢复（待决策）:** 2026-08-17 后公网通道全停，移动端 APK 仅限局域网。恢复方案：重开 Render/Netlify（低成本）或自建 ECS（可控），决策前移动端对外交付受限
 
 ---
 
@@ -1014,7 +1019,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
   ├── P0（当前）: 播放器增强 + 多码率 + 字幕完善 + 合集 + 创作者数据中心
   │   → 播放体验对标 B站"能看"
   │
-  ├── P1: 推荐引擎 + 标签话题 + 认证 + 移动端 + 高级弹幕 + 水印
+  ├── P1: 推荐引擎 + 标签话题 + 认证 + 移动端 ✅ + 高级弹幕 + 水印
   │   → 社区生态对标 B站"好用"
   │   → 并发目标: 500 用户，需水平扩展
   │
@@ -1024,6 +1029,11 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
   └── P3: 电商 + 课堂 + 游戏 + 音频
       → 完整平台对标 B站
 ```
+
+**路线图进度（2026-08-20 更新）:**
+
+- ✅ **P1 移动端已完成**：2026-08-16 立项（`cakecake-vue/cakecake-app/`），2026-08-20 云打包发布 **v0.1.0**（APK 14.8MB，GitHub Release `PandaGuGu/Copy` tag v0.1.0，详见 §12）
+- ⏳ P0 其余项（播放器增强 / 多码率 / 字幕编辑器 / 合集 / 创作者数据中心）与 P1 其余项（推荐引擎 / 标签话题 / 高级弹幕 / 水印）未实施，状态跟踪见 `docs/GAP-TRACKER.md`
 
 ### 重新审视触发条件（汇总自 ADR）
 
@@ -1037,7 +1047,51 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 推荐系统上线 | ADR-016: ItemCF 离线任务每日凌晨重算；相似度阈值 0.15 |
 | 视频量 > 10 万 | ADR-016: ItemCF 矩阵过大 → 升级 Embedding 召回 |
 | 移动端流量 > 20% | 评估独立移动端 SPA 或 PWA |
-| 生产环境部署 | ADR-002: 切换 golang-migrate |
+| 恢复公网生产部署 | ADR-002: 切换 golang-migrate（当前本地单点仍用 AutoMigrate，触发即切换） |
+
+---
+
+## 12. 移动端架构（2026-08 新增）
+
+> 2026-08-16 立项，2026-08-20 云打包发布 v0.1.0。位于 `cakecake-vue/cakecake-app/`，独立 npm 工程，复用现有 Go 后端 180+ 端点（约 90% 移动端需求已覆盖）。
+
+### 12.1 技术栈与结构
+
+| 项 | 选择 | 说明 |
+|----|------|------|
+| 框架 | uni-app + Vue 3 + TypeScript + Vite | CLI 工程（非 HBuilderX 向导工程） |
+| 状态 | Pinia | 与 PC 端 Vuex 4 并存，互不干扰 |
+| UI | uni-ui + 自定义组件 | 主色 #FB7299（B 站粉） |
+| 页面 | 4 个 tab + 19 个二级页面 | tab：首页/关注/会员购/我的，中间 midButton 发布器 |
+| API 层 | `src/api/` 19 个模块 | axios + JWT 401 自动刷新 + `{code,msg,data}` 信封 |
+| 构建 | `npm run build:h5` / `npm run build:app` | H5 → `dist/build/h5/`；App → `dist/build/app/`（www 资源） |
+
+### 12.2 后端地址机制
+
+- **H5 dev**：`VITE_API_BASE_URL=` 空 → axios 相对路径 `/api/` → vite dev 代理 → `VITE_PROXY_TARGET=http://127.0.0.1:8080`
+- **App 原生**：`VITE_API_BASE_URL_APP=http://192.168.1.100:8080`（电脑局域网 IP，真机经此访问）
+- 真机联调：HBuilderX CLI 构建 `uni build -p app` → `adb push` 到基座 `io.dcloud.HBuilder` 的 `www/` 目录 → `monkey` 启动（详见 `.workbuddy/memory/2026-08-17.md` 与 `2026-08-20.md`）
+
+### 12.3 移动端架构决策（MD-ADR）
+
+| ID | 决策 | 理由 |
+|----|------|------|
+| MD-ADR-001 | 复用 Go API，不自建 BFF | 180+ 端点覆盖 90% 需求；1 人团队维护 BFF 是净负担 |
+| MD-ADR-002 | 图标优先纯 CSS 绘制，其次静态 PNG，emoji/svg 不可靠 | HBuilder 基座 WebView 对 emoji/svg/彩色 img 渲染不可靠（8/20 信封图标排查实证） |
+| MD-ADR-003 | 安全区适配：`App.vue` onLaunch 注入 `--status-bar-height` + 全局 `.safe-area-top !important` | uni-app App-vue 页面不自动提供该变量；scoped `padding` 简写权重 (0,2,0) 会静默覆盖全局类 (0,1,0) |
+
+### 12.4 已知平台坑（实测沉淀）
+
+- **`uni-image :src` + swiper**：src binding 不传递到 DOM → 用原生 `scroll-view scroll-x + <img>` 替代（首页 banner 自动轮播）
+- **API 返回 `{items:[...]}` 包装**：前端必须 `.then(d => d.items)` 拆一层
+- **v-if + 长列表时序竞争**：v-if 从 false 变 true 时组件重新挂载，可能出现空 DOM
+- **遍历对象数组 v-for**：模板必须 `item.xxx`，直接 `{{ item }}` 会渲染 JSON 字符串
+
+### 12.5 待补（backlog）
+
+- 移动端专属 API：分片上传 / 推送注册 / 商品下单
+- 弹幕播放器（nvue 或 renderjs）
+- 公网通道恢复（当前仅局域网可用，见 §10）
 
 ---
 
@@ -1082,6 +1136,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 1.2 | 2026-06-28 | Winston | P0 修复：直播纳入范围、数据模型补全 |
 | 2.0 | 2026-06-28 | Winston | 重评估：Service层+WS+ES+组件补全，NFR全面覆盖 |
 | 3.0 | 2026-06-30 | Winston | 审计修正：RefreshToken时长(30d/3d)、RBAC权限(23→23保持一致)、API端点(~190 admin)、模型数(86)、ADR-016状态更新；新增 BI summary/engagement-stats、Dynamic统一端点、LLMProvider；补充风控引擎详述、MMR重排序 |
+| 4.0 | 2026-08-20 | Winston | 文档一致性对齐：§1 补移动端规模；§8 补移动端技术栈；§10 对齐公网通道停用（Render/Netlify/OSS/隧道 8/17 下线 → 本地单点）；§11 路线图标记移动端完成 + 触发条件更新；新增 §12 移动端架构（MD-ADR-001~003） |
 
 
 ---

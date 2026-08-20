@@ -1,5 +1,7 @@
 # Cakecake 项目架构真实性审计报告
 
+> **⚠️ 历史文档（2026-06-28 快照）** — 后续架构变更（移动端 v0.1.0、公网通道停用、LLM Provider 通用化等）见 `bmad-output/architecture.md`（当前 v4.0）与 `docs/GAP-TRACKER.md`。本文档保留作为当时的审计基线。
+>
 > **审计日期**: 2026-06-28  
 > **审计方法**: BMAD Architecture Validate 模式 — 逐项对比 docs/、working_memory 声称 vs 代码实际  
 > **代码扫描范围**: 99 个 Go 源文件 + 48+ Vue 页面 + 17 个 Admin API 模块

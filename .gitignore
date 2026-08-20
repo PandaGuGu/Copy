@@ -60,6 +60,16 @@ cakecake-vue/cakecake-app/*.py
 cakecake-vue/cakecake-app/*-qr.png
 cakecake-vue/cakecake-app/phone-screen.png
 cakecake-vue/cakecake-app/offline-demo-*.png
+
+# ── Python 缓存 ──
+__pycache__/
+*.pyc
+
+# ── OpenCode 工具目录（本地依赖 61MB）──
+.opencode/
+
+# ── APK 安装包（已发 GitHub Release，本地不入库）──
+*.apk
 cakecake-vue/cakecake-app/tab-test*.png
 
 # ── Crash dumps & build artifacts（勿提交）──

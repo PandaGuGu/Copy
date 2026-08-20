@@ -6,6 +6,8 @@
 > 认证方式: `Authorization: Bearer <token>`
 > 所有端点前缀: `/api/v1`
 
+> **移动端接入（2026-08 起）:** 本文档所有端点被移动端 App（`cakecake-vue/cakecake-app/`，uni-app）直接复用，约 90% 移动端需求已覆盖。移动端网络层 `src/utils/request.ts` 已内置 `{code,msg,data}` 信封解包 + JWT 401 自动刷新。注意：部分端点返回 `{items:[...]}` 包装时，前端需自行拆一层。地址机制与平台坑见 `docs/APP.md`。
+
 ---
 
 ## 目录

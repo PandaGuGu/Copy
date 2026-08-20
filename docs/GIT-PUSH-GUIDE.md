@@ -117,10 +117,11 @@ video auth user comment danmaku upload transcode
 admin api config deploy frontend backend db cache
 mq oss llm feed subtitle ticket risk copyright bi
 cs ops rbac player creator report dynamic
-dashboard settings llm_config
+dashboard settings llm_config app
 ```
 
 > scope 可省略：`chore: 更新依赖版本`
+> `app` 为移动端工程（`cakecake-vue/cakecake-app/`），2026-08-20 加入白名单（此前 `feat(app)` 会被 commit-msg hook 拒绝）
 
 ---
 
