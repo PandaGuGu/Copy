@@ -14,6 +14,7 @@ import (
 	"minibili/internal/middleware"
 	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/statemachine"
 )
 
 // ---------- Admin Ticket Endpoints ----------
@@ -462,6 +463,11 @@ func (a *API) AdminUpdateTicketStatus(c *gin.Context) {
 		return
 	}
 	if t.Status == "closed" {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	// State machine (ADR-018): reject illegal jumps (e.g. open -> resolved).
+	if !statemachine.Ticket.Can(t.Status, req.Status) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

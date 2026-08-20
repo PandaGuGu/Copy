@@ -15,6 +15,7 @@ import (
 	"minibili/internal/middleware"
 	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/statemachine"
 )
 
 // ──────────────────────────────────────────────
@@ -674,7 +675,8 @@ func (a *API) AdminApproveFlowStep(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if flow.Status != "pending" {
+	// State machine (ADR-018): only pending flow may be approved.
+	if !statemachine.ApprovalFlow.Can(flow.Status, "approved") {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -747,7 +749,8 @@ func (a *API) AdminRejectFlowStep(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if flow.Status != "pending" {
+	// State machine (ADR-018): only pending flow may be rejected.
+	if !statemachine.ApprovalFlow.Can(flow.Status, "rejected") {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

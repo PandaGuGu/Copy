@@ -185,6 +185,16 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 		"video_url": videoURL,
 		"cover_url": coverURL,
 	}
+	// State machine (ADR-018): only "processing" may leave to pending_review/published.
+	var cur model.Video
+	if err := db.Select("status").First(&cur, job.VideoID).Error; err == nil && cur.Status != "processing" {
+		lg.Warn("transcode done but video not in processing (skipped status change)",
+			zap.Uint64("video_id", job.VideoID), zap.String("status", cur.Status))
+		cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+		finishTaskLog(db, taskLog.ID, "success", "already in "+cur.Status)
+		_ = d.Ack(false)
+		return
+	}
 	if cfg.VideoReviewRequired {
 		updates["status"] = "pending_review"
 	}
@@ -217,6 +227,11 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 	}
 	if msg == "" {
 		msg = "视频处理失败，请稍后重试。"
+	}
+	// State machine (ADR-018): only processing may become failed.
+	var cur model.Video
+	if err := db.Select("status").First(&cur, id).Error; err == nil && cur.Status != "processing" {
+		return
 	}
 	_ = db.Model(&model.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      "failed",

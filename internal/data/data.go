@@ -38,5 +38,11 @@ func NewDB(dsn string, lg *zap.Logger, appEnv string) (*gorm.DB, error) {
 			zap.String("app_env", appEnv),
 		)
 	}
+
+	// Versioned migrations (P0-3): runs ./migrations/*.up.sql after AutoMigrate
+	// when DB_MIGRATE_TOOL=golang-migrate|sql. Default off — behaviour unchanged.
+	if err := RunVersionedMigrations(db, MigrateToolEnabled()); err != nil {
+		return nil, fmt.Errorf("versioned migrations: %w", err)
+	}
 	return db, nil
 }

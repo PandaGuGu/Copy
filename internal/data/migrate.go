@@ -103,6 +103,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.NotificationRecord{},
 		&model.LiveRoom{},
 		&model.LLMProvider{},
+		&model.VideoSimilarity{},
 	); err != nil {
 		return err
 	}

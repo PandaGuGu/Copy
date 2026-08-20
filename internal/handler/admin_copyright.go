@@ -14,6 +14,7 @@ import (
 	"minibili/internal/middleware"
 	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/statemachine"
 )
 
 // ──────────────────────────────────────────────
@@ -274,6 +275,12 @@ func (a *API) AdminTakedownContent(c *gin.Context) {
 		return
 	}
 
+	// State machine (ADR-018): only pending/accepted/takedown may takedown.
+	if !statemachine.Copyright.Can(cp.Status, "takedown") {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+
 	now := time.Now()
 	if err := a.takedownRelatedContent(cp.RelatedID, cp.RelatedType); err != nil {
 		a.Log.Error("takedown content failed", zap.Error(err))
@@ -312,6 +319,12 @@ func (a *API) AdminRestoreContent(c *gin.Context) {
 	var cp model.CopyrightComplaint
 	if err := a.DB.First(&cp, id).Error; err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// State machine (ADR-018): only takedown may be restored.
+	if !statemachine.Copyright.Can(cp.Status, "restored") {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
 
