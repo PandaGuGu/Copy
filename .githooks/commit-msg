@@ -43,7 +43,7 @@ commit_msg=$(cat "$commit_msg_file" | head -1)
 valid_types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|wip"
 
 # 合法 scope 列表（根据项目实际情况）
-valid_scopes="video|auth|user|comment|danmaku|upload|transcode|admin|api|config|deploy|frontend|backend|db|cache|mq|oss|llm|feed|subtitle|ticket|risk|copyright|bi|cs|ops|rbac|player|creator|report|dynamic|dashboard|settings|llm_config"
+valid_scopes="video|auth|user|comment|danmaku|upload|transcode|admin|api|config|deploy|frontend|backend|db|cache|mq|oss|llm|feed|subtitle|ticket|risk|copyright|bi|cs|ops|rbac|player|creator|report|dynamic|dashboard|settings|llm_config|app"
 
 # ------------------------------------------------------------
 # 正则校验

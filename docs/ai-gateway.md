@@ -18,6 +18,19 @@ Vue MbDmChatPanel
 
 ## 运营后台配置
 
+### LLM Provider 通用化（2026-07 起，支持自定义 baseurl / api-key / model）
+
+登录运营中心 → **系统设置 → LLM 配置**（`/admin/llm-config`）：
+
+- `GET/PUT /api/v1/admin/llm-config` — 全局默认配置
+- `GET/POST /api/v1/admin/llm-config/providers` — 多 Provider 管理（OpenAI 兼容）
+- `PUT/DELETE /api/v1/admin/llm-config/providers/:id` — 增删改
+- `POST /api/v1/admin/llm-config/providers/:id/set-default` — 设默认
+
+**优先级：DB 覆盖 env。** `internal/aigateway/deepseek.go` 的 `DBConfig` 回调从 `LLMProvider` 表读取 apiKey/baseURL/model，非空即覆盖静态 env 字段；env 仅作兜底默认。
+
+### AI 角色
+
 登录运营中心 → **AI 角色**（`/admin/agent`）：
 
 - **多角色卡片**：每个角色独立名称、头像、人设、欢迎语库
@@ -27,9 +40,11 @@ Vue MbDmChatPanel
 
 ## 环境变量
 
+> env 仅作兜底，运营后台配置的 LLM Provider（DB）优先。
+
 | 变量 | 说明 |
 |------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API Key（必填才启用回复） |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key（DB 无配置时兜底） |
 | `DEEPSEEK_BASE_URL` | 默认 `https://api.deepseek.com` |
 | `DEEPSEEK_MODEL` | 默认 `deepseek-chat` |
 | `AGENT_BOT_USERNAME` | 系统账号用户名，默认 `minibili_ai` |
@@ -50,3 +65,4 @@ Vue MbDmChatPanel
 - `internal/service/agent.go` — 编排、配额、落库
 - `internal/handler/dm.go` — agent 会话分支
 - `internal/data/agent_seed.go` — 系统用户与会话初始化
+- `internal/data/llm_config.go` + `internal/handler/admin_llm_config.go` — LLM Provider 通用化（DB 存储，覆盖 env）
