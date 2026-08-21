@@ -9,6 +9,7 @@
   <a href="#docker-一键部署"><img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&style=flat-square" alt="Docker"></a>
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&style=flat-square" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&style=flat-square" alt="Vue">
+  <img src="https://img.shields.io/badge/uni--app-3.x-2C9C6F?style=flat-square" alt="uni-app">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/tables-88-orange?style=flat-square" alt="88 Tables">
   <img src="https://img.shields.io/badge/admin_modules-23-blueviolet?style=flat-square" alt="23 Admin Modules">
@@ -31,6 +32,7 @@
 | 社交 | 关注/拉黑/分组 · 私信（WS 实时）· 通知聚合 · 硬币账本 |
 | 搜索/推荐 | ES 全文搜索（可选）· 协同过滤 + MMR 重排序 |
 | 直播 | SRS RTMP 推流 → HTTP-FLV 播放 · WS 聊天 + 礼物 |
+| 移动端 App | uni-app（Vue3 + TS + Pinia）· 19 页面 · 复用后端 180+ API（见 [docs/APP.md](./docs/APP.md)） |
 | 运营后台 | 23 模块全前后端对齐，RBAC 权限控制（见下） |
 
 架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)。
@@ -146,6 +148,10 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 | 首页 | 视频播放（弹幕） | 运营后台 BI | 直播间 |
 |------|------|------|------|
 | ![首页](docs/images/homepage-v2.png) | ![播放](docs/images/player-v2.png) | ![BI](docs/images/admin-bi.png) | ![直播](docs/images/live-room-viewer.png) |
+
+| 移动端 App（H5 真机） |
+|------|
+| ![移动端](docs/app-screenshots/dev-real-v1.png) |
 
 ---
 

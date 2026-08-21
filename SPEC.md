@@ -187,3 +187,4 @@ AC-1 至 AC-16：用户注册登录、视频上传转码、弹幕实时、评论
 | NF-5 | 前端 | Vue 3 + Vite SPA，AdminLayout 统一后台布局 |
 | NF-6 | 配置 | .env 文件 updateEnvKeys() 逐行更新；Feature Flag FNV-1a hash 灰度 |
 | NF-7 | 测试 | go build ./... 编译验证；handler 层可集成测试 |
+| NF-8 | 治理 | 限流（Redis 三级滑动窗口 429）+ 熔断（状态机 closed/open/half-open，错误率阈值 503）+ Prometheus 文本格式监控端点 /api/v1/metrics（QPS/延迟直方图/错误率/限流拒绝/熔断状态）；基准：本地单实例 /api/v1/videos ~536 QPS（c10, p99 30ms），scripts/bench/bench.go 可复测 |
