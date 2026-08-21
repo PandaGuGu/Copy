@@ -89,11 +89,13 @@
         </view>
         <view
           class="progress-wrap"
-          @tap="onSeekTap"
+          @touchstart.stop="onSeekTouchStart"
+          @touchmove.stop.prevent="onSeekTouchMove"
+          @touchend.stop.prevent="onSeekTouchEnd"
         >
           <view class="progress-bg" />
-          <view class="progress-fill" :style="{ width: progressPct + '%' }" />
-          <view class="progress-thumb" :style="{ left: progressPct + '%' }" />
+          <view class="progress-fill" :style="{ width: fillWidthPx + 'px' }" />
+          <view class="progress-thumb" :style="{ left: thumbLeftPx + 'px' }" />
         </view>
         <!-- 倍速菜单弹层 -->
         <view v-if="speedMenuOpen" class="speed-menu" @tap.stop="noop">
@@ -115,6 +117,34 @@
       </view>
     </view>
 
+    <!-- 第1行：简介 / 评论 切换 tab + 弹幕发送 + 弹幕开关（点击后下方组件切换，上方视频不动） -->
+    <view class="detail-tabs">
+      <view
+        class="tab-item"
+        :class="{ active: activeTab === 'intro' }"
+        @tap="activeTab = 'intro'"
+      ><text>简介</text></view>
+      <view
+        class="tab-item"
+        :class="{ active: activeTab === 'comment' }"
+        @tap="activeTab = 'comment'"
+      ><text>评论 {{ video?.comment_count ? formatCount(video.comment_count) : '' }}</text></view>
+      <view class="tab-spacer" />
+      <input
+        v-model="danmakuText"
+        class="tab-dm-input"
+        placeholder="发个弹幕"
+        confirm-type="send"
+        @confirm="sendDanmaku"
+      />
+      <view class="tab-dm-send" @tap="sendDanmaku"><text>发送</text></view>
+      <view class="dm-toggle" :class="{ off: !dmVisible }" @tap="toggleDmVisible">
+        <text>{{ dmVisible ? '✓弹' : '弹' }}</text>
+      </view>
+    </view>
+
+    <!-- 简介视图（第2-5行 + 简介全文 + 相关推荐） -->
+    <view v-if="activeTab === 'intro'">
     <!-- UP主卡片 -->
     <view v-if="video" class="up-card">
       <image class="avatar" :src="video.uploader_avatar_url || '/static/avatar/default.png'" mode="aspectFill" @tap="goSpace" />
@@ -130,17 +160,34 @@
       </view>
     </view>
 
-    <!-- 标题 -->
+    <!-- 标题 + 详细下拉（简介展开） -->
     <view v-if="video" class="title-section">
-      <text class="v-title">{{ video.title }}</text>
-      <text class="v-meta">▶ {{ formatCount(video.play_count) }}  💬 {{ video.comment_count }}</text>
+      <view class="title-row">
+        <text class="v-title">{{ video.title }}</text>
+        <text v-if="video.description" class="detail-toggle" @tap="expanded = !expanded">
+          {{ expanded ? '收起 ⌃' : '详细 ⌄' }}
+        </text>
+      </view>
+      <text v-if="video.description && expanded" class="v-desc">{{ video.description }}</text>
     </view>
 
-    <!-- 操作按钮组 -->
+    <!-- 数据行：播放量 / 弹幕量 / 日期 / 在线人数 -->
+    <view v-if="video" class="stats-row">
+      <text class="stat-item">▶ {{ formatCount(video.play_count) }}</text>
+      <text class="stat-item">💬 {{ formatCount(video.danmaku_count) }}</text>
+      <text class="stat-item">📅 {{ formatDate(video.created_at) }}</text>
+      <text class="stat-item">🟢 {{ video.watching_count || 0 }} 人在线</text>
+    </view>
+
+    <!-- 操作按钮组：点赞 / 点踩 / 投币 / 收藏 / 转发 -->
     <view v-if="video" class="action-row">
       <view class="action-btn" @tap="onLike">
         <text class="action-icon">{{ video.liked_by_me ? '❤️' : '👍' }}</text>
         <text>{{ formatCount(video.like_count) }}</text>
+      </view>
+      <view class="action-btn" @tap="onDislike">
+        <text class="action-icon">{{ disliked ? '👎' : '🤙' }}</text>
+        <text>点踩</text>
       </view>
       <view class="action-btn" @tap="onCoin">
         <text class="action-icon">🪙</text>
@@ -152,24 +199,33 @@
       </view>
       <view class="action-btn" @tap="onShare">
         <text class="action-icon">↗</text>
-        <text>分享</text>
+        <text>转发</text>
       </view>
     </view>
 
-    <!-- 弹幕发送 -->
-    <view class="danmaku-bar">
-      <input
-        v-model="danmakuText"
-        class="danmaku-input"
-        placeholder="发个弹幕见证当下"
-        confirm-type="send"
-        @confirm="sendDanmaku"
-      />
-      <view class="danmaku-send" @tap="sendDanmaku">
-        <text>发送</text>
-      </view>
+    <!-- 视频合集导航（后端有合集数据时才显示，点击弹出视频列表） -->
+    <view v-if="video && seriesList && seriesList.length > 0" class="series-bar" @tap="openSeries">
+      <text class="series-title">合集 · {{ seriesTitle || '视频合集' }}</text>
+      <text class="series-arrow">▾ 点击展开</text>
     </view>
 
+    <!-- 相关推荐（简介视图底部） -->
+    <view class="related">
+      <text class="section-title">相关推荐</text>
+      <view v-for="r in related" :key="r.id" class="related-card" @tap="loadDetail(r.id)">
+        <image class="r-cover" :src="r.cover_url || '/static/placeholder.png'" mode="aspectFill" />
+        <view class="r-meta">
+          <text class="r-title" lines="2">{{ r.title }}</text>
+          <text class="r-up">{{ r.uploader || '匿名' }}</text>
+          <text class="r-stats">▶ {{ formatCount(r.play_count) }} · {{ formatDuration(r.duration) }}</text>
+        </view>
+      </view>
+    </view>
+    </view>
+    <!-- /简介视图 -->
+
+    <!-- 评论视图（评论区，点击"评论"tab 后显示，上方视频不动） -->
+    <view v-if="activeTab === 'comment'">
     <!-- 评论区（两层：顶层 + 回复） -->
     <view class="comment-section">
       <view class="comment-head">
@@ -229,19 +285,8 @@
         <text>加载更多评论</text>
       </view>
     </view>
-
-    <!-- 相关推荐 -->
-    <view class="related">
-      <text class="section-title">相关推荐</text>
-      <view v-for="r in related" :key="r.id" class="related-card" @tap="loadDetail(r.id)">
-        <image class="r-cover" :src="r.cover_url || '/static/placeholder.png'" mode="aspectFill" />
-        <view class="r-meta">
-          <text class="r-title" lines="2">{{ r.title }}</text>
-          <text class="r-up">{{ r.uploader || '匿名' }}</text>
-          <text class="r-stats">▶ {{ formatCount(r.play_count) }} · {{ formatDuration(r.duration) }}</text>
-        </view>
-      </view>
     </view>
+    <!-- /评论视图 -->
   </view>
 </template>
 
@@ -262,6 +307,10 @@ const related = ref<Video[]>([])
 const loading = ref(false)
 const expanded = ref(false)
 const followed = ref(false)
+const disliked = ref(false) // 点踩（后端暂无 dislike 接口，先本地态）
+const seriesList = ref<unknown[]>([]) // 合集（后端暂无接口，预留条件渲染）
+const seriesTitle = ref('')
+const activeTab = ref<'intro' | 'comment'>('intro') // 简介/评论 切换
 let currentId = 0
 
 const sys = uni.getSystemInfoSync()
@@ -428,6 +477,7 @@ function lockOrientation(lock: boolean) {
 
 function onFullscreen() {
   fullscreen.value = true
+  seekRect = null // 布局变化，进度条 rect 需重新查询
   lockOrientation(true)
   setTimeout(() => {
     refreshDmSize()
@@ -437,6 +487,7 @@ function onFullscreen() {
 
 function onExitFullscreen() {
   fullscreen.value = false
+  seekRect = null // 布局变化，进度条 rect 需重新查询
   lockOrientation(false)
   setTimeout(() => {
     refreshDmSize()
@@ -659,6 +710,17 @@ async function onFavorite() {
 
 function onShare() { uni.showToast({ title: '分享功能待完善', icon: 'none' }) }
 
+/** 点踩：后端暂无接口，先本地切换 */
+function onDislike() {
+  disliked.value = !disliked.value
+  uni.showToast({ title: disliked.value ? '已点踩' : '已取消点踩', icon: 'none' })
+}
+
+/** 合集展开：后端暂无合集接口，预留 */
+function openSeries() {
+  uni.showToast({ title: '合集功能待接入', icon: 'none' })
+}
+
 const isUploader = computed(() => !!video.value && isLoggedIn.value && localUser.value?.user_id === video.value.user_id)
 
 // ===== 播放器状态 =====
@@ -817,24 +879,8 @@ function onTogglePlay() {
   } catch { /* 忽略 */ }
 }
 
-function onSeekTap(e: any) {
-  if (!duration.value) return
-  let ratio = 0
-  try {
-    const rect = (e.target as any)?.getBoundingClientRect?.()
-    if (rect && typeof e.detail?.x === 'number') {
-      ratio = Math.min(1, Math.max(0, (e.detail.x - rect.left) / rect.width))
-    } else {
-      ratio = Math.min(1, Math.max(0, (e.detail?.x || 0) / 300))
-    }
-  } catch { /* 忽略 */ }
-  const target = ratio * duration.value
-  resetSimClock(target)
-  getVideoContext()?.seek(target)
-  resetDm()
-}
-
 // ===== 进度条拖动（touch 事件，nvue/weex 原生支持） =====
+// 注：进度条只绑 touch 三件套，不绑 @tap——拖完松手 weex 会派发 tap，用错误比例覆盖 seek 结果
 const dragging = ref(false)
 let seekRect: { left: number; width: number } | null = null
 
@@ -851,8 +897,18 @@ function ensureSeekRect() {
 function ratioFromTouch(e: any): number {
   const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0])
   if (!t) return -1
-  if (!seekRect || seekRect.width <= 0) return -1
-  return Math.min(1, Math.max(0, (t.pageX - seekRect.left) / seekRect.width))
+  if (seekRect && seekRect.width > 0) {
+    // 轨道起点 = wrap 左缘 + 14rpx padding；轨道宽度 = wrap 宽 - 两侧 padding（与 fill/thumb 定位一致）
+    const trackLeft = seekRect.left + barPadPx
+    const trackW = seekRect.width - barPadPx * 2
+    if (trackW <= 0) return -1
+    return Math.min(1, Math.max(0, (t.pageX - trackLeft) / trackW))
+  }
+  // 兜底：seekRect 尚未异步就绪（首次触摸）时，用布局常量同步估算
+  // 轨道起点 = controls padding(16rpx) + wrap padding(14rpx)，宽度 = barTrackW
+  const startX = (16 * screenW) / 750 + barPadPx
+  if (barTrackW <= 0) return -1
+  return Math.min(1, Math.max(0, (t.pageX - startX) / barTrackW))
 }
 
 function onSeekTouchStart(e: any) {
@@ -873,7 +929,7 @@ function onSeekTouchMove(e: any) {
 function onSeekTouchEnd(e: any) {
   if (!dragging.value) return
   dragging.value = false
-  seekRect = null
+  // 保留 seekRect 缓存：拖动/点击进度条位置不变，避免下次重新异步查询导致首次触摸不跟手
   const r = ratioFromTouch(e)
   if (r >= 0) {
     const target = r * duration.value
@@ -961,8 +1017,19 @@ const progressPct = computed(() => {
   if (!d || !isFinite(d) || d <= 0 || !isFinite(t) || t < 0) return 0
   const pct = (t / d) * 100
   if (!isFinite(pct)) return 0
-  return Math.min(100, Math.round(pct))
+  // 保留小数：拖动时按像素平滑跟随，不用 round 跳格
+  return Math.min(100, Math.max(0, pct))
 })
+
+// ===== 进度条布局（weex 绝对定位 % 不可靠，全部换算成显式 px） =====
+const ctrlPadPx = ((16 * screenW) / 750) * 2   // .controls padding 16rpx 左右
+const barPadPx = (14 * screenW) / 750           // .progress-wrap padding 14rpx
+const barTrackW = screenW - ctrlPadPx - barPadPx * 2 // 轨道实际宽度 px
+const thumbHalfPx = (18 * screenW) / 750        // thumb 半径（36rpx/2）
+/** fill 宽度 px：轨道宽 × 百分比 */
+const fillWidthPx = computed(() => (barTrackW * progressPct.value) / 100)
+/** thumb left px：相对 progress-wrap，轨道起点 + 进度 - 半径（圆心对准进度位置） */
+const thumbLeftPx = computed(() => barPadPx + (barTrackW * progressPct.value) / 100 - thumbHalfPx)
 
 // ===== 工具 =====
 function noop() {}
@@ -990,6 +1057,13 @@ function formatTime(s: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
 }
+/** 发布日期（数据行用，与 formatTime 同逻辑） */
+function formatDate(s: string): string {
+  if (!s) return ''
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
+}
 function onMore() { uni.showToast({ title: '更多操作待完善', icon: 'none' }) }
 function goBack() { uni.navigateBack() }
 function goLogin() { uni.navigateTo({ url: '/pages/login/index' }) }
@@ -1009,6 +1083,7 @@ function onFollow() { followed.value = !followed.value }
 
 .navbar {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   align-items: center;
   padding: 16rpx 24rpx;
   background: rgba(255, 255, 255, 0.96);
@@ -1104,6 +1179,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .ctrl-row {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   align-items: center;
   color: #FFF;
 }
@@ -1120,7 +1196,7 @@ function onFollow() { followed.value = !followed.value }
 .spacer { flex: 1; }
 .progress-wrap {
   position: relative;
-  height: 24rpx;
+  height: 36rpx; /* 加高到与 thumb 同高，thumb 垂直居中无需 % */
   margin-top: 2rpx;
   /* 左右留出圆点半径空间：0% 进度时圆点依然在屏内可见 */
   padding-left: 14rpx;
@@ -1132,30 +1208,33 @@ function onFollow() { followed.value = !followed.value }
   position: absolute;
   left: 14rpx;
   right: 14rpx;
+  top: 15rpx; /* (36-6)/2 显式居中 */
   height: 6rpx;
   border-radius: 3rpx;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.5);
   pointer-events: none; /* 触摸穿透到 progress-wrap，避免 e.target 落在子元素 */
 }
 .progress-fill {
   position: absolute;
   left: 14rpx;
+  top: 15rpx;
   height: 6rpx;
   border-radius: 3rpx;
   background: #FB7299;
   pointer-events: none;
+  /* 不加 box-shadow（weex 支持差），靠颜色和加粗提高辨识度 */
 }
 .progress-thumb {
   position: absolute;
-  top: 50%;
-  margin-top: -14rpx;
-  margin-left: -14rpx;
-  width: 28rpx;
-  height: 28rpx;
-  border-radius: 14rpx;
-  background: #FFF;
-  border: 3rpx solid #FB7299;
+  top: 0;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 18rpx;        /* 与 width 一致保证圆形 */
+  background: #FB7299;          /* 粉实心 + 白边，对比度比白底粉边强 */
+  border: 4rpx solid #FFF;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.45); /* 让圆点浮起来，视频画面上清晰可见 */
   pointer-events: none;
+  z-index: 3;
 }
 
 /* 倍速菜单弹层（控制条上方右半区） */
@@ -1196,6 +1275,7 @@ function onFollow() { followed.value = !followed.value }
 
 .up-card {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   align-items: center;
   padding: 24rpx;
   border-bottom-width: 1rpx;
@@ -1204,7 +1284,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .avatar { width: 80rpx; height: 80rpx; border-radius: 40rpx; }
 .up-meta { flex: 1; margin-left: 16rpx; }
-.up-row { display: flex; align-items: center; }
+.up-row { display: flex; flex-direction: row; align-items: center; }
 .nickname { font-size: 28rpx; font-weight: 500; color: #181818; }
 .fans { font-size: 20rpx; color: #999; margin-left: 8rpx; }
 .up-intro { font-size: 22rpx; color: #999; margin-top: 4rpx; }
@@ -1216,12 +1296,84 @@ function onFollow() { followed.value = !followed.value }
   font-size: 24rpx;
 }
 
-.title-section { padding: 24rpx; }
-.v-title { font-size: 32rpx; color: #181818; }
-.v-meta { margin-top: 12rpx; font-size: 22rpx; color: #999; }
+.title-section { padding: 24rpx 24rpx 8rpx; }
+.title-row { display: flex; flex-direction: row; align-items: flex-start; }
+.v-title { flex: 1; font-size: 32rpx; color: #181818; font-weight: 500; }
+.detail-toggle { font-size: 24rpx; color: #FB7299; padding: 4rpx 0 0 16rpx; white-space: nowrap; }
+.v-desc { display: block; margin-top: 12rpx; font-size: 24rpx; color: #666; line-height: 36rpx; }
+
+/* 第1行：简介/评论 tab + 弹幕发送 + 弹幕开关 */
+.detail-tabs {
+  display: flex;
+  flex-direction: row; /* weex 默认 column，必须显式横排 */
+  align-items: center;
+  padding: 0 24rpx;
+  height: 88rpx;
+  border-bottom-width: 1rpx;
+  border-bottom-color: #F1F1F1;
+  border-bottom-style: solid;
+}
+.tab-item { padding: 0 24rpx 0 0; font-size: 30rpx; color: #999; }
+.tab-item.active { color: #181818; font-weight: 600; }
+.tab-spacer { flex: 1; }
+.tab-dm-input {
+  width: 200rpx;
+  height: 56rpx;
+  background: #F4F4F4;
+  border-radius: 28rpx;
+  padding: 0 20rpx;
+  font-size: 24rpx;
+}
+.tab-dm-send {
+  background: #FB7299;
+  color: #FFF;
+  padding: 10rpx 20rpx;
+  border-radius: 28rpx;
+  font-size: 24rpx;
+  margin-left: 12rpx;
+}
+.dm-toggle {
+  width: 64rpx;
+  height: 56rpx;
+  margin-left: 12rpx;
+  border-radius: 12rpx;
+  background: #FB7299;
+  color: #FFF;
+  font-size: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dm-toggle.off { background: #999; color: #FFF; }
+
+.stats-row {
+  display: flex;
+  flex-direction: row; /* weex 默认 column */
+  align-items: center;
+  padding: 0 24rpx 16rpx;
+  flex-wrap: wrap;
+}
+.stat-item { font-size: 22rpx; color: #999; margin-right: 24rpx; }
+
+.series-bar {
+  display: flex;
+  flex-direction: row; /* weex 默认 column */
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 24rpx 16rpx;
+  padding: 20rpx 24rpx;
+  background: #F8F8F8;
+  border-radius: 12rpx;
+  border-left-width: 6rpx;
+  border-left-color: #FB7299;
+  border-left-style: solid;
+}
+.series-title { font-size: 26rpx; color: #181818; font-weight: 500; }
+.series-arrow { font-size: 22rpx; color: #FB7299; }
 
 .action-row {
   display: flex;
+  flex-direction: row; /* 五个按钮横排一行 */
   border-top-width: 1rpx;
   border-top-color: #F1F1F1;
   border-top-style: solid;
@@ -1232,13 +1384,14 @@ function onFollow() { followed.value = !followed.value }
 .action-btn {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* 图标与文字横排 */
   align-items: center;
+  justify-content: center;
   padding: 20rpx 0;
   font-size: 22rpx;
   color: #666;
 }
-.action-icon { font-size: 36rpx; }
+.action-icon { font-size: 34rpx; margin-right: 8rpx; }
 
 .danmaku-bar {
   display: flex;
@@ -1279,6 +1432,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .comment-input-row {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   align-items: center;
   margin-top: 24rpx;
 }
@@ -1307,6 +1461,7 @@ function onFollow() { followed.value = !followed.value }
 
 .comment-item {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   padding: 24rpx 0;
   border-bottom-width: 1rpx;
   border-bottom-color: #F8F8F8;
@@ -1314,7 +1469,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .c-avatar { width: 64rpx; height: 64rpx; border-radius: 32rpx; background: #F0F0F0; }
 .c-body { flex: 1; margin-left: 16rpx; }
-.c-row { display: flex; align-items: center; }
+.c-row { display: flex; flex-direction: row; align-items: center; }
 .c-name { font-size: 24rpx; color: #757575; }
 .c-time { font-size: 20rpx; color: #C0C4CC; margin-left: 12rpx; }
 .c-content {
@@ -1324,6 +1479,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .c-actions {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   margin-top: 12rpx;
   font-size: 22rpx;
   color: #999;
@@ -1338,6 +1494,7 @@ function onFollow() { followed.value = !followed.value }
 }
 .reply-item {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   flex-wrap: wrap;
   padding: 8rpx 0;
 }
@@ -1360,6 +1517,7 @@ function onFollow() { followed.value = !followed.value }
 .related { padding: 24rpx; }
 .related-card {
   display: flex;
+  flex-direction: row; /* weex 默认 column */
   margin: 24rpx 0;
 }
 .r-cover {
