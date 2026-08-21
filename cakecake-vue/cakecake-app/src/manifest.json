@@ -2,16 +2,14 @@
     "name" : "CakeCake",
     "appid" : "__UNI__30895C4",
     "description" : "CakeCake 移动客户端（uni-app + Vue3）",
-    "versionName" : "0.1.0",
-    "versionCode" : "1",
+    "versionName" : "0.1.2",
+    "versionCode" : "2",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
         "nvueStyleCompiler" : "uni-app",
         "compilerVersion" : 3,
-        "screenOrientation" : [
-            "portrait-primary"
-        ],
+        "screenOrientation" : [ "portrait-primary" ],
         "splashscreen" : {
             "alwaysShowBeforeRender" : false,
             "waiting" : false,

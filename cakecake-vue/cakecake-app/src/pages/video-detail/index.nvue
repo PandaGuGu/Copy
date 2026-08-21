@@ -656,7 +656,6 @@ async function sendDanmaku() {
   }
   if (!isLoggedIn.value) {
     uni.showToast({ title: '请先登录', icon: 'none' })
-    setTimeout(() => goLogin(), 500)
     return
   }
   try {

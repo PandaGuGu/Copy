@@ -84,7 +84,7 @@
         </view>
         <view v-if="liveRooms.length === 0 && !loading" class="empty-state">
           <text class="icon">📡</text>
-          <text>暂无直播</text>
+          <text>当前没人直播哦~</text>
         </view>
       </view>
 
@@ -193,6 +193,42 @@ const cursor = ref<string | null>(null)
 const hasMore = ref(true)
 const loading = ref(false)
 
+// 直播流主机（与后端同机，8000 端口由 nms 提供 HLS）
+function streamHost2(): string {
+  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:8080'
+  try {
+    const i = base.indexOf('://')
+    const rest = i >= 0 ? base.slice(i + 3) : base
+    const c = rest.indexOf(':')
+    return c > 0 ? rest.slice(0, c) : rest
+  } catch {
+    return '192.168.1.100'
+  }
+}
+
+// 探测该直播间是否真的在直播：查 nms 的活跃流 API，存在该 key 的 publisher 即真在播
+function isLiveReachable(key: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!key) { resolve(false); return }
+    uni.request({
+      url: `http://${streamHost2()}:8000/api/streams`,
+      method: 'GET',
+      timeout: 2500,
+      success: (res) => {
+        try {
+          if (res.statusCode !== 200) { resolve(false); return }
+          const d = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          const live = d && d.live
+          resolve(!!(live && live[key] && live[key].publisher))
+        } catch {
+          resolve(false)
+        }
+      },
+      fail: () => resolve(false)
+    })
+  })
+}
+
 // banner 自动向右流动（单向轮播：scroll-left 累加，到末尾回到 0）
 const bannerScrollLeft = ref(0)
 let bannerTimer: ReturnType<typeof setInterval> | null = null
@@ -264,10 +300,17 @@ async function loadVideos(reset = false) {
       leaderboard.value = reset ? list : leaderboard.value.concat(list)
       hasMore.value = false
     }
-    // 直播 tab：直播房间
+    // 直播 tab：直播房间（只保留真有流的真实直播间）
     else if (tab === 'live') {
       const resp = await liveApi.rooms()
-      liveRooms.value = resp.rooms || []
+      const rooms = resp.rooms || []
+      const real: LiveRoom[] = []
+      for (const r of rooms) {
+        // 逐个探测该房间是否真的有直播流（HLS m3u8 可访问 = 真在播）
+        const ok = await isLiveReachable(r.stream_key)
+        if (ok) real.push(r)
+      }
+      liveRooms.value = real
       hasMore.value = false
     }
     // 分区 tab：动画/影视 走 zones/:zone/recommendation

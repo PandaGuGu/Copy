@@ -42,7 +42,8 @@ const config = {
   http: {
     port: 8000,
     mediaroot: HLS_DIR,
-    allow_origin: "*"
+    allow_origin: "*",
+    api: true // 暴露 /api/streams 供服务端/App 查询活跃直播流
   },
   trans: {
     ffmpeg: ffmpegPath,

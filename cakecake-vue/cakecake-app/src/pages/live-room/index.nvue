@@ -1,0 +1,290 @@
+<template>
+  <view class="live-page">
+    <view v-if="loading" class="loading">
+      <text>加载中…</text>
+    </view>
+
+    <view v-else-if="room" class="room">
+      <!-- 顶部直播视频区 -->
+      <view class="cover-wrap">
+        <image
+          v-if="!isLive"
+          class="cover"
+          :src="room.cover_url || '/static/demo/live_default.jpg'"
+          mode="aspectFill"
+        />
+        <video
+          v-else
+          class="cover"
+          :src="liveSrc"
+          controls
+          autoplay
+          muted
+          @error="onPlayerError"
+        ></video>
+
+        <!-- 顶部导航栏 -->
+        <view class="topbar">
+          <view class="tb-left">
+            <text class="tb-back" @tap="goBack">‹</text>
+            <view class="tb-avatar">
+              <image v-if="room.avatar_url" class="tb-avatar-img" :src="room.avatar_url" mode="aspectFill" />
+              <text v-else class="tb-avatar-txt">{{ hostInitial }}</text>
+            </view>
+            <text class="tb-name">{{ hostName }}</text>
+          </view>
+          <view class="tb-right">
+            <view class="tb-aud"><text class="tb-aud-txt">1</text></view>
+            <view class="tb-aud"><text class="tb-aud-txt">2</text></view>
+            <view class="tb-aud"><text class="tb-aud-txt">3</text></view>
+            <text class="tb-count">{{ viewerText }}</text>
+            <text class="tb-set" @tap="onAction('设置')">⋮</text>
+          </view>
+        </view>
+
+        <view class="live-time">
+          <text>{{ startText }}</text>
+        </view>
+
+        <!-- 弹幕飘屏层（右→左飞过，不滞留） -->
+        <view class="damu-layer" v-if="danmakuEnabled">
+          <text
+            v-for="d in danmakuList"
+            :key="d.id"
+            class="damu-bullet"
+            :style="{ top: d.top + 'rpx', transform: 'translateX(' + d.x + 'px)' }"
+          >{{ d.text }}</text>
+        </view>
+
+        <!-- 右下角按钮组：关闭弹幕 + 旋转 -->
+        <view class="player-tools">
+          <view class="damu-toggle" @tap="toggleDanmaku">
+            <text class="damu-char" :class="{ off: !danmakuEnabled }">弹</text>
+          </view>
+          <view class="rotate-btn" @tap="onAction('旋转')">
+            <view class="mini-phone portrait"></view>
+            <view class="mini-phone landscape"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 聊天区 -->
+      <view class="chat-area">
+        <view class="chat-msg">
+          <text class="chat-title">{{ room.title }}</text>
+          <view v-for="m in messages" :key="m.id" class="chat-line">
+            <text class="chat-user">{{ m.user }}</text>
+            <text class="chat-text">{{ '：' + m.text }}</text>
+          </view>
+        </view>
+
+        <!-- 底部弹幕输入栏 -->
+        <view class="input-row">
+          <view class="input-box">
+            <input
+              class="chat-input"
+              v-model="danmakuText"
+              placeholder="弹幕支持下～"
+              placeholder-style="color:#888888"
+              confirm-type="send"
+              @confirm="onSend"
+            />
+          </view>
+          <view class="input-send" @tap="onSend">
+            <text>发送</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { onLoad as onPageLoad, onUnload } from '@dcloudio/uni-app'
+import { liveApi, type LiveRoom } from '@/api/live-detail'
+
+const room = ref<LiveRoom | null>(null)
+const loading = ref(false)
+const danmakuText = ref('')
+const danmakuEnabled = ref(true)
+const myName = ref('我')
+const messages = ref<{ id: number; user: string; text: string }[]>([])
+const danmakuList = ref<{ id: number; text: string; top: number; x: number }[]>([])
+let seq = 0
+let viewCount = 0
+let viewTimer: ReturnType<typeof setInterval> | null = null
+let flyTimer: ReturnType<typeof setInterval> | null = null
+
+const isLive = computed(() => room.value?.status === 'live' && !!room.value.stream_key)
+const hostName = computed(() => room.value?.host_name || '')
+const hostInitial = computed(() => ((room.value?.host_name || '')?.slice(0, 1) || '').toUpperCase())
+const viewerText = computed(() => formatCount(viewCount))
+const startText = computed(() => formatStartTime(room.value?.started_at))
+
+const liveSrc = computed(() => {
+  if (!isLive.value) return ''
+  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:8080'
+  let host = '192.168.1.100'
+  try {
+    const idx = base.indexOf('://')
+    const rest = idx >= 0 ? base.slice(idx + 3) : base
+    const colon = rest.indexOf(':')
+    host = colon > 0 ? rest.slice(0, colon) : rest
+  } catch (e) {}
+  return 'rtmp://' + host + ':1935/live/' + room.value!.stream_key
+})
+
+function onPlayerError(e: any) {
+  const msg = e?.detail?.errMsg || ''
+  uni.showToast({ title: msg ? '直播画面加载失败：' + msg : '直播画面加载失败', icon: 'none' })
+}
+
+onPageLoad((q: any) => {
+  const id = Number(q?.id) || 0
+  if (id) loadRoom(id)
+})
+
+onUnload(() => {
+  if (viewTimer) clearInterval(viewTimer)
+  if (flyTimer) clearInterval(flyTimer)
+})
+
+async function loadRoom(id: number) {
+  loading.value = true
+  try {
+    room.value = await liveApi.detail(id)
+    viewCount = room.value?.viewer_count ?? 0
+    const host = hostName.value
+    messages.value.push({ id: ++seq, user: host || '系统', text: '欢迎来到直播间，畅所欲言～' })
+    messages.value.push({ id: ++seq, user: '系统', text: '👀 当前 ' + viewerText.value + ' 人观看' })
+    // 让右上人数"活"起来（基于真实 viewer_count 微动，避免显得静止/硬编码）
+    if (viewTimer) clearInterval(viewTimer)
+    viewTimer = setInterval(() => {
+      viewCount += Math.floor(Math.random() * 3) // +0~2
+    }, 3000)
+    // 弹幕飘屏驱动：每 60ms 左移 18px，移出后移除
+    if (flyTimer) clearInterval(flyTimer)
+    flyTimer = setInterval(() => {
+      danmakuList.value = danmakuList.value
+        .map((d) => ({ ...d, x: d.x - 18 }))
+        .filter((d) => d.x > -1100)
+    }, 60)
+  } catch (e) {}
+  finally { loading.value = false }
+}
+
+function pushDanmaku(text: string) {
+  const top = 140 + (danmakuList.value.length % 3) * 56
+  danmakuList.value.push({ id: ++seq, text, top, x: 40 })
+}
+
+function onSend() {
+  const t = (danmakuText.value || '').trim()
+  if (!t) return
+  messages.value.push({ id: ++seq, user: myName.value, text: t })
+  if (danmakuEnabled.value) pushDanmaku(t)
+  danmakuText.value = ''
+  uni.hideKeyboard()
+}
+
+function toggleDanmaku() {
+  danmakuEnabled.value = !danmakuEnabled.value
+}
+
+function goBack()   { uni.navigateBack() }
+function onAction(name: string) {
+  uni.showToast({ title: name + ' - 待开发', icon: 'none' })
+}
+
+function formatCount(n: number): string {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
+  return String(n)
+}
+
+function formatStartTime(t?: string): string {
+  if (!t) return '—'
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return t
+  const diffMs = Date.now() - d.getTime()
+  if (diffMs < 60_000) return '刚刚开播'
+  if (diffMs < 3_600_000) return Math.floor(diffMs / 60_000) + '分钟前开播'
+  if (diffMs < 86_400_000) return Math.floor(diffMs / 3_600_000) + '小时前开播'
+  return d.getMonth() + 1 + '-' + d.getDate()
+}
+</script>
+
+<style lang="scss">
+.live-page { flex: 1; background: #121212; }
+.loading { text-align: center; padding-top: 120rpx; color: #999; font-size: 28rpx; }
+.room { flex: 1; flex-direction: column; }
+
+.cover-wrap { position: relative; width: 750rpx; height: 540rpx; background: #000; }
+.cover { width: 750rpx; height: 540rpx; }
+
+.topbar {
+  position: absolute; top: 0; left: 0; right: 0;
+  flex-direction: row; align-items: center; justify-content: space-between;
+  padding-top: 20rpx; padding-bottom: 20rpx; padding-left: 16rpx; padding-right: 16rpx;
+  background-color: rgba(0, 0, 0, 0.35); z-index: 10;
+}
+.tb-left { flex-direction: row; align-items: center; }
+.tb-back { font-size: 44rpx; color: #FFF; margin-right: 10rpx; }
+.tb-avatar {
+  width: 60rpx; height: 60rpx; border-radius: 30rpx; background: #FB7299;
+  align-items: center; justify-content: center; margin-right: 12rpx;
+  border-width: 2rpx; border-color: rgba(255,255,255,0.6);
+}
+.tb-avatar-txt { color: #FFF; font-size: 28rpx; font-weight: 600; }
+.tb-avatar-img { width: 60rpx; height: 60rpx; border-radius: 30rpx; }
+.tb-name { color: #FFF; font-size: 28rpx; font-weight: 600; max-width: 220rpx; }
+.tb-right { flex-direction: row; align-items: center; }
+.tb-aud { width: 44rpx; height: 44rpx; border-radius: 22rpx; background: rgba(255,255,255,0.85); align-items: center; justify-content: center; margin-right: 6rpx; }
+.tb-aud-txt { color: #333; font-size: 22rpx; font-weight: 600; }
+.tb-count { color: #FFF; font-size: 26rpx; margin-left: 8rpx; font-weight: 600; }
+.tb-set { color: #FFF; font-size: 40rpx; margin-left: 20rpx; font-weight: 700; line-height: 1; }
+
+.live-time {
+  position: absolute; bottom: 24rpx; left: 20rpx; color: #FFF; font-size: 24rpx;
+  background: rgba(0,0,0,0.5); padding-top: 4rpx; padding-bottom: 4rpx; padding-left: 12rpx; padding-right: 12rpx;
+  border-radius: 4rpx; z-index: 5;
+}
+
+/* 弹幕飘屏（右→左，JS 每帧驱动位移，避免 nvue 不支持 CSS keyframes） */
+.damu-layer { position: absolute; top: 0; left: 0; right: 0; height: 300rpx; overflow: hidden; z-index: 6; }
+.damu-bullet {
+  position: absolute; right: 0;
+  background-color: rgba(0, 0, 0, 0.35); border-radius: 6rpx;
+  color: #FFF; font-size: 26rpx; padding-top: 6rpx; padding-bottom: 6rpx; padding-left: 12rpx; padding-right: 12rpx;
+}
+
+.player-tools { position: absolute; right: 20rpx; bottom: 20rpx; flex-direction: row; align-items: center; z-index: 7; }
+.rotate-btn {
+  flex-direction: row; align-items: center; background-color: rgba(0, 0, 0, 0.4); border-radius: 8rpx;
+  padding-top: 10rpx; padding-bottom: 10rpx; padding-left: 12rpx; padding-right: 12rpx; margin-left: 14rpx;
+}
+.mini-phone.portrait { width: 14rpx; height: 24rpx; border-width: 2rpx; border-color: rgba(255,255,255,0.9); border-radius: 3rpx; }
+.mini-phone.landscape { width: 24rpx; height: 14rpx; border-width: 2rpx; border-color: rgba(255,255,255,0.9); border-radius: 3rpx; margin-left: 6rpx; }
+.damu-toggle { background-color: rgba(0, 0, 0, 0.4); border-radius: 8rpx; padding-top: 10rpx; padding-bottom: 10rpx; padding-left: 14rpx; padding-right: 14rpx; }
+.damu-char { color: #FFF; font-size: 30rpx; font-weight: 600; }
+.damu-char.off { text-decoration: line-through; opacity: 0.45; }
+
+.chat-area { flex: 1; flex-direction: column; padding-top: 16rpx; padding-left: 20rpx; padding-right: 20rpx; }
+.chat-msg { flex: 1; }
+.chat-title { font-size: 30rpx; color: #FFF; font-weight: 600; display: block; }
+.chat-line { flex-direction: row; margin-top: 14rpx; }
+.chat-user { color: #4FC3F7; font-weight: 600; font-size: 26rpx; }
+.chat-text { color: #CCC; font-size: 26rpx; }
+
+.input-row { flex-direction: row; align-items: center; padding-bottom: 24rpx; }
+.input-box {
+  flex: 1; height: 68rpx; border-radius: 34rpx; border-width: 1rpx; border-color: #333;
+  background: #1E1E1E; flex-direction: row; align-items: center; padding-left: 24rpx; padding-right: 24rpx;
+}
+.chat-input { flex: 1; color: #FFF; font-size: 26rpx; height: 68rpx; }
+.input-send {
+  height: 68rpx; border-radius: 34rpx; background: #FB7299; align-items: center; justify-content: center;
+  padding-left: 30rpx; padding-right: 30rpx; margin-left: 16rpx;
+}
+.input-send text { color: #FFF; font-size: 26rpx; font-weight: 600; }
+</style>
