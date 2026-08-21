@@ -38,9 +38,11 @@ export interface SearchResult {
 }
 
 export const searchApi = {
-  /** 真实搜索（GET /search?keyword=&page=&page_size=） */
+  /** 真实搜索（GET /search?keyword=&page=&page_size=）
+   *  ⚠️ App 端（uni-app axios 适配器）GET params 可能不序列化 → 手动拼 URL 保证 keyword 送达 */
   search(keyword: string, page = 1, pageSize = 20): Promise<SearchResult> {
-    return request({ url: '/api/v1/search', method: 'GET', params: { keyword, page, page_size: pageSize } })
+    const q = `keyword=${encodeURIComponent(keyword)}&page=${page}&page_size=${pageSize}`
+    return request({ url: `/api/v1/search?${q}`, method: 'GET' })
   },
   /** 热搜榜（GET /hot-search） */
   hotSearch(): Promise<{ items: HotSearchItem[] }> {

@@ -83,6 +83,10 @@ export const videoApi = {
         color: d.color || ''
       }
     })
+  },
+  /** 弹幕时间轴（video_time 升序，供播放器按进度消费） */
+  danmakus(id: number, offset = 0, limit = 1000): Promise<{ items: Danmaku[]; total: number; next_offset: number; has_more: boolean }> {
+    return request({ url: `/api/v1/videos/${id}/danmaku`, method: 'GET', params: { offset, limit } })
   }
 }
 

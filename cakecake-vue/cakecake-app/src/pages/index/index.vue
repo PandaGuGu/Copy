@@ -309,7 +309,13 @@ function goSearch()      { uni.navigateTo({ url: '/pages/search/index' }) }
 function goMessages()    { uni.navigateTo({ url: '/pages/notifications/index' }) }
 function goCategories()  { uni.navigateTo({ url: '/pages/categories/index' }) }
 function goMine()        { uni.reLaunch({ url: '/pages/mine/index' }) }
-function goVideoDetail(id: number) { uni.navigateTo({ url: `/pages/video-detail/index?id=${id}` }) }
+function goVideoDetail(id: number) {
+  // 调试反馈:App 端 WebView 自动化 input tap 是否触发了 @tap,弹 toast 即触发但 navigateTo 失败
+  if (process.env.NODE_ENV !== 'production') {
+    uni.showToast({ title: `goVideoDetail id=${id}`, icon: 'none', duration: 1500 })
+  }
+  uni.navigateTo({ url: `/pages/video-detail/index?id=${id}` })
+}
 
 function onBannerTap(b: Banner) {
   const target = b.url

@@ -9,8 +9,8 @@
       <text class="more" @tap="onMore">⋯</text>
     </view>
 
-    <!-- 视频播放器（B 站风格：自定义控制条） -->
-    <view class="player">
+    <!-- 视频播放器（B 站风格：自定义控制条 + canvas 弹幕层 + 应用内全屏） -->
+    <view class="player" :class="{ 'fs-active': fullscreen }">
       <video
         v-if="video"
         :id="'vd-' + video.id"
@@ -25,36 +25,84 @@
         @timeupdate="onTimeUpdate"
         @ended="onEnded"
         @loadedmetadata="onLoadedMeta"
-        @fullscreenchange="onFullscreenChange"
         style="width:100%;height:100%;"
       />
-      <!-- 封面遮罩（未播放时显示） -->
-      <view v-if="!playing && !userStarted" class="player-cover" @tap="onTogglePlay">
-        <view class="play-btn"><text>▶</text></view>
-        <text class="cover-tip">点击播放</text>
-      </view>
-      <!-- 控制条 -->
-      <view v-if="userStarted" class="controls" @tap.stop>
-        <view class="ctrl-row">
-          <view class="ctrl-btn" @tap="onTogglePlay">
-            <text>{{ playing ? '❚❚' : '▶' }}</text>
-          </view>
-          <text class="time">{{ formatClock(currentTime) }} / {{ formatClock(duration) }}</text>
-          <view class="spacer" />
-          <view class="ctrl-btn speed" @tap="onCycleSpeed">
-            <text>{{ speed }}x</text>
-          </view>
-          <view class="ctrl-btn" @tap="onFullscreen">
-            <text>⛶</text>
-          </view>
+      <!-- 弹幕层（canvas，pointer-events none 不挡控制条） -->
+      <canvas
+        v-if="video && dmReady"
+        canvas-id="dm-layer"
+        id="dm-layer"
+        class="dm-layer"
+        :style="{ width: dmW + 'px', height: dmH + 'px' }"
+      />
+      <!-- 封面遮罩（未播放时显示；App 端用 cover-view 盖在原生 video 上） -->
+      <cover-view v-if="!playing && !userStarted" class="player-cover" @tap="onTogglePlay">
+        <cover-view class="play-btn"><cover-view>▶</cover-view></cover-view>
+        <cover-view class="cover-tip">点击播放</cover-view>
+      </cover-view>
+        <!-- 控制条：App 端 video 是原生组件会盖住普通 view，必须用 cover-view 才能显示在 video 上方 -->
+        <cover-view v-if="userStarted" class="controls" @tap.stop>
+          <cover-view class="ctrl-row">
+            <cover-view class="ctrl-btn" @tap="onTogglePlay">
+              <cover-view>{{ playing ? '❚❚' : '▶' }}</cover-view>
+            </cover-view>
+            <cover-view class="time">{{ formatClock(currentTime) }} / {{ formatClock(duration) }}</cover-view>
+            <cover-view class="spacer" />
+            <!-- 弹幕开关 -->
+            <cover-view class="ctrl-btn" @tap="toggleDmVisible">
+              <cover-view>{{ dmVisible ? '弹' : '关弹' }}</cover-view>
+            </cover-view>
+            <!-- 倍速菜单(弹层) -->
+            <cover-view class="ctrl-btn speed" @tap="openSpeedMenu">
+              <cover-view>{{ speedLabel }}</cover-view>
+            </cover-view>
+            <!-- 循环 -->
+            <cover-view class="ctrl-btn" @tap="toggleLoop">
+              <cover-view>{{ loopMode === 'off' ? '↻' : (loopMode === 'one' ? '🔂' : '🔁') }}</cover-view>
+            </cover-view>
+            <!-- 宽屏 -->
+            <cover-view class="ctrl-btn" @tap="toggleWide">
+              <cover-view>{{ wideMode ? '▣' : '▢' }}</cover-view>
+            </cover-view>
+            <!-- 音量 -->
+            <cover-view class="ctrl-btn" @tap="toggleMute">
+              <cover-view>{{ muted ? '🔇' : '🔊' }}</cover-view>
+            </cover-view>
+            <!-- 全屏 -->
+            <cover-view class="ctrl-btn" @tap="fullscreen ? onExitFullscreen() : onFullscreen()">
+              <cover-view>{{ fullscreen ? '✕' : '⛶' }}</cover-view>
+            </cover-view>
+          </cover-view>
+          <!-- 进度条 -->
+          <cover-view
+            class="progress-bar"
+            @tap="onSeekTap"
+            @touchstart="onSeekTouchStart"
+            @touchmove="onSeekTouchMove"
+            @touchend="onSeekTouchEnd"
+          >
+            <cover-view class="progress-fill" :style="{ width: progressPct + '%' }" />
+            <cover-view class="progress-thumb" :style="{ left: progressPct + '%' }" />
+          </cover-view>
+          <!-- 倍速菜单弹层(cover-view 内只能用 cover-view) -->
+          <cover-view v-if="speedMenuOpen" class="speed-menu" @tap.stop>
+            <cover-view
+              v-for="s in SPEEDS"
+              :key="s"
+              class="speed-item"
+              :class="{ active: s === speed }"
+              @tap="pickSpeed(s)"
+            >
+              <cover-view>{{ s === 1 ? '1x (正常)' : s + 'x' }}</cover-view>
+            </cover-view>
+          </cover-view>
+        </cover-view>
+        <!-- 全屏顶部返回条 -->
+        <view v-if="fullscreen" class="fs-topbar" @tap.stop>
+          <view class="fs-exit" @tap="onExitFullscreen"><text>‹ 退出全屏</text></view>
+          <text class="fs-title text-ellipsis-1">{{ video?.title }}</text>
         </view>
-        <!-- 进度条 -->
-        <view class="progress-bar" @tap="onSeekTap">
-          <view class="progress-fill" :style="{ width: progressPct + '%' }" />
-          <view class="progress-thumb" :style="{ left: progressPct + '%' }" />
-        </view>
       </view>
-    </view>
 
     <!-- UP主信息 -->
     <view v-if="video" class="up-card">
@@ -214,7 +262,7 @@
 
 <script setup lang="ts">
 import { computed, ref, getCurrentInstance } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onReady, onUnload, onBackPress } from '@dcloudio/uni-app'
 import { videoApi } from '@/api/video'
 import { useUserStore } from '@/store/user'
 import type { Comment, Video } from '@/utils/types'
@@ -229,8 +277,14 @@ const expanded = ref(false)
 const followed = ref(false)
 let currentId = 0
 
-// 播放地址：相对路径拼 baseURL
+// 播放地址 baseURL：与 request.ts 同款条件编译（App 端必须用局域网 IP，不能 127.0.0.1）
+// #ifdef APP-PLUS
+const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+// #endif
+// #ifndef APP-PLUS
+// 注意：H5 dev 的 VITE_API_BASE_URL 为空，必须 fallback 127.0.0.1:8080（vite dev 不代理 /uploads）
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+// #endif
 const playUrl = computed(() => {
   if (!video.value?.video_url) return ''
   const u = video.value.video_url
@@ -248,6 +302,189 @@ let replyParentId: number | null = null
 // 弹幕
 const danmakuText = ref('')
 
+// ===== 弹幕引擎（canvas 时间轴回放） =====
+interface DmTimelineItem {
+  content: string
+  color: string
+  type: string
+  font_size: string
+  video_time: number
+}
+interface ActiveDm {
+  text: string
+  color: string
+  type: string
+  fontSize: number
+  x: number
+  y: number
+  speed: number
+  born: number
+  duration: number
+}
+
+const dmList = ref<DmTimelineItem[]>([])
+const dmReady = ref(false)
+const dmW = ref(0)
+const dmH = ref(0)
+let dmIdx = 0
+let activeDms: ActiveDm[] = []
+let dmTimer: ReturnType<typeof setInterval> | null = null
+let dmCtx: any = null
+let dmTrackCursor = 0
+const DM_FPS = 30
+const DM_TRAVEL_SEC = 8
+
+onReady(() => {
+  setupDmCanvas()
+})
+
+onUnload(() => {
+  stopDm()
+  // #ifdef H5
+  document.removeEventListener('fullscreenchange', onH5FullscreenChange)
+  // #endif
+})
+
+function setupDmCanvas() {
+  refreshDmCanvasSize()
+}
+
+/** 查询 .player 实际尺寸并同步 canvas（普通/全屏切换后都要重查）。
+ *  全屏容器为 fixed inset 0（不旋转），boundingClientRect 即视口尺寸，无需特判。 */
+function refreshDmCanvasSize() {
+  uni
+    .createSelectorQuery()
+    .in(getCurrentInstance()?.proxy)
+    .select('.player')
+    .boundingClientRect((rect: any) => {
+      if (rect && rect.width > 0) {
+        dmW.value = Math.round(rect.width)
+        dmH.value = Math.round(rect.height)
+        dmReady.value = true
+      }
+    })
+    .exec()
+}
+
+function getDmCtx(): any {
+  if (!dmCtx) dmCtx = uni.createCanvasContext('dm-layer', getCurrentInstance()?.proxy)
+  return dmCtx
+}
+
+function fontSizePx(fs: string): number {
+  const base = Math.max(12, Math.round(dmW.value / 27))
+  if (fs === 'sm') return base - 2
+  if (fs === 'lg') return base + 4
+  return base
+}
+
+function dmTrackCount(): number {
+  if (!dmH.value) return 4
+  return Math.max(2, Math.floor((dmH.value * 0.82) / (fontSizePx('md') + 8)))
+}
+
+async function loadDanmakus() {
+  dmList.value = []
+  dmIdx = 0
+  activeDms = []
+  if (!currentId) return
+  try {
+    const resp = await videoApi.danmakus(currentId, 0, 2000)
+    dmList.value = resp.items.map((i) => ({
+      content: i.content,
+      color: i.color,
+      type: i.type,
+      font_size: i.font_size,
+      video_time: i.video_time
+    }))
+  } catch {
+    /* 弹幕拉取失败不阻塞播放 */
+  }
+}
+
+function spawnDm(item: DmTimelineItem, now: number) {
+  const fs = fontSizePx(item.font_size)
+  const isScroll = item.type !== 'top' && item.type !== 'bottom'
+  if (isScroll) {
+    const speed = dmW.value / DM_TRAVEL_SEC
+    dmTrackCursor = (dmTrackCursor + 1) % dmTrackCount()
+    const y = dmTrackCursor * (fs + 8) + fs
+    activeDms.push({
+      text: item.content, color: item.color || '#FFFFFF', type: 'scroll',
+      fontSize: fs, x: dmW.value, y, speed, born: now, duration: 0
+    })
+  } else {
+    const y = item.type === 'top' ? fs + 4 : dmH.value - fs - 6
+    activeDms.push({
+      text: item.content, color: item.color || '#FFFFFF', type: item.type,
+      fontSize: fs, x: dmW.value / 2, y, speed: 0, born: now, duration: 3.5
+    })
+  }
+}
+
+function dmTextWidth(text: string, fs: number): number {
+  // 估算：全角≈fs，半角≈0.55fs
+  let w = 0
+  for (const ch of text) {
+    w += ch.charCodeAt(0) > 255 ? fs : fs * 0.55
+  }
+  return w
+}
+
+function tickDm() {
+  const t = currentTime.value
+  while (dmIdx < dmList.value.length && dmList.value[dmIdx].video_time <= t) {
+    spawnDm(dmList.value[dmIdx], t)
+    dmIdx++
+  }
+  drawDm(t)
+}
+
+function drawDm(now: number) {
+  if (!dmReady.value) return
+  const ctx = getDmCtx()
+  ctx.clearRect(0, 0, dmW.value, dmH.value)
+  const keep: ActiveDm[] = []
+  for (const d of activeDms) {
+    const age = now - d.born
+    if (d.type === 'scroll') {
+      d.x -= d.speed * (1 / DM_FPS)
+      if (d.x + dmTextWidth(d.text, d.fontSize) < 0) continue
+    } else if (age > d.duration) {
+      continue
+    }
+    ctx.setFillStyle(d.color)
+    ctx.setFontSize(d.fontSize)
+    ctx.setTextAlign(d.type === 'scroll' ? 'left' : 'center')
+    ctx.fillText(d.text, d.type === 'scroll' ? d.x : d.x, d.y)
+    keep.push(d)
+  }
+  activeDms = keep
+  ctx.draw()
+}
+
+function startDm() {
+  stopDm()
+  if (!dmReady.value || !dmList.value.length) return
+  dmTimer = setInterval(tickDm, 1000 / DM_FPS)
+}
+
+function stopDm() {
+  if (dmTimer) {
+    clearInterval(dmTimer)
+    dmTimer = null
+  }
+}
+
+function resetDm() {
+  activeDms = []
+  dmIdx = 0
+  if (dmReady.value) {
+    getDmCtx().clearRect(0, 0, dmW.value, dmH.value)
+    getDmCtx().draw()
+  }
+}
+
 onLoad((q) => {
   currentId = Number(q?.id) || 0
   loadDetail(currentId)
@@ -259,6 +496,7 @@ async function loadDetail(id: number) {
   video.value = null
   comments.value = []
   commentCursor = null
+  stopDm()
   try {
     const [v, rels] = await Promise.all([
       videoApi.detail(id),
@@ -266,8 +504,11 @@ async function loadDetail(id: number) {
     ])
     video.value = v
     followed.value = v.followed_by_me
+    // 时长直接取后端字段（避免 loadedmetadata 事件缺失导致 duration=0）
+    duration.value = v.duration || 0
     related.value = rels.items.filter((r) => r.id !== id).slice(0, 8)
     loadComments()
+    loadDanmakus()
   } finally {
     loading.value = false
   }
@@ -357,6 +598,15 @@ async function sendDanmaku() {
     await videoApi.sendDanmaku(currentId, { content, video_time: Math.floor(currentTime) || 0 })
     uni.showToast({ title: '弹幕已发送', icon: 'success' })
     danmakuText.value = ''
+    // 本地上屏：立即加入时间轴，播放中则马上滚动出来
+    dmList.value.push({
+      content,
+      color: '#FFFFFF',
+      type: 'scroll',
+      font_size: 'md',
+      video_time: Math.floor(currentTime) || 0
+    })
+    if (playing.value && dmReady.value) spawnDm(dmList.value[dmList.value.length - 1], currentTime.value)
   } catch { /* 已 toast */ }
 }
 
@@ -420,9 +670,25 @@ function onFollow()    { followed.value = !followed.value }
 function goSpace() {
   if (video.value) uni.navigateTo({ url: `/pages/space/index?id=${video.value.user_id}` })
 }
-function onPlay()      { playing.value = true }
-function onPause()     { playing.value = false }
-function onEnded()     { playing.value = false }
+function onPlay()      { playing.value = true; startDm() }
+function onPause()     { playing.value = false; stopDm() }
+function onEnded() {
+  playing.value = false
+  stopDm()
+  // 单曲循环
+  if (loopMode.value === 'one') {
+    currentTime.value = 0
+    resetDm()
+    setTimeout(() => {
+      playing.value = true
+      getVideoContext()?.seek(0)
+      getVideoContext()?.play()
+      startDm()
+    }, 200)
+  } else {
+    resetDm()
+  }
+}
 
 // ===== 自定义播放器状态 =====
 const playing = ref(false)
@@ -430,21 +696,133 @@ const userStarted = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const speed = ref(1)
-const SPEEDS = [0.5, 1, 1.5, 2]
+const SPEEDS = [0.5, 1, 1.25, 1.5, 2, 3]
+const speedLabel = computed(() => (speed.value === 1 ? '1x' : speed.value + 'x'))
+const speedMenuOpen = ref(false)
+function openSpeedMenu() { speedMenuOpen.value = !speedMenuOpen.value }
+function pickSpeed(s: number) {
+  speed.value = s
+  speedMenuOpen.value = false
+  try { getVideoContext()?.playbackRate(s) } catch { /* ignore */ }
+}
+
+// PC 端功能:弹幕开关 / 循环 / 宽屏 / 音量
+const dmVisible = ref(true)
+function toggleDmVisible() {
+  dmVisible.value = !dmVisible.value
+  if (!dmVisible.value) { stopDm(); activeDms = [] } else if (playing.value) startDm()
+}
+
+const loopMode = ref<'off' | 'one' | 'all'>('off')
+function toggleLoop() {
+  loopMode.value = loopMode.value === 'off' ? 'one' : loopMode.value === 'one' ? 'all' : 'off'
+}
+
+const wideMode = ref(false)
+function toggleWide() {
+  wideMode.value = !wideMode.value
+  // 改 video object-fit (H5 直接生效;App 端原生 video 可能不支持运行时改)
+  try {
+    const v: any = document.querySelector(`#vd-${video.value?.id}`) || document.querySelector('video')
+    if (v) v.style.objectFit = wideMode.value ? 'cover' : 'contain'
+  } catch { /* ignore */ }
+}
+
+const volume = ref(1.0)
+const muted = ref(false)
+function setVolume(v: number) {
+  volume.value = Math.max(0, Math.min(1, v))
+  muted.value = volume.value === 0
+  try {
+    const vEl: any = document.querySelector('video')
+    if (vEl) vEl.volume = volume.value
+  } catch { /* ignore */ }
+}
+function toggleMute() {
+  if (muted.value) { if (volume.value === 0) volume.value = 1; setVolume(volume.value) }
+  else setVolume(0)
+}
 
 function onLoadedMeta(e: any) {
-  duration.value = e.detail?.duration || e.target?.duration || 0
+  // 兼容不同事件格式
+  duration.value = e?.detail?.duration || e?.duration || e?.target?.duration || 0
 }
 
 function onTimeUpdate(e: any) {
-  currentTime.value = e.detail?.currentTime || e.target?.currentTime || 0
-  if (!duration.value && e.detail?.duration) duration.value = e.detail.duration
+  // 拖动进度条时忽略，避免 thumb 被拉回
+  if (dragging.value) return
+  const t = e?.detail?.currentTime ?? e?.currentTime ?? e?.target?.currentTime
+  if (typeof t === 'number' && isFinite(t)) currentTime.value = t
+  const d = e?.detail?.duration ?? e?.duration ?? e?.target?.duration
+  if (d && !duration.value) duration.value = d
 }
 
 function onFullscreenChange(e: any) {
-  // 全屏切换后保留播放状态
+  // 不再使用系统全屏（应用内全屏），保留兼容：若外部触发全屏事件则同步状态
   playing.value = !!e.detail?.fullScreen
 }
+
+// ===== 应用内全屏（客户端方案：不进系统播放器，UI 撑满 + 锁横屏，弹幕层跟随） =====
+const fullscreen = ref(false)
+
+function lockOrientation(lock: boolean) {
+  // #ifdef APP-PLUS
+  try {
+    if (lock) (plus as any).screen.lockOrientation('landscape-primary')
+    else (plus as any).screen.unlockOrientation()
+  } catch (_) { /* 部分 ROM 不支持，忽略 */ }
+  // #endif
+}
+
+// H5：orientation.lock 需要浏览器全屏上下文 → requestFullscreen 后锁横屏
+// #ifdef H5
+function onH5FullscreenChange() {
+  if (document.fullscreenElement) {
+    // 进入浏览器全屏成功，再锁横屏（真机生效；桌面/headless 忽略失败）
+    try { (screen.orientation as any)?.lock?.('landscape') } catch (_) { /* 忽略 */ }
+    setTimeout(() => { refreshDmCanvasSize(); resetDm() }, 150)
+  } else if (fullscreen.value) {
+    // 用户通过浏览器手势退出全屏 → 同步应用状态
+    fullscreen.value = false
+    lockOrientation(false)
+    setTimeout(() => { refreshDmCanvasSize(); resetDm() }, 150)
+  }
+}
+document.addEventListener('fullscreenchange', onH5FullscreenChange)
+// #endif
+
+function onFullscreen() {
+  fullscreen.value = true
+  lockOrientation(true)
+  // #ifdef H5
+  try {
+    const el = document.documentElement as any
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {})
+  } catch (_) { /* 不支持则保持 fixed 全屏 */ }
+  setTimeout(() => { refreshDmCanvasSize(); resetDm() }, 150)
+  // #endif
+  // #ifndef H5
+  setTimeout(() => { refreshDmCanvasSize(); resetDm() }, 150)
+  // #endif
+}
+
+function onExitFullscreen() {
+  fullscreen.value = false
+  lockOrientation(false)
+  // #ifdef H5
+  try { if (document.fullscreenElement) document.exitFullscreen() } catch (_) { /* 忽略 */ }
+  // #endif
+  setTimeout(() => { refreshDmCanvasSize(); resetDm() }, 150)
+}
+
+// 物理返回键：全屏时先退出全屏
+onBackPress(() => {
+  if (fullscreen.value) {
+    onExitFullscreen()
+    return true
+  }
+  return false
+})
 
 function onTogglePlay() {
   userStarted.value = true
@@ -454,15 +832,58 @@ function onTogglePlay() {
   else ctx.play()
 }
 
+// 进度条拖动状态（cover-view 触摸事件，App 端原生）
+const dragging = ref(false)
+
+/** 从 touch 事件算比例：cover-view 无 getBoundingClientRect，用屏幕宽估算（左右各 32rpx 内缩） */
+function ratioFromTouch(e: any): number {
+  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0])
+  if (!t) return -1
+  const x = t.clientX ?? t.pageX
+  if (typeof x !== 'number') return -1
+  const sys = uni.getSystemInfoSync()
+  const screenWpx = (sys.windowWidth || 390) * (sys.pixelRatio || 1)
+  const padPx = (32 * screenWpx) / 750
+  const w = screenWpx - padPx * 2
+  if (w <= 0) return -1
+  return Math.min(1, Math.max(0, (x - padPx) / w))
+}
+
+function onSeekTouchStart(e: any) {
+  if (!duration.value) return
+  dragging.value = true
+  const ratio = ratioFromTouch(e)
+  if (ratio >= 0) currentTime.value = ratio * duration.value
+}
+
+function onSeekTouchMove(e: any) {
+  if (!dragging.value) return
+  const ratio = ratioFromTouch(e)
+  if (ratio >= 0) currentTime.value = ratio * duration.value
+}
+
+function onSeekTouchEnd(e: any) {
+  if (!dragging.value) return
+  dragging.value = false
+  const ratio = ratioFromTouch(e)
+  if (ratio >= 0) {
+    const target = ratio * duration.value
+    currentTime.value = target
+    console.log('[seek] dragEnd ratio=', ratio, 'target=', target, 'ctx=', !!getVideoContext())
+    getVideoContext()?.seek(target)
+    resetDm() // 拖动进度条后弹幕按新进度重放
+  }
+}
+
 function onSeekTap(e: any) {
   if (!duration.value) return
-  // 计算点击位置比例
-  const rect = (e.target as any)?.getBoundingClientRect?.()
-  const x = e.detail?.x ?? (rect ? e.detail.x - rect.left : 0)
-  const ratio = Math.min(1, Math.max(0, x / 300))
-  const target = ratio * duration.value
+  // cover-view 无 rect，用与拖动相同的估算比例
+  const ratio = ratioFromTouch(e)
+  const target = Math.max(0, ratio) * duration.value
   currentTime.value = target
+  console.log('[seek] tap ratio=', ratio, 'target=', target, 'dur=', duration.value, 'ctx=', !!getVideoContext())
   getVideoContext()?.seek(target)
+  resetDm() // 拖动进度条后弹幕按新进度重放
 }
 
 function onCycleSpeed() {
@@ -471,18 +892,23 @@ function onCycleSpeed() {
   getVideoContext()?.playbackRate(speed.value)
 }
 
-function onFullscreen() {
-  getVideoContext()?.requestFullScreen({ direction: 0 })
-}
-
+let vctxCache: UniApp.VideoContext | null = null
 function getVideoContext(): UniApp.VideoContext | null {
   if (!video.value) return null
-  return uni.createVideoContext('vd-' + video.value.id, getCurrentInstance()?.proxy)
+  if (!vctxCache) {
+    vctxCache = uni.createVideoContext('vd-' + video.value.id, getCurrentInstance()?.proxy)
+  }
+  return vctxCache
 }
 
 const progressPct = computed(() => {
-  if (!duration.value) return 0
-  return Math.min(100, Math.round((currentTime.value / duration.value) * 100))
+  // 兜底：duration/currentTime 非法时返回 0，避免 NaN%
+  const d = duration.value
+  const t = currentTime.value
+  if (!d || !isFinite(d) || d <= 0 || !isFinite(t) || t < 0) return 0
+  const pct = (t / d) * 100
+  if (!isFinite(pct)) return 0
+  return Math.min(100, Math.round(pct))
 })
 
 function formatClock(sec: number): string {
@@ -540,6 +966,61 @@ function formatTime(s: string): string {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
+}
+
+/* 应用内全屏：fixed 填满屏幕。横屏由锁屏方向实现（App: plus.screen.lockOrientation；
+ * H5: screen.orientation.lock），不旋转容器——避免 canvas 弹幕文字跟着转 90°。 */
+.player.fs-active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999;
+  aspect-ratio: auto;
+  background: #000;
+}
+
+/* 全屏顶部返回条 */
+.fs-topbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 24rpx;
+  background: linear-gradient(rgba(0, 0, 0, 0.6), transparent);
+  z-index: 4;
+  .fs-exit {
+    color: #FFF;
+    font-size: 26rpx;
+    padding: 8rpx 0;
+    flex-shrink: 0;
+  }
+  .fs-title {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 24rpx;
+    flex: 1;
+  }
+}
+
+/* 全屏控制条：字号放大 */
+.player.fs-active .controls {
+  padding: 24rpx 32rpx 20rpx;
+  .ctrl-btn { min-width: 64rpx; height: 64rpx; font-size: 32rpx; }
+  .time { font-size: 26rpx; }
+  .progress-bar { height: 40rpx; }
+}
+
+/* 弹幕层：盖在视频上、控制条下，点击穿透 */
+.dm-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* 未播放封面遮罩 */
@@ -610,22 +1091,25 @@ function formatTime(s: string): string {
 }
 .progress-bar {
   position: relative;
-  height: 32rpx;
+  height: 40rpx;
   display: flex;
   align-items: center;
   margin-top: 4rpx;
+  /* 左右留出圆点半径空间：0% 进度时圆点也在屏内可见 */
+  padding-left: 16rpx;
+  padding-right: 16rpx;
   &::before {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 16rpx;
+    right: 16rpx;
     height: 6rpx;
     border-radius: 3rpx;
     background: rgba(255, 255, 255, 0.3);
   }
   .progress-fill {
     position: absolute;
-    left: 0;
+    left: 16rpx;
     height: 6rpx;
     border-radius: 3rpx;
     background: #FB7299;
@@ -634,12 +1118,35 @@ function formatTime(s: string): string {
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 20rpx;
-    height: 20rpx;
+    width: 28rpx;
+    height: 28rpx;
     border-radius: 50%;
     background: #FFF;
+    border: 3rpx solid #FB7299;
     box-shadow: 0 0 6rpx rgba(0, 0, 0, 0.4);
   }
+}
+
+/* 倍速菜单弹层（cover-view 内只能用 cover-view,所有子元素必须用 cover-view） */
+.speed-menu {
+  position: absolute;
+  right: 16rpx;
+  bottom: 130rpx;
+  background: rgba(0, 0, 0, 0.78);
+  border-radius: 12rpx;
+  padding: 8rpx 0;
+  min-width: 180rpx;
+  z-index: 5;
+}
+.speed-item {
+  padding: 16rpx 28rpx;
+  color: #FFF;
+  font-size: 26rpx;
+  text-align: center;
+}
+.speed-item.active {
+  color: #FB7299;
+  font-weight: 600;
 }
 
 .up-card {

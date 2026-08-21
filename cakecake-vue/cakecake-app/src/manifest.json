@@ -9,11 +9,14 @@
         "usingComponents" : true,
         "nvueStyleCompiler" : "uni-app",
         "compilerVersion" : 3,
+        "screenOrientation" : [
+            "portrait-primary"
+        ],
         "splashscreen" : {
-            "alwaysShowBeforeRender" : true,
-            "waiting" : true,
+            "alwaysShowBeforeRender" : false,
+            "waiting" : false,
             "autoclose" : true,
-            "delay" : 0
+            "delay" : 1500
         },
         "modules" : {},
         "distribute" : {

@@ -13,9 +13,16 @@ export const uploadApi = {
    * @param token 已登录用户 access token
    */
   uploadVideo(token: string, filePath: string, title: string, description = ''): Promise<UploadResult> {
+    // App 端无 vite 代理，必须用局域网 IP（与 request.ts 同款条件编译）
+    // #ifdef APP-PLUS
+    const apiBase = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+    // #endif
+    // #ifndef APP-PLUS
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    // #endif
     return new Promise((resolve, reject) => {
       uni.uploadFile({
-        url: (import.meta.env.VITE_API_BASE_URL || '') + '/api/v1/videos',
+        url: apiBase + '/api/v1/videos',
         filePath,
         name: 'file',
         formData: { title, description },
