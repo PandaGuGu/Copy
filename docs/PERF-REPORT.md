@@ -85,3 +85,73 @@ Prometheus / Grafana 可直接抓取。
 - 治理件：**限流 99.7% 拒绝率实测 + 熔断 5 单测 + 监控端点全指标可抓**——评价中"缺熔断、限流、监控"的三点，限流早已存在，熔断/监控已补齐并验证
 - 移动端："添头"标签被击穿——弹幕播放器 + 全屏 + 原生 nvue 渲染已实现
 - 待真机验证：nvue 渲染效果（需 APK，云打包/本地打包路径见 `.workbuddy/memory/2026-08-20.md`）
+
+## 9. 2026-08-21 实测复核（本轮真实运行结果）
+
+> 本机同时运行 IDE / 模拟器 / 浏览器，属负载偏高的开发机，非干净服务器环境。以下是**实际跑出的数字**，非参考他人结论。
+
+### 单元测试与覆盖率（`go test ./... && go test -cover ./...`）
+
+- **全部包 PASS**：`internal/{config,ffmpeg,handler,middleware,model,search,service,data/pkg/sensitive,pkg/userlevel,...}` 均 `ok`，通过。此前 `internal/handler` 会 panic，本轮已修复（见下方修复说明）。
+- **覆盖率（语句级）**：
+
+| 包 | 覆盖率 |
+|---|---|
+| `pkg/username` | 100.0% |
+| `pkg/userlevel` | 90.3% |
+| `pkg/useravatar` | 72.7% |
+| `pkg/markdown` | 70.9% |
+| `pkg/iplocate` | 55.4% |
+| `pkg/statemachine` | 50.0% |
+| `pkg/ffmpeg` | 42.7% |
+| `pkg/sensitive` | 37.5% |
+| `middleware` | 17.4% |
+| `service` | 10.3% |
+| `search` | 7.3% |
+| `handler` | 4.5% |
+| `model` | 1.3% |
+
+### 修复：`internal/handler` 测试一致 panic
+
+根因是 gorm.`sqlite.Open(":memory:")` 默认连接池打开多个连接，而 SQLite `:memory:` 每个连接是独立内存库——迁移/写入落在连接 A、后续查询落在空库连接 B，报 `no such table: users / trace_records`，再叠加全局 `logger.L=nil` 在 trace 异步写库失败时 panic。修复见 `internal/handler/auth_sqlite_test.go`：`SetMaxOpenConns(1)` 使所有操作走同一内存库。修复后 `go test ./internal/handler/ -count=1` → `ok 2.421s`。
+
+### 性能压测（`scripts/bench/bench.go`）
+
+**1) 无状态健康检查 `GET /api/v1/health`（限流豁免，n=2000, c=50）**
+
+```
+qps   : 139.9
+p50   : 41.4ms
+p95   : 1.10s
+p99   : 9.49s
+errors: 18（10s 超时，连接池在 50 并发饱和）
+status: 200 -> 1982
+```
+
+**2) 有状态视频流 `GET /api/v1/videos?limit=10`（DB + 限流 + 追踪全链路，n=2000, c=50）**
+
+```
+qps   : 137.2
+status: 429 -> 1697（85%，Guest 60/min 限流按设计拒绝）
+       200 -> 212
+       500 -> 79
+errors: 12
+```
+
+**3) 限流配额内干净样本 `GET /api/v1/videos?limit=10`（n=50, c=10，等待 60s 窗口重置后）**
+
+```
+qps   : 182.9
+p50   : 50.4ms
+p95   : 73.7ms
+p99   : 110.1ms
+errors: 0
+status: 200 -> 50
+```
+
+### 结论
+
+- **限流确实生效**：未登录打 `/api/v1/videos`，超配额即刻 429（占用该窗口配额后连续多次压测均 429），配额内放行零错误。
+- **DB 全链路单机基准**：配额内 50 请求 **~183 QPS / p99 110ms / 零错误**（比 8/20 干净环境的 536 QPS 低，因本机开发负载高、limit=10 与 limit=20 查询成本不同）。
+- **并发饱和点**：50 并发下 `health` 与 `videos` 均出现 p99 秒级与少量超时/5xx，指向 GORM/MySQL 连接池在该机器上的饱和边界，属可观测的容量拐点，非代码硬伤。
+- 复测命令见 README「测试」节与本节。

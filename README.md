@@ -145,13 +145,53 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 
 ## 界面截图
 
-| 首页 | 视频播放（弹幕） | 运营后台 BI | 直播间 |
-|------|------|------|------|
-| ![首页](docs/images/homepage-v2.png) | ![播放](docs/images/player-v2.png) | ![BI](docs/images/admin-bi.png) | ![直播](docs/images/live-room-viewer.png) |
+**PC 端**
 
-| 移动端 App（H5 真机） |
-|------|
-| ![移动端](docs/app-screenshots/dev-real-v1.png) |
+| 首页 | 直播广场 | 直播间 | 消息 |
+|------|------|------|------|
+| ![首页](docs/images/screens/pc/首页.png) | ![直播广场](docs/images/screens/pc/直播广场.png) | ![直播间](docs/images/screens/pc/直播间.png) | ![消息](docs/images/screens/pc/消息.png) |
+
+| 个人主页 | 创作中心 | 动态 | 后台管理 |
+|------|------|------|------|
+| ![个人主页](docs/images/screens/pc/个人主页.png) | ![创作中心](docs/images/screens/pc/创作中心.png) | ![动态](docs/images/screens/pc/动态.png) | ![后台管理](docs/images/screens/pc/后台管理.png) |
+
+**移动端 App**
+
+| 首页 | 直播间 | 消息 | 个人空间 |
+|------|------|------|------|
+| ![首页](docs/images/screens/app/首页.png) | ![直播间](docs/images/screens/app/直播间.png) | ![消息](docs/images/screens/app/消息.png) | ![个人空间](docs/images/screens/app/个人空间.png) |
+
+| 关注页面 | 我的页面 |
+|------|------|
+| ![关注页面](docs/images/screens/app/关注页面.png) | ![我的页面](docs/images/screens/app/我的页面.png) |
+
+---
+
+## 测试
+
+### 后端（Go test）
+
+```bash
+go test ./... -count=1       # 单元测试：SQLite 内存库 + miniredis，无外部依赖
+go test -cover ./... -count=1 # 覆盖率
+```
+
+单元测试覆盖 `internal/{handler,service,ws,model,pkg}/...` 等核心模块（当前 `internal/handler` 部分用例依赖测试库初始化，需要 `trace_records` 等表已建，否则 trace 中间件会空指针 panic 而失败）。
+
+### 前端（Vitest / Vue）
+
+```bash
+cd cakecake-vue/bilibili-vue && npm test          # 前端单元测试（如配置）
+cd cakecake-vue/cakecake-app && npm run type-check # 移动端类型检查
+```
+
+### 性能压测（压测脚本工具）
+
+```bash
+go run ./scripts/bench        # 压测脚本（需先启动后端，见 bench.go）
+```
+
+压测思路参考上游 [earthcake2233/cakecake](https://github.com/earthcake2233/cakecake)：用仓库内 `go test -cover` 统计覆盖、用独立压测脚本对目标接口并发高压并配合 pprof 定位瓶颈（系统调用 / GORM-MySQL 查询链 / JSON 序列化）。
 
 ---
 

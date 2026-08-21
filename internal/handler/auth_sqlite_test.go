@@ -36,6 +36,12 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
+	// SQLite :memory: 每个连接是独立的内存库，默认连接池会打开多个连接，
+	// 导致迁移/写入落在连接 A、后续查询落在空库连接 B 而报 "no such table"。
+	// 限制单连接使所有操作走同一个内存库。
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, data.AutoMigrateAll(db, zap.NewNop()))
 
 	mr, err := miniredis.Run()
