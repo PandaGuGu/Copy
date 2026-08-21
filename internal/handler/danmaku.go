@@ -53,6 +53,67 @@ type danmakuPost struct {
 	VideoTime float64 `json:"video_time"`
 }
 
+// ListDanmakus returns the danmaku timeline of a video, ordered by video_time
+// ascending so players can consume it as a playhead-aligned feed.
+// Supports offset pagination (danmakus per video are small, offset is fine).
+func (a *API) ListDanmakus(c *gin.Context) {
+	vid, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || vid == 0 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "500"))
+	if limit <= 0 || limit > 2000 {
+		limit = 500
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int64
+	_ = a.DB.Model(&model.Danmaku{}).Where("video_id = ?", vid).Count(&total).Error
+
+	var rows []model.Danmaku
+	if err := a.DB.Where("video_id = ?", vid).
+		Order("video_time ASC, id ASC").
+		Limit(limit).Offset(offset).
+		Find(&rows).Error; err != nil {
+		a.Log.Error("list danmakus", zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+
+	items := make([]gin.H, 0, len(rows))
+	for _, d := range rows {
+		items = append(items, gin.H{
+			"id":         d.ID,
+			"content":    d.Content,
+			"color":      d.Color,
+			"type":       d.Type,
+			"font_size":  danmakuFontSizeField(d),
+			"video_time": d.VideoTime,
+			"like_count": d.LikeCount,
+			"created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	nextOffset := 0
+	if offset+len(items) < int(total) {
+		nextOffset = offset + len(items)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code": errcode.CodeSuccess,
+		"msg":  errcode.GetMsg(errcode.CodeSuccess),
+		"data": gin.H{
+			"items":        items,
+			"total":        total,
+			"next_offset":  nextOffset,
+			"has_more":     nextOffset > 0,
+		},
+	})
+}
+
 // PostDanmaku persists and broadcasts a danmaku (F5, S-007, S-014).
 func (a *API) PostDanmaku(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
@@ -124,6 +185,18 @@ func (a *API) PostDanmaku(c *gin.Context) {
 		a.Log.Error("sensitive check", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
+	}
+
+	// AI semantic review (optional layer; fail-open on LLM errors).
+	if a.AISens != nil && a.AISens.Enabled() {
+		blocked, aiErr := a.AISens.Review(ctx, content)
+		if aiErr != nil {
+			a.Log.Warn("ai danmaku review error (fail-open)", zap.Error(aiErr))
+		} else if blocked {
+			_, _ = a.Redis.Del(ctx, key).Result()
+			resp.Err(c, http.StatusBadRequest, errcode.CodeDanmakuSensitive)
+			return
+		}
 	}
 
 	fontSize := normalizeDanmakuFontSize(req.FontSize)

@@ -31,5 +31,18 @@ func (a *API) rejectIfSensitive(c *gin.Context, content string, code int) bool {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return true
 	}
+
+	// AI semantic review (optional; fail-open on LLM errors).
+	if a.AISens != nil && a.AISens.Enabled() {
+		blocked, aiErr := a.AISens.Review(c.Request.Context(), content)
+		if aiErr != nil {
+			if a.Log != nil {
+				a.Log.Warn("ai ugc review error (fail-open)", zap.Error(aiErr))
+			}
+		} else if blocked {
+			resp.Err(c, http.StatusBadRequest, code)
+			return true
+		}
+	}
 	return false
 }

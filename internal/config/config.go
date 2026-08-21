@@ -72,6 +72,10 @@ type C struct {
 	AgentDailyQuota    int
 	AgentRequestTimeout time.Duration
 
+	// AI-sensitive review (optional LLM layer on top of keyword filter)
+	AISensitiveEnabled bool
+	AISensitiveTimeout time.Duration
+
 	// Rate limiting
 	RateLimitEnabled     bool
 	RateLimitGuestMax    int
@@ -80,6 +84,17 @@ type C struct {
 	RateLimitGuestWindow time.Duration
 	RateLimitUserWindow  time.Duration
 	RateLimitAdminWindow time.Duration
+
+	// Circuit breaker (governance, Module G1)
+	CircuitBreakerEnabled     bool
+	CircuitBreakerFailureRate float64
+	CircuitBreakerMinRequests int
+	CircuitBreakerWindow      time.Duration
+	CircuitBreakerOpenTimeout time.Duration
+	CircuitBreakerHalfOpenMax int
+
+	// Metrics endpoint (governance, Module G1)
+	MetricsEnabled bool
 
 	// Security
 	CORSAllowedOrigins string // comma-separated origins or "*"
@@ -129,6 +144,18 @@ func parseBoolEnv(key string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+func parseFloatEnv(key string, def float64) float64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return def
+	}
+	return f
 }
 
 // renderHTTPAddr respects Render's PORT env var.
@@ -192,6 +219,9 @@ func Load() *C {
 		AgentDailyQuota:    atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
 
+		AISensitiveEnabled: parseBoolEnv("AI_SENSITIVE_ENABLED", false),
+		AISensitiveTimeout: mustParseDuration(os.Getenv("AI_SENSITIVE_TIMEOUT"), 5*time.Second),
+
 		RateLimitEnabled:     parseBoolEnv("RATE_LIMIT_ENABLED", true),
 		RateLimitGuestMax:    atoi(os.Getenv("RATE_LIMIT_GUEST_MAX"), 60),
 		RateLimitUserMax:     atoi(os.Getenv("RATE_LIMIT_USER_MAX"), 300),
@@ -199,6 +229,15 @@ func Load() *C {
 		RateLimitGuestWindow: mustParseDuration(os.Getenv("RATE_LIMIT_GUEST_WINDOW"), 60*time.Second),
 		RateLimitUserWindow:  mustParseDuration(os.Getenv("RATE_LIMIT_USER_WINDOW"), 60*time.Second),
 		RateLimitAdminWindow: mustParseDuration(os.Getenv("RATE_LIMIT_ADMIN_WINDOW"), 60*time.Second),
+
+		CircuitBreakerEnabled:     parseBoolEnv("CIRCUIT_BREAKER_ENABLED", true),
+		CircuitBreakerFailureRate: parseFloatEnv("CIRCUIT_BREAKER_FAILURE_RATE", 0.5),
+		CircuitBreakerMinRequests: atoi(os.Getenv("CIRCUIT_BREAKER_MIN_REQUESTS"), 20),
+		CircuitBreakerWindow:      mustParseDuration(os.Getenv("CIRCUIT_BREAKER_WINDOW"), 10*time.Second),
+		CircuitBreakerOpenTimeout: mustParseDuration(os.Getenv("CIRCUIT_BREAKER_OPEN_TIMEOUT"), 10*time.Second),
+		CircuitBreakerHalfOpenMax: atoi(os.Getenv("CIRCUIT_BREAKER_HALF_OPEN_MAX"), 5),
+
+		MetricsEnabled: parseBoolEnv("METRICS_ENABLED", true),
 
 		CORSAllowedOrigins: getenv("CORS_ALLOWED_ORIGINS", "*"),
 		TrustedProxies:     os.Getenv("TRUSTED_PROXIES"),

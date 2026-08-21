@@ -36,6 +36,7 @@ const (
 	CodeAccountBanned           = 40307 // 账号已被管理员封禁
 	CodeNotFound                = 40400
 	CodeRateLimited             = 42900
+	CodeServiceUnavailable      = 50300
 	CodeSearchUnavailable       = 50301
 	CodeInternalError           = 50000
 )
@@ -76,6 +77,7 @@ var messages = map[int]string{
 	CodeAccountClosed:      "账号已注销",
 	CodeNotFound:           "资源不存在",
 	CodeRateLimited:    "请求过于频繁，请稍后再试",
+	CodeServiceUnavailable: "服务暂时不可用，请稍后重试",
 	CodeSearchUnavailable:  "搜索服务暂不可用，请检查 Elasticsearch 配置",
 	CodeInternalError:      "服务器内部错误",
 }

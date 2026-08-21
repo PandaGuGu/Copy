@@ -239,11 +239,33 @@ func main() {
 		ChatHub: chatHub, Log: log,
 	}
 
+	// AI sensitive review layer (optional; keyword filter remains the hard gate).
+	var aiSens *sensitive.AIChecker
+	if agentGW != nil && agentGW.LLM != nil {
+		llm := agentGW.LLM
+		aiSens = sensitive.NewAIChecker(cfg.AISensitiveEnabled, cfg.AISensitiveTimeout, log,
+			func(ctx context.Context, text string) (bool, error) {
+				reply, err := llm.Complete(ctx, []aigateway.ChatMessage{
+					{Role: "system", Content: sensitive.DefaultReviewPrompt},
+					{Role: "user", Content: text},
+				})
+				if err != nil {
+					return false, err
+				}
+				norm := strings.ToUpper(strings.TrimSpace(reply))
+				return strings.Contains(norm, "BLOCK"), nil
+			})
+		if cfg.AISensitiveEnabled {
+			log.Info("ai sensitive review enabled",
+				zap.String("model", cfg.DeepSeekModel), zap.Duration("timeout", cfg.AISensitiveTimeout))
+		}
+	}
+
 	feedSvc := service.NewFeedService(db, rdb)
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
-		JWT: jm, Sens: sens, OSS: ossc, ES: esc, Play: pc,
+		JWT: jm, Sens: sens, AISens: aiSens, OSS: ossc, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		Svcs: service.NewServices(db, cfg),
 		Feed: feedSvc,
