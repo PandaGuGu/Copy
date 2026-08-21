@@ -104,6 +104,26 @@
         </view>
       </view>
 
+    <!-- 第1行：简介 / 评论 切换 tab + 弹幕发送 + 弹幕开关 -->
+    <view class="detail-tabs">
+      <view class="tab-item" :class="{ active: activeTab === 'intro' }" @tap="activeTab = 'intro'"><text>简介</text></view>
+      <view class="tab-item" :class="{ active: activeTab === 'comment' }" @tap="activeTab = 'comment'"><text>评论 {{ video?.comment_count ? formatCount(video.comment_count) : '' }}</text></view>
+      <view class="tab-spacer" />
+      <input
+        v-model="danmakuText"
+        class="tab-dm-input"
+        placeholder="发个弹幕"
+        confirm-type="send"
+        @confirm="sendDanmaku"
+      />
+      <view class="tab-dm-send" @tap="sendDanmaku"><text>发送</text></view>
+      <view class="dm-toggle" :class="{ off: !dmVisible }" @tap="toggleDmVisible">
+        <text>{{ dmVisible ? '✓弹' : '弹' }}</text>
+      </view>
+    </view>
+
+    <!-- 简介视图（第2-5行 + 简介 + 相关推荐） -->
+    <view v-if="activeTab === 'intro'">
     <!-- UP主信息 -->
     <view v-if="video" class="up-card">
       <image class="avatar" :src="video.uploader_avatar_url || '/static/avatar/default.png'" mode="aspectFill" @tap="goSpace" />
@@ -122,7 +142,7 @@
     <!-- 标题区 -->
     <view v-if="video" class="title-section">
       <text class="title">{{ video.title }}</text>
-      <text class="meta">▶ {{ formatCount(video.play_count) }}  💬 {{ video.comment_count }}  发布于 {{ formatTime(video.created_at) }}</text>
+      <text class="meta">▶ {{ formatCount(video.play_count) }}  💬 {{ formatCount(video.danmaku_count) }}  📅 {{ formatDate(video.created_at) }}  🟢 {{ video.watching_count || 0 }} 人在线</text>
     </view>
 
     <!-- 操作按钮组 -->
@@ -131,9 +151,9 @@
         <text class="icon">{{ video.liked_by_me ? '❤️' : '👍' }}</text>
         <text>{{ formatCount(video.like_count) }}</text>
       </view>
-      <view class="action-btn">
-        <text class="icon">👎</text>
-        <text>不喜欢</text>
+      <view class="action-btn" @tap="onDislike">
+        <text class="icon">{{ disliked ? '👎' : '🤙' }}</text>
+        <text>点踩</text>
       </view>
       <view class="action-btn" @tap="onCoin">
         <text class="icon">🪙</text>
@@ -145,8 +165,14 @@
       </view>
       <view class="action-btn" @tap="onShare">
         <text class="icon">↗</text>
-        <text>分享</text>
+        <text>转发</text>
       </view>
+    </view>
+
+    <!-- 视频合集导航（后端有合集数据时才显示） -->
+    <view v-if="video && seriesList && seriesList.length > 0" class="series-bar" @tap="openSeries">
+      <text class="series-title">合集 · {{ seriesTitle || '视频合集' }}</text>
+      <text class="series-arrow">▾ 点击展开</text>
     </view>
 
     <!-- 简介 -->
@@ -155,20 +181,23 @@
       <text class="toggle" @tap="expanded = !expanded">{{ expanded ? '收起 ⌃' : '展开 ⌄' }}</text>
     </view>
 
-    <!-- 弹幕发送 -->
-    <view class="danmaku-bar">
-      <input
-        v-model="danmakuText"
-        class="danmaku-input"
-        placeholder="发个弹幕见证当下"
-        confirm-type="send"
-        @confirm="sendDanmaku"
-      />
-      <view class="danmaku-send" @tap="sendDanmaku">
-        <text>发送</text>
+    <!-- 相关推荐（简介视图底部） -->
+    <view class="related">
+      <text class="section-title">相关推荐</text>
+      <view v-for="r in related" :key="r.id" class="related-card" @tap="loadDetail(r.id)">
+        <image class="cover" :src="r.cover_url || '/static/placeholder.png'" mode="aspectFill" />
+        <view class="meta">
+          <text class="title text-ellipsis-2">{{ r.title }}</text>
+          <text class="up">{{ r.uploader || '匿名' }}</text>
+          <text class="stats">▶ {{ formatCount(r.play_count) }} · {{ formatDuration(r.duration) }}</text>
+        </view>
       </view>
     </view>
+    </view>
+    <!-- /简介视图 -->
 
+    <!-- 评论视图（评论区，点击"评论"tab 后显示，上方视频不动） -->
+    <view v-if="activeTab === 'comment'">
     <!-- 评论区 -->
     <view class="comment-section">
       <view class="comment-head">
@@ -244,19 +273,8 @@
         <text>加载更多评论</text>
       </view>
     </view>
-
-    <!-- 相关推荐 -->
-    <view class="related">
-      <text class="section-title">相关推荐</text>
-      <view v-for="r in related" :key="r.id" class="related-card" @tap="loadDetail(r.id)">
-        <image class="cover" :src="r.cover_url || '/static/placeholder.png'" mode="aspectFill" />
-        <view class="meta">
-          <text class="title text-ellipsis-2">{{ r.title }}</text>
-          <text class="up">{{ r.uploader || '匿名' }}</text>
-          <text class="stats">▶ {{ formatCount(r.play_count) }} · {{ formatDuration(r.duration) }}</text>
-        </view>
-      </view>
     </view>
+    <!-- /评论视图 -->
   </view>
 </template>
 
@@ -275,6 +293,10 @@ const related = ref<Video[]>([])
 const loading = ref(false)
 const expanded = ref(false)
 const followed = ref(false)
+const disliked = ref(false) // 点踩（后端暂无 dislike 接口，先本地态）
+const seriesList = ref<unknown[]>([]) // 合集（后端暂无接口，预留条件渲染）
+const seriesTitle = ref('')
+const activeTab = ref<'intro' | 'comment'>('intro') // 简介/评论 切换
 let currentId = 0
 
 // 播放地址 baseURL：与 request.ts 同款条件编译（App 端必须用局域网 IP，不能 127.0.0.1）
@@ -646,6 +668,17 @@ async function onFavorite() {
 
 function onShare()     { uni.showToast({ title: '分享功能待完善', icon: 'none' }) }
 
+/** 点踩：后端暂无接口，先本地切换 */
+function onDislike() {
+  disliked.value = !disliked.value
+  uni.showToast({ title: disliked.value ? '已点踩' : '已取消点踩', icon: 'none' })
+}
+
+/** 合集展开：后端暂无合集接口，预留 */
+function openSeries() {
+  uni.showToast({ title: '合集功能待接入', icon: 'none' })
+}
+
 const isUploader = computed(() => !!video.value && isLoggedIn.value && userStore.user?.user_id === video.value.user_id)
 
 async function pinComment(c: Comment) {
@@ -941,6 +974,13 @@ function formatTime(s: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
 }
+/** 发布日期（数据行用，固定 yyyy-MM-dd） */
+function formatDate(s: string): string {
+  if (!s) return ''
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
+}
 </script>
 
 <style lang="scss" scoped>
@@ -1182,6 +1222,47 @@ function formatTime(s: string): string {
   .meta { display: block; margin-top: 12rpx; font-size: 22rpx; color: #999; }
 }
 
+/* 第1行：简介/评论 tab + 弹幕发送 + 弹幕开关 */
+.detail-tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 24rpx;
+  height: 88rpx;
+  border-bottom: 1rpx solid #F1F1F1;
+  .tab-item { padding: 0 24rpx 0 0; font-size: 30rpx; color: #999; }
+  .tab-item.active { color: #181818; font-weight: 600; }
+  .tab-spacer { flex: 1; }
+  .tab-dm-input {
+    width: 200rpx;
+    height: 56rpx;
+    background: #F4F4F4;
+    border-radius: 28rpx;
+    padding: 0 20rpx;
+    font-size: 24rpx;
+  }
+  .tab-dm-send {
+    background: #FB7299;
+    color: #FFF;
+    padding: 10rpx 20rpx;
+    border-radius: 28rpx;
+    font-size: 24rpx;
+    margin-left: 12rpx;
+  }
+  .dm-toggle {
+    width: 64rpx;
+    height: 56rpx;
+    margin-left: 12rpx;
+    border-radius: 12rpx;
+    background: #FB7299;
+    color: #FFF;
+    font-size: 24rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dm-toggle.off { background: #999; color: #FFF; }
+}
+
 .action-row {
   display: flex;
   border-top: 1rpx solid #F1F1F1;
@@ -1190,15 +1271,29 @@ function formatTime(s: string): string {
   .action-btn {
     flex: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* 图标与文字横排 */
     align-items: center;
+    justify-content: center;
     gap: 8rpx;
     padding: 20rpx 0;
     font-size: 22rpx;
     color: #666;
 
-    .icon { font-size: 36rpx; }
+    .icon { font-size: 34rpx; }
   }
+}
+
+.series-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 24rpx 16rpx;
+  padding: 20rpx 24rpx;
+  background: #F8F8F8;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #FB7299;
+  .series-title { font-size: 26rpx; color: #181818; font-weight: 500; }
+  .series-arrow { font-size: 22rpx; color: #FB7299; }
 }
 
 .intro-card {
