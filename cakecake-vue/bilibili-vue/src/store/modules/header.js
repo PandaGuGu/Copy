@@ -33,7 +33,7 @@ const state = {
     {
       name: "直播",
       class: "live",
-      href: "/#/minibili/live"
+      href: "/minibili/live"
     },
     {
       name: "会员购",
@@ -132,16 +132,16 @@ const state = {
       name: "直播",
       class: "",
       icon: "live",
-      href: "/#/minibili/live",
+      href: "/minibili/live",
       fieldClass: "nav-live",
       fields: [
         {
           name: "全部直播",
-          href: "/#/minibili/live"
+          href: "/minibili/live"
         },
         {
           name: "开播设置",
-          href: "/#/minibili/live/create"
+          href: "/minibili/live/create"
         }
       ],
       fieldImgClass: "live-field",

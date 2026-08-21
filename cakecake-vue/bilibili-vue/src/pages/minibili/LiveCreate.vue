@@ -91,16 +91,21 @@ export default {
     const loading = ref(true);
     const uploading = ref(false);
     const regenerating = ref(false);
+    const loadFailed = ref(false);
     const obsServer = ref("rtmp://localhost:1935/live");
 
     const maskedKey = computed(() => {
       const k = form.stream_key;
-      if (!k || k.length <= 8) return k || "加载中...";
-      return k.slice(0, 4) + "****" + k.slice(-4);
+      if (k) {
+        if (k.length <= 8) return k;
+        return k.slice(0, 4) + "****" + k.slice(-4);
+      }
+      return loadFailed.value ? "获取失败" : "加载中...";
     });
 
     async function initRoom() {
       loading.value = true;
+      loadFailed.value = false;
       try {
         const res = await getMyLiveRoom();
         const data = (res.data || res).data || res.data || res;
@@ -111,7 +116,15 @@ export default {
           form.stream_key = data.stream_key || "";
         }
       } catch (e) {
-        ElMessage.error("加载失败，请刷新重试");
+        loadFailed.value = true;
+        const code = e && e.minibiliApiCode;
+        if (code === 40100) {
+          ElMessage.warning("登录已过期，请重新登录后获取推流密钥");
+        } else if (code === 42900 || (e && e.response && e.response.status === 429)) {
+          ElMessage.warning("请求过于频繁，请稍等几秒后刷新重试");
+        } else {
+          ElMessage.error("加载失败，请刷新重试");
+        }
       } finally {
         loading.value = false;
       }

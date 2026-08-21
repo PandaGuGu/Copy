@@ -54,7 +54,7 @@
           <router-link to="/article" class="sn-right-link">专栏</router-link>
           <router-link to="/activity" class="sn-right-link">活动</router-link>
           <router-link to="/community" class="sn-right-link">社区中心</router-link>
-          <a href="/#/minibili/live" class="sn-right-link">直播</a>
+          <router-link to="/minibili/live" class="sn-right-link">直播</router-link>
           <router-link to="/class" class="sn-right-link">课堂</router-link>
           <router-link to="/zone/音乐" class="sn-right-link sn-right-highlight">新歌热榜</router-link>
         </div>

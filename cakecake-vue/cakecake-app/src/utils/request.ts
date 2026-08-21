@@ -38,6 +38,8 @@ export interface RequestOptions extends AxiosRequestConfig {
   cacheTTL?: number
   /** 强制刷新：跳过缓存直接请求并覆盖缓存 */
   forceRefresh?: boolean
+  /** 401 时不强制跳登录（用于可降级的可选接口，如搜索历史；未登录走本地兜底） */
+  noAuthRedirect?: boolean
 }
 
 /**
@@ -47,7 +49,14 @@ export interface RequestOptions extends AxiosRequestConfig {
  */
 function uniRequestAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
   return new Promise((resolve, reject) => {
-    const url = (config.baseURL || '') + (config.url || '')
+    // 自定义适配器不会像内置适配器那样自动拼 config.params，需手动序列化进 URL
+    let url = (config.baseURL || '') + (config.url || '')
+    const params = (config.params || {}) as Record<string, any>
+    const qs = Object.keys(params)
+      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== '')
+      .map((k) => `${k}=${encodeURIComponent(String(params[k]))}`)
+      .join('&')
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs
     const method = (config.method || 'get').toUpperCase()
     // axios 的 headers 可能是 AxiosHeaders 实例，统一摊平成普通对象
     const headers: Record<string, string> = {}
@@ -134,6 +143,10 @@ http.interceptors.response.use(
         // 刷新失败 → 跳登录
         uni.removeStorageSync('access_token')
         uni.removeStorageSync('refresh_token')
+        // noAuthRedirect：可选接口（如搜索历史）401 时静默失败，不打断浏览
+        if ((response.config as RequestOptions).noAuthRedirect) {
+          return Promise.reject(new ApiError(code, msg))
+        }
         uni.showToast({ title: '请重新登录', icon: 'none' })
         setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 800)
         return Promise.reject(new ApiError(code, msg))

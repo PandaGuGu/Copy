@@ -52,9 +52,9 @@ export const searchApi = {
   suggest(keyword: string): Promise<{ tag: SuggestTag[] }> {
     return request({ url: '/api/v1/search/suggest', method: 'GET', params: { keyword } })
   },
-  /** 我的搜索历史（GET /users/me/search-history，auth） */
+  /** 我的搜索历史（GET /users/me/search-history，auth）——未登录 401 时静默走本地兜底，不跳登录 */
   history(): Promise<{ keywords: string[] }> {
-    return request({ url: '/api/v1/users/me/search-history', method: 'GET' })
+    return request({ url: '/api/v1/users/me/search-history', method: 'GET', noAuthRedirect: true })
   },
   /** 记录搜索历史（POST /users/me/search-history，auth） */
   saveHistory(keyword: string): Promise<unknown> {
