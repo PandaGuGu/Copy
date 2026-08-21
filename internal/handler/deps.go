@@ -34,6 +34,7 @@ type 	Dependencies struct {
 	ChatHub      *ws.ChatHub
 	JWT          *jwttoken.Manager
 	Sens         *sensitive.Filter
+	AISens       *sensitive.AIChecker
 	OSS          storage.FileStorager
 	MQ           queue.TranscodePublisher
 	ES           *search.Client

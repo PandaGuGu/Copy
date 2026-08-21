@@ -56,7 +56,7 @@ func DefaultRateLimitConfig() RateLimitConfig {
 //   - admin:   identified by admin_id from JWT context
 //
 // Each tier has its own window and max. Exceeded requests receive 429.
-func RateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
+func RateLimiter(rdb *redis.Client, cfg RateLimitConfig, reg *MetricsRegistry) gin.HandlerFunc {
 	if !cfg.Enabled {
 		return func(c *gin.Context) { c.Next() }
 	}
@@ -132,6 +132,9 @@ func RateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 
 		if int(count) > max {
 			c.Header("Retry-After", strconv.Itoa(int(ttl.Seconds())))
+			if reg != nil {
+				reg.RecordRateLimitRejected(path)
+			}
 			resp.Err(c, http.StatusTooManyRequests, errcode.CodeRateLimited)
 			c.Abort()
 			return

@@ -18,6 +18,10 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Use(logger.GinMiddleware(a.Log))
 	r.Use(middleware.TraceRecordMiddleware(a.DB))
 
+	// Metrics (before rate limit so the endpoint is observable).
+	metricsReg := middleware.NewMetricsRegistry()
+	r.Use(middleware.MetricsMiddleware(metricsReg))
+
 	// Rate limiting (after trace, before auth)
 	rlCfg := middleware.DefaultRateLimitConfig()
 	if a.Cfg != nil {
@@ -29,7 +33,27 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		rlCfg.UserWindow = a.Cfg.RateLimitUserWindow
 		rlCfg.AdminWindow = a.Cfg.RateLimitAdminWindow
 	}
-	r.Use(middleware.RateLimiter(a.Redis, rlCfg))
+	rlCfg.SkipPaths["/api/v1/metrics"] = true
+	r.Use(middleware.RateLimiter(a.Redis, rlCfg, metricsReg))
+
+	// Circuit breaker (governance): global breaker protects API group.
+	brCfg := middleware.DefaultBreakerConfig()
+	if a.Cfg != nil {
+		brCfg.Enabled = a.Cfg.CircuitBreakerEnabled
+		brCfg.FailureRate = a.Cfg.CircuitBreakerFailureRate
+		brCfg.MinRequests = a.Cfg.CircuitBreakerMinRequests
+		brCfg.Window = a.Cfg.CircuitBreakerWindow
+		brCfg.OpenTimeout = a.Cfg.CircuitBreakerOpenTimeout
+		brCfg.HalfOpenMax = a.Cfg.CircuitBreakerHalfOpenMax
+	}
+	apiBreaker := middleware.NewCircuitBreaker("api", brCfg)
+	if a.Cfg == nil || a.Cfg.MetricsEnabled {
+		metricsReg.RegisterBreaker("api", apiBreaker)
+	}
+	r.Use(middleware.CircuitBreakerMiddleware(apiBreaker))
+
+	// Metrics endpoint (public, skipped by rate limit & breaker).
+	r.GET("/api/v1/metrics", middleware.MetricsHandler(metricsReg))
 
 	r.GET("/api/v1/health", a.Health)
 
@@ -85,6 +109,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		// Module 2: Player chapters/bitrates (public)
 		pub.GET("/videos/:id/chapters", a.ListVideoChapters)
 		pub.GET("/videos/:id/bitrates", a.ListVideoBitrates)
+		pub.GET("/videos/:id/danmaku", a.ListDanmakus)
 		// Module 3: Subtitles (public list)
 		pub.GET("/videos/:id/subtitles", a.ListSubtitles)
 		pub.GET("/videos/:id/subtitles/:subtitleId", a.GetSubtitle)

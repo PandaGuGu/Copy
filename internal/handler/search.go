@@ -21,6 +21,15 @@ import (
 // SearchAll implements GET /api/v1/search for the bilibili-vue search page.
 func (a *API) SearchAll(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("keyword"))
+	// 临时调试日志：记录每次搜索请求（2026-08-21 排查"参数错误"）
+	a.Log.Info("search request",
+		zap.String("keyword_raw", c.Query("keyword")),
+		zap.String("keyword", keyword),
+		zap.Int("kw_len", len([]rune(keyword))),
+		zap.String("raw_query", c.Request.URL.RawQuery),
+		zap.String("ua", c.GetHeader("User-Agent")),
+		zap.String("client_ip", c.ClientIP()),
+	)
 	if err := search.ValidateKeyword(keyword); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
