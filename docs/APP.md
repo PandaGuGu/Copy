@@ -30,6 +30,10 @@ npm run build:app           # App 构建 → dist/build/app/（www 资源）
 
 ## 后端地址机制
 
+- App 端无 vite 代理，直连后端必须用 `VITE_API_BASE_URL_APP`（电脑局域网 IP，如 `http://192.168.1.100:8080`）
+- **铁律（S-020）**：任何直连地址（video src / fetch / uploadFile / 自拼 URL）都必须 `#ifdef APP-PLUS` 条件编译——App 用 `VITE_API_BASE_URL_APP`，H5 用 `VITE_API_BASE_URL || 'http://127.0.0.1:8080'`（H5 dev 的 fallback 严禁删）
+- 反例：video-detail 曾直接拼 `VITE_API_BASE_URL`（App 打包=127.0.0.1）→ 真机视频黑屏只有播放按钮；user.ts/upload.ts 同类 → 发动态/上传必失败（均已修，2026-08-20）
+
 | 场景 | 配置 | 说明 |
 |------|------|------|
 | H5 dev | `VITE_API_BASE_URL=` 空 | axios 相对路径 `/api/` → vite dev 代理 → `VITE_PROXY_TARGET=http://127.0.0.1:8080` |
@@ -54,10 +58,22 @@ npm run build:app           # App 构建 → dist/build/app/（www 资源）
 
 ![真机首页](app-screenshots/dev-real-v1.png)
 
+## 弹幕播放器（2026-08-20 落地，双端原生/WebView 分流）
+
+- **双端实现**：`src/pages/video-detail/` 下同名 `index.vue`（H5/WebView，canvas 弹幕）+ `index.nvue`（**App 端客户端原生渲染**，weex 引擎）——uni-app 同名 .vue/.nvue 并存时 App 自动优先 .nvue，H5 用 .vue，零路由改动
+- **nvue 版弹幕**：不用 canvas（nvue canvas API 差异大），改**原生 view 节点模拟**——每条弹幕一个绝对定位 view，`translateX` 移动，30fps 定时器消费时间轴；原生控件渲染性能优于 WebView canvas
+- **nvue 版状态栏**：全局 SCSS 的 `var(--status-bar-height)` 在 nvue 无效（编译警告来源），navbar 必须显式 `paddingTop: getSystemInfoSync().statusBarHeight`；全屏时 `plus.navigator.setFullscreen(true)` 隐藏状态栏、退出恢复
+- **nvue 版评论**：两层结构（顶层+回复展开），已含 UP 主置顶/精选操作
+- **后端**：`GET /api/v1/videos/:id/danmaku?limit=&offset=` 按 `video_time ASC` 返回时间轴（`ListDanmakus`）；发送沿用既有 `POST .../danmaku`（S-007 冷却 + S-014 颜色 + 敏感词 + 可选 AI 审核）
+- **应用内全屏**：不调系统播放器全屏；容器 `fixed` 铺满 + 锁横屏——App(nvue) 走 `plus.screen.lockOrientation('landscape-primary')`，H5 走 `requestFullscreen()` → `screen.orientation.lock('landscape')`（需全屏上下文）；**切勿用 CSS rotate(90deg) 容器做横屏**（文字竖排，实测踩坑）；物理返回键先退全屏
+- **回归验证**：H5 用 `cakecake-app/dm-verify.cjs`（playwright + PIL 像素分析）；App 端 nvue 编译产物验证 `grep -c canvas` = 0（nvue 无 canvas）+ `dm-item` 存在；真机横屏需 HBuilderX 基座实测
+- **遗留**：nvue 版评论为简化两层结构（无 UP主置顶/精选按钮）；弹幕 WS 实时订阅未做（REST 时间轴 + 发送后本地上屏）
+
 ## Backlog
 
 - 移动端专属 API：分片上传 / 推送注册 / 商品下单
-- 弹幕播放器（nvue 或 renderjs）
+- 弹幕 WS 实时订阅（当前 H5 无 WS 弹幕，靠 REST 时间轴 + 发送后本地上屏）
+- nvue 版评论区补 UP主操作（置顶/精选）
 - 公网通道恢复（当前仅局域网可用，见 `bmad-output/architecture.md` §10）
 - 专业设计稿替换占位图标（当前 TabBar 图标为 PIL 生成）
 

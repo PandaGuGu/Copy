@@ -587,3 +587,62 @@ if !colorRegex.MatchString(color) {
 - 严禁修改 `domains.go` 后不同步测试
 
 ---
+
+### S-019：治理件使用（熔断 / 监控 / 压测）
+
+**对应 Rule**：R-OBS-3（监控端点保持可达）、R-OBS-4（熔断统一状态机）
+
+**触发条件**：需要排查服务稳定性、验证限流/熔断行为、或给出性能基准时。
+
+**执行步骤**：
+
+1. **查看监控**：`GET /api/v1/metrics` 返回 Prometheus 文本格式指标：
+   - `minibili_http_requests_total{method,path,status}` — 请求计数
+   - `minibili_http_request_duration_seconds_bucket{le}` — 延迟直方图
+   - `minibili_rate_limit_rejected_total{path}` — 限流 429 计数
+   - `minibili_circuit_breaker_state{name}` — 0 closed / 1 open / 2 half_open
+   - `minibili_circuit_breaker_rejected_total{name}` — 熔断快速失败计数
+2. **熔断配置**（环境变量，默认值）：
+   - `CIRCUIT_BREAKER_ENABLED=true`、`CIRCUIT_BREAKER_FAILURE_RATE=0.5`
+   - `CIRCUIT_BREAKER_MIN_REQUESTS=20`、`CIRCUIT_BREAKER_WINDOW=10s`
+   - `CIRCUIT_BREAKER_OPEN_TIMEOUT=10s`、`CIRCUIT_BREAKER_HALF_OPEN_MAX=5`
+   - 触发后返回 HTTP 503 + 业务码 `50300`；验证用单测 `go test ./internal/middleware/ -run TestBreaker -v`
+3. **压测基准**：`go run ./scripts/bench/bench.go -url http://127.0.0.1:8080/api/v1/videos?limit=20 -n 2000 -c 50`
+   - 输出 QPS / avg / p50 / p95 / p99 / 状态码分布；配合限流阈值观察 429 保护
+4. **AI 敏感词审核**：`AI_SENSITIVE_ENABLED=true` 启用 LLM 语义审核层（词表硬门禁之后、fail-open 降级），接入弹幕与 UGC 评论/动态/文章链路
+
+**禁止行为**：
+- 严禁移除 `/api/v1/metrics` 的限流/熔断豁免（R-OBS-3）
+- 严禁在业务代码里绕过熔断状态机自造降级（R-OBS-4）
+- 严禁用 `fmt.Println` 替代 zap 记录审核/熔断日志（R-OBS-1）
+
+---
+
+### S-020：移动端 baseURL 条件编译（App 端直连地址铁律）
+
+**对应 Rule**：R-FE-7（必须使用环境变量配置请求地址）
+
+**触发条件**：在 cakecake-app（uni-app）中编写任何直连后端的地址——`video src`、`image src`（相对路径）、`fetch`、`uni.uploadFile`、`uni.request` 之外的自拼 URL。
+
+**执行步骤**：
+
+1. **统一使用 request.ts 的 baseURL 策略**（条件编译）：
+   ```ts
+   // #ifdef APP-PLUS
+   const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+   // #endif
+   // #ifndef APP-PLUS
+   const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+   // #endif
+   ```
+2. **App 端必须用 `VITE_API_BASE_URL_APP`（电脑局域网 IP）**——`VITE_API_BASE_URL` 在 App 打包时是 `127.0.0.1:8080`，手机访问 127.0.0.1 是手机自己，必然失败。
+3. **H5 dev 分支必须保留 `'http://127.0.0.1:8080'` fallback**——`VITE_API_BASE_URL` 在 dev 为空，fallback 到 127.0.0.1（vite dev 不代理 /uploads，视频/图片走 8080 直连）。**严禁改成 `''`**（会导致 H5 dev 视频加载失败 "The element has no supported sources"）。
+
+**禁止行为**：
+- 严禁在页面/API 层直接写死 `127.0.0.1:8080` 或裸拼 `VITE_API_BASE_URL` 不带条件编译
+- 严禁删掉 H5 分支的 `127.0.0.1` fallback
+- 严禁新增 `fetch`/`uni.uploadFile` 直连时绕过条件编译
+
+**排查指引**：App 端"白屏/黑屏/上传失败/视频加载失败"优先 grep `127.0.0.1:8080` 和 `import.meta.env.VITE_API_BASE_URL`，检查是否缺 `#ifdef APP-PLUS`。
+
+---

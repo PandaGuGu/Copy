@@ -84,3 +84,10 @@ snapshot.txt
 
 # ── Netlify 本地状态（勿提交）──
 .netlify/state.json
+
+# ── 本地工具压缩包（147MB/131MB，不入库）──
+cmdline-tools.zip
+gradle.zip
+
+# ── App 构建产物目录（APK + 测试截图，勿提交）──
+cakecake-vue/cakecake-app/release/
