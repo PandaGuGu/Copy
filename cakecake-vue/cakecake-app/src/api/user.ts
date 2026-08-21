@@ -35,7 +35,14 @@ export const dynamicApi = {
     const fd = new FormData()
     fd.append('title', title)
     fd.append('content', content)
-    const baseURL = (import.meta.env.VITE_API_BASE_URL || '') + '/api/v1/users/me/dynamics'
+    // App 端无 vite 代理，必须用局域网 IP（与 request.ts 同款条件编译）
+    // #ifdef APP-PLUS
+    const apiBase = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+    // #endif
+    // #ifndef APP-PLUS
+    const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+    // #endif
+    const baseURL = apiBase + '/api/v1/users/me/dynamics'
     const resp = await fetch(baseURL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },

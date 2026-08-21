@@ -41,7 +41,7 @@
 }
 
 /* 视频卡片网格（flex 双列，全端兼容：H5/小程序/App 均可用）
-   左右 padding 4rpx + 卡片 50%：几乎贴边全宽，对齐真实 B 站网格观感 */
+   左右 padding 4rpx + 卡片 calc((100% - gap)/2)：恰好双列并排，不溢出换行 */
 .video-grid {
   display: flex;
   flex-wrap: wrap;
@@ -51,14 +51,26 @@
 }
 
 .video-card {
-  width: 50%;
+  /* 50%*2 + gap 2rpx + padding 会超宽 → flex-wrap 把第二张挤到下一行
+     calc 精确扣除 gap，保证两张并排恰好放下 */
+  width: calc((100% - 2rpx) / 2);
+  min-width: 0;
   background-color: var(--bg-card);
   border-radius: 12rpx;
   overflow: hidden;
   transition: transform 0.15s;
+  /* 显式 position:relative + z-index:1:避免父级 scroll-view 滚动状态下 hit-test 错位,
+     防止 <img> 子元素在 App 端 WebView 拦截父 view @tap */
+  position: relative;
+  z-index: 1;
 
   &:active {
     transform: scale(0.98);
+  }
+
+  /* 封面/标题/UP主/统计等子元素不拦截 tap,直接落到父 video-card */
+  image, .video-cover, .video-meta, .video-cover-img, .video-duration {
+    pointer-events: none;
   }
 }
 
