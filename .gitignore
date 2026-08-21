@@ -91,3 +91,9 @@ gradle.zip
 
 # ── App 构建产物目录（APK + 测试截图，勿提交）──
 cakecake-vue/cakecake-app/release/
+
+# ── uni-app 编译产物（HBuilderX 生成，勿提交）──
+cakecake-vue/cakecake-app/unpackage/
+
+# ── 本地调试日志/模拟器截图（勿提交）──
+/logs/
