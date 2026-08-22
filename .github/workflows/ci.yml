@@ -93,7 +93,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate commit messages
-        uses: tim-actions/commit-message-checker@v0.3.1
+        uses: tim-actions/commit-message-checker-with-regex@v0.3.1
         with:
           commits: ${{ steps.get-pr-commits.outputs.commits }}
           pattern: '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|wip)(\([^)]+\))?!?: .{1,100}$'
