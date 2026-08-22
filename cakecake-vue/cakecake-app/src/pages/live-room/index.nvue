@@ -124,7 +124,7 @@ const startText = computed(() => formatStartTime(room.value?.started_at))
 
 const liveSrc = computed(() => {
   if (!isLive.value) return ''
-  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:8080'
+  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:18080'
   let host = '192.168.1.100'
   try {
     const idx = base.indexOf('://')

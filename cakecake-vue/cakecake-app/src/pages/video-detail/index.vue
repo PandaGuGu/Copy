@@ -301,11 +301,11 @@ let currentId = 0
 
 // 播放地址 baseURL：与 request.ts 同款条件编译（App 端必须用局域网 IP，不能 127.0.0.1）
 // #ifdef APP-PLUS
-const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:18080'
 // #endif
 // #ifndef APP-PLUS
-// 注意：H5 dev 的 VITE_API_BASE_URL 为空，必须 fallback 127.0.0.1:8080（vite dev 不代理 /uploads）
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+// 注意：H5 dev 的 VITE_API_BASE_URL 为空，必须 fallback 127.0.0.1:18080（vite dev 不代理 /uploads）
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:18080'
 // #endif
 const playUrl = computed(() => {
   if (!video.value?.video_url) return ''

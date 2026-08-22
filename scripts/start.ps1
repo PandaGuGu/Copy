@@ -141,8 +141,8 @@ if (Test-PortListening 5672) {
 # ════════════════════════════════════════
 #  [4/6] Go 后端
 # ════════════════════════════════════════
-Write-Host "[4/6] Backend (8080)..." -NoNewline
-if (Test-PortListening 8080) {
+Write-Host "[4/6] Backend (18080)..." -NoNewline
+if (Test-PortListening 18080) {
     Write-Host " OK (已运行)" -ForegroundColor Green
 } else {
     $bin = "$ROOT\bin\mini-bili.exe"
@@ -156,7 +156,7 @@ if (Test-PortListening 8080) {
     if (Test-Path $bin) {
         Start-And-Forget "Backend" $bin
         Start-Sleep 4
-        if (Test-PortListening 8080) {
+        if (Test-PortListening 18080) {
             Write-Host " OK" -ForegroundColor Green
         } else {
             Write-Host " 启动中（请检查 logs/ 目录）" -ForegroundColor Yellow
@@ -220,7 +220,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  启动完成!" -ForegroundColor Green
 Write-Host "  前端:  http://localhost:8888" -ForegroundColor Cyan
 Write-Host "  后台:  http://localhost:8888/#/admin" -ForegroundColor Cyan
-Write-Host "  API:   http://localhost:8080/api/v1/health" -ForegroundColor DarkGray
+Write-Host "  API:   http://localhost:18080/api/v1/health" -ForegroundColor DarkGray
 Write-Host "========================================" -ForegroundColor Cyan
 
 # 自动打开浏览器

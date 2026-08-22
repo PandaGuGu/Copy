@@ -5,7 +5,7 @@ const path = require("path");
 // Auto-detect project root from this script's location (two levels up from scripts/)
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const HLS_DIR = path.join(PROJECT_ROOT, "data", "live");
-const GO_API = "http://127.0.0.1:8080/api/v1/live/callback";
+const GO_API = "http://127.0.0.1:18080/api/v1/live/callback";
 
 // Try to find ffmpeg from common locations, fall back to PATH
 const { execSync } = require("child_process");

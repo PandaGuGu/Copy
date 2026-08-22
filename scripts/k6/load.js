@@ -12,7 +12,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
 
-const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:8080';
+const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const api = BASE_URL.replace(/\/$/, '') + '/api/v1';
 
 // 只统计服务端 5xx 的"真错误率"。

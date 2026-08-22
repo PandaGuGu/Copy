@@ -195,7 +195,7 @@ const loading = ref(false)
 
 // 直播流主机（与后端同机，8000 端口由 nms 提供 HLS）
 function streamHost2(): string {
-  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:8080'
+  const base = (import.meta.env.VITE_API_BASE_URL_APP as string) || 'http://192.168.1.100:18080'
   try {
     const i = base.indexOf('://')
     const rest = i >= 0 ? base.slice(i + 3) : base
