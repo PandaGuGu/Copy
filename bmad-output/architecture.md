@@ -11,7 +11,7 @@
 > 这是横切技术决策的唯一真相源。所有后续开发任务继承此处记录的**锁定**决策。
 > 在此层面捕获对齐的成本约为实现阶段的 1/10。
 
----
+***
 
 ## 目录
 
@@ -27,7 +27,7 @@
 10. [部署架构](#10-部署架构)
 11. [未来考虑](#11-未来考虑)
 
----
+***
 
 ## 1. 系统概述
 
@@ -38,17 +38,17 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 ### 范围
 
 **在范围内:**
-- **用户端:** 注册/登录（JWT 双 Token）、视频上传（≤500MB/≤30min→FFmpeg H.264 MP4→OSS）、弹幕 WebSocket（≤200ms, 5s 冷却+敏感词）、3 级评论（视频/文章/动态三套独立表）、点赞/投币/收藏（硬币经济）、关注/拉黑/私信（WebSocket 实时）、直播（SRS 推流+flv.js + WebSocket 聊天+礼物+弹幕飘屏）、Feed 推荐（MMR 多样性排序+协同过滤）、ES 全文搜索、历史追踪、每日任务
+
+- **用户端:** 注册/登录（JWT 双 Token）、视频上传（≤500MB/≤30min→FFmpeg H.264 MP4→OSS）、弹幕 WebSocket（≤200ms, 5s 冷却+敏感词）、3 级评论（视频/文章/动态三套独立表）、点赞/投币/收藏（硬币经济）、关注/拉黑/私信（WebSocket 实时）、直播（nms 推流+HTTP-FLV/RTMP 播放 + WebSocket 聊天+礼物+弹幕飘屏）、Feed 推荐（MMR 多样性排序+协同过滤）、ES 全文搜索、历史追踪、每日任务
 - **运营后台 23 模块:** 数据概览、首页轮播、热搜运营、用户管理、视频审核、专栏审核、直播管理、动态管理、评论管理、系统设置、举报处理、AI 角色、工单管理、风控管理、版权管理、BI 报表、客服后台、运维监控 5 合 1、配置发布、权限审计、播放器高级、字幕管理、Feed 推荐
-- **社交体系:** 关注/取关、拉黑（双向互阻）、关注分组、多收藏夹、投币（coin_ledgers）、图文动态发布、私信 WebSocket 实时推送
+- **社交体系:** 关注/取关、拉黑（双向互阻）、关注分组、多收藏夹、投币（coin\_ledgers）、图文动态发布、私信 WebSocket 实时推送
 - **搜索与发现:** ES 全文搜索、热搜运营（Redis 热词+管理干预）、搜索历史、Feed 推荐（规则/热度+MMR 重排序）、排行榜
-- **Service 层架构:** handler → service → DB 三层解耦，`internal/service/` 包（19 个 service 文件）
-- **基础设施:** MySQL 8.x + Redis 7.x + RabbitMQ 3.x + 阿里云 OSS + Elasticsearch 8.x（可选）+ SRS 5.x
+- **Service 层架构:** handler → service → DB 三层解耦，`internal/service/` 包（21 个 service 文件）
+- **基础设施:** MySQL 8.x + Redis 7.x + RabbitMQ 3.x + 阿里云 OSS + Elasticsearch 8.x（可选）+ Node-Media-Server
 
 **不在范围内:**
+
 - 支付/会员/充电等任何商业化功能（Non-Commercial License）
-- ML 推荐算法（当前为规则/热度排序 + MMR 多样性重排序）
-- 移动端/小程序适配
 - CDN 实际分发（仅有管理 CRUD 接口）
 - Whisper ASR（Worker 预留但未实现）
 
@@ -57,25 +57,25 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 最制约设计的 NFR（从 SPEC.md 提取）：
 
 1. **NFR-3（鉴权）:** 用户 JWT + Admin JWT 双体系隔离；RBAC resource:action 细粒度（23 种权限码）；全写操作审计
-2. **NFR-1（并发）:** 弹幕 100 人在线 ≤200ms；运营后台 ~50 并发管理员
+2. **NFR-1（并发）:** 弹幕 100 人在线 ≤200ms；运营后台 \~50 并发管理员
 3. **NFR-2（存储）:** MySQL + Redis + RabbitMQ + OSS 四层存储
 4. **NFR-4（API）:** RESTful，JSON 信封统一响应格式，统一错误码
 5. **NFR-6（配置）:** .env 文件管理 + Feature Flag FNV-1a hash 灰度
 
 ### 代码规模（实测数据 2026-06-30）
 
-| 指标 | 数值 |
-|------|------|
-| Go 源文件 | **193** 个（`internal/` 目录） |
-| GORM AutoMigrate 模型 | **86** 个 |
-| RBAC 权限码 | **23** 种（`resource:action` 格式） |
-| Admin API 端点 | **~190** 个 |
-| 用户端 API 端点 | **~140** 个 |
-| 公开只读端点 | **~46** 个 |
-| WebSocket 通道 | **3** 套（弹幕/私信/直播聊天） |
-| 总路由注册 | **~380** 行 |
-| Vue 3 前端页面 | **24+** 个 admin 页面 + 用户端全栈 |
-| 移动端 App 页面 | **19** 个（uni-app，2026-08 新增，见 §12） |
+| 指标                  | 数值                                 |
+| ------------------- | ---------------------------------- |
+| Go 源文件              | **200+** 个（`internal/` 目录）         |
+| GORM AutoMigrate 模型 | **88** 个                           |
+| RBAC 权限码            | **23** 种（`resource:action` 格式）     |
+| Admin API 端点        | **\~190** 个                        |
+| 用户端 API 端点          | **\~140** 个                        |
+| 公开只读端点              | **\~46** 个                         |
+| WebSocket 通道        | **3** 套（弹幕/私信/直播聊天）                |
+| 总路由注册               | **\~380** 行                        |
+| Vue 3 前端页面          | **24+** 个 admin 页面 + 用户端全栈         |
+| 移动端 App 页面          | **19** 个（uni-app，2026-08 新增，见 §12） |
 
 ### 利益相关者与约束
 
@@ -84,13 +84,26 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 - **现有约束:** Go Gin 模块化单体、Vue 3 + Vite SPA、MySQL/Redis/RabbitMQ、阿里云 OSS
 - **兼容性:** BC-2 要求支持未来平滑拆分为 Kratos 微服务
 
----
+### 数据流图（DFD）
+
+系统数据流从外部实体视角（上下文图）与主要处理过程视角（0 层图）两个层次描述，图片源文件位于 `docs/images/`。
+
+**图 1. 上下文图（Level-0 Context）** — 系统与外部实体（用户 / UP 主 / 运营管理员 / 内容审核 / 客服）之间的边界与数据交换。
+
+![数据流-上下文图](../docs/images/dataflow-context.png)
+
+**图 2. 一层数据流图（Level-0 DFD）** — 核心处理过程（认证、视频流水线、弹幕、评论、社交、直播、搜索推荐等）及过程间数据流动。
+
+![数据流-0层图](../docs/images/dataflow-level0.png)
+
+***
 
 ## 2. 架构模式
 
 **模式:** 模块化单体（Modular Monolith）
 
 **论证:**
+
 - 1 人团队维护微服务的运维负担远超当前规模收益
 - 运营中心并发需求低（<50 管理员），用户端并发可控，单体足以支撑
 - 文件级模块拆分（每个功能一个 handler 文件，共 83 个 handler 文件）已为未来微服务拆分预留边界
@@ -98,10 +111,12 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 - 三层架构（handler → service → DB）确保业务逻辑隔离
 
 **考虑的替代方案:**
+
 - **Kratos 微服务:** 1 人团队维护 10+ 独立服务的部署、配置、监控成本过高，当前并发无需独立扩缩容
 - **纯单体无拆分规划:** 违反 BC-2 要求，未来重构成本指数级增长
 
 **应用方式:**
+
 ```
 minibili（单进程）
 ├── internal/handler/         ← 83 个 handler 文件，按模块拆分
@@ -109,7 +124,7 @@ minibili（单进程）
 │   ├── auth.go, video.go, …  ← 用户端 handler
 │   ├── router.go             ← 路由注册（~380 条）
 │   └── deps.go               ← API 结构体（DI 依赖注入容器）
-├── internal/service/         ← 业务逻辑层（19 个文件）
+├── internal/service/         ← 业务逻辑层（21 个文件）
 │   ├── services.go           ← Services 容器
 │   ├── video_service.go      ← 视频 CRUD + 状态管理
 │   ├── user_service.go       ← 用户管理 + 社交
@@ -137,6 +152,7 @@ handler（HTTP 请求处理，参数验证/响应格式化）
 ```
 
 **实现:**
+
 ```
 internal/service/
 ├── services.go           ← Services 容器，聚合所有子 Service（DI 注入）
@@ -164,11 +180,11 @@ internal/service/
 
 平台有三套独立的 WebSocket 通信通道：
 
-| 通道 | 端点 | 用途 | 技术 | 并发目标 |
-|------|------|------|------|---------|
-| 弹幕 | `ws://host/ws/danmaku?video_id=X&token=X` | 实时弹幕推送 | gorilla/websocket，5s 冷却，敏感词过滤，Canvas 多轨道 | 100 在线 ≤200ms |
-| 私信 | `ws://host/ws/chat?token=X` | 实时私信推送 | JWT 鉴权，双向通信，conversation_id 路由 | 按需 |
-| 直播聊天 | `ws://host/ws/live?room_id=X&token=X` | 直播间聊天+礼物+弹幕飘屏 | 同一 WebSocket 库，消息类型(chat/gift/system/admin_warning)区分 | 单房间多观众 |
+| 通道   | 端点                                        | 用途            | 技术                                                     | 并发目标          |
+| ---- | ----------------------------------------- | ------------- | ------------------------------------------------------ | ------------- |
+| 弹幕   | `ws://host/ws/danmaku?video_id=X&token=X` | 实时弹幕推送        | gorilla/websocket，5s 冷却，敏感词过滤，Canvas 多轨道               | 100 在线 ≤200ms |
+| 私信   | `ws://host/ws/chat?token=X`               | 实时私信推送        | JWT 鉴权，双向通信，conversation\_id 路由                        | 按需            |
+| 直播聊天 | `ws://host/ws/live?room_id=X&token=X`     | 直播间聊天+礼物+弹幕飘屏 | 同一 WebSocket 库，消息类型(chat/gift/system/admin\_warning)区分 | 单房间多观众        |
 
 **锁定规则:** 三套 WS 复用心跳机制（30s ping/pong）；消息体统一 JSON 信封 `{type, data, timestamp}`；断线自动重连（指数退避，最大 30s）；鉴权失败立即发送 `auth_failed` → 关闭连接。
 
@@ -211,9 +227,10 @@ ES 全文检索（ik 中文分词）
 ```
 
 **索引策略:**
-- `videos` 索引: title, description, tags (ik_smart 分词)
-- `articles` 索引: title, content (ik_max_word 分词)
-- `users` 索引: username, nickname (keyword + ik_smart)
+
+- `videos` 索引: title, description, tags (ik\_smart 分词)
+- `articles` 索引: title, content (ik\_max\_word 分词)
+- `users` 索引: username, nickname (keyword + ik\_smart)
 - 热搜运营: Redis Sorted Set 热词 + `hot_search_ops` 表人工干预
 - 搜索历史: Redis List per user，最大 50 条
 
@@ -239,6 +256,7 @@ ES 全文检索（ik 中文分词）
 **业务状态（后端）:** 2026-08-20 起由 `internal/pkg/statemachine` 统一治理（ADR-018）——8 个业务域的合法转移集中定义，散落的裸状态写入逐步收拢为 `machine.Can(from,to)` 校验 + 时间驱动执行器。
 
 **前端状态:** Vuex 4.x 集中式状态管理。
+
 - **服务端状态:** 管理后台数据通过 API 响应直接消费，不做客户端缓存。
 - **认证状态:** JWT Token 存储在 `localStorage`，通过 Axios 拦截器自动注入 `Authorization` header。
 - **路由状态:** `vue-router` 管理路由，路由守卫检查认证+权限（通过 `GET /admin/rbac/me/permissions` 获取）。
@@ -246,7 +264,7 @@ ES 全文检索（ik 中文分词）
 
 **锁定规则:** 所有管理页面通过 `AdminLayout.vue` 统一布局；跨页面共享状态存储在 Vuex store。
 
----
+***
 
 ## 3. 架构决策记录（ADR）
 
@@ -254,21 +272,21 @@ ES 全文检索（ik 中文分词）
 
 ### ADR 索引
 
-| ADR | 标题 | 状态 | 驱动 | 日期 |
-|-----|------|------|------|------|
-| ADR-001 | REST + JSON 信封响应格式 | 已接受 | NFR-4 | 2026-06-25 |
-| ADR-002 | MySQL 8.x + GORM AutoMigrate + Redis + RMQ + OSS | 已接受 | NFR-2, NFR-1 | 2026-06-25 |
-| ADR-003 | 独立管理员 JWT 双 Token 认证 | 已接受 | NFR-3 | 2026-06-25 |
-| ADR-004 | RBAC resource:action 细粒度授权（23 种权限码） | 已接受 | NFR-3 | 2026-06-25 |
-| ADR-005 | 模块化单体架构 (Gin) | 已接受 | NFR-1, BC-2 | 2026-06-25 |
-| ADR-006 | 全写操作自动审计日志 | 已接受 | NFR-3 | 2026-06-25 |
-| ADR-007 | 统一错误码体系（errcode 包，20+ 错误码） | 已接受 | NFR-4 | 2026-06-25 |
-| ADR-008 | Feature Flag FNV-1a 灰度策略 | 已接受 | NFR-6 | 2026-06-25 |
-| ADR-009 | 审批流多级串行审核 | 已接受 | NFR-3 | 2026-06-25 |
-| ADR-015 | SRS + flv.js 直播技术选型 | **已实施** | FR-050 | 2026-06-28 |
-| ADR-016 | ItemCF 协同过滤推荐引擎 | 部分实施（离线+在线召回已上线，冷启动待补） | NFR-REC-1/2 | 2026-06-28 |
-| ADR-017 | GORM 软删除（Video/Article 等核心实体） | 已接受 | 数据完整性 | 2026-06-28 |
-| ADR-018 | 轻量状态机治理（internal/pkg/statemachine） | 已实施 | 状态一致性/审计 | 2026-08-20 |
+| ADR     | 标题                                               | 状态                     | 驱动           | 日期                         |
+| ------- | ------------------------------------------------ | ---------------------- | ------------ | -------------------------- |
+| ADR-001 | REST + JSON 信封响应格式                               | 已接受                    | NFR-4        | 2026-06-25                 |
+| ADR-002 | MySQL 8.x + GORM AutoMigrate + Redis + RMQ + OSS | 已接受                    | NFR-2, NFR-1 | 2026-06-25                 |
+| ADR-003 | 独立管理员 JWT 双 Token 认证                             | 已接受                    | NFR-3        | 2026-06-25                 |
+| ADR-004 | RBAC resource:action 细粒度授权（23 种权限码）              | 已接受                    | NFR-3        | 2026-06-25                 |
+| ADR-005 | 模块化单体架构 (Gin)                                    | 已接受                    | NFR-1, BC-2  | 2026-06-25                 |
+| ADR-006 | 全写操作自动审计日志                                       | 已接受                    | NFR-3        | 2026-06-25                 |
+| ADR-007 | 统一错误码体系（errcode 包，20+ 错误码）                       | 已接受                    | NFR-4        | 2026-06-25                 |
+| ADR-008 | Feature Flag FNV-1a 灰度策略                         | 已接受                    | NFR-6        | 2026-06-25                 |
+| ADR-009 | 审批流多级串行审核                                        | 已接受                    | NFR-3        | 2026-06-25                 |
+| ADR-015 | 流媒体选型：nms（本地默认）/ SRS（生产正轨）                       | **已实施**                | FR-050       | 2026-06-28（2026-08-22 补权衡） |
+| ADR-016 | ItemCF 协同过滤推荐引擎                                  | 部分实施（离线+在线召回已上线，冷启动待补） | NFR-REC-1/2  | 2026-06-28                 |
+| ADR-017 | GORM 软删除（Video/Article 等核心实体）                    | 已接受                    | 数据完整性        | 2026-06-28                 |
+| ADR-018 | 轻量状态机治理（internal/pkg/statemachine）               | 已实施                    | 状态一致性/审计     | 2026-08-20                 |
 
 ### ADR-001: REST + JSON 信封响应格式
 
@@ -277,6 +295,7 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** SPEC NF-4 要求所有 API 使用 RESTful 风格 + 统一 JSON 响应格式。Rule R-API-1 严格定义了 `{code, msg, data}` 格式。
 
 **Decision（决策）:**
+
 - 所有 HTTP API 使用 RESTful 风格（GET 查询/POST 创建/PUT+PATCH 更新/DELETE 删除）
 - URL 使用复数名词（`/videos`，非 `/video`），不走动词路径
 - 统一 JSON 响应：`{ "code": number, "msg": string, "data": object | null }`
@@ -284,6 +303,7 @@ ES 全文检索（ik 中文分词）
 - 实现：`internal/pkg/resp/resp.go` 提供 `OK(c, data)` 和 `Err(c, code)` 工厂函数
 
 **Consequences（后果） — 对所有开发锁定:**
+
 - 所有 handler 必须使用 `resp.OK` / `resp.Err`，严禁裸 `c.JSON`
 - 新增错误码必须在 `internal/errcode/errcode.go` 注册
 - 无数据时 `data` 字段返回 `null`，非空
@@ -291,12 +311,13 @@ ES 全文检索（ik 中文分词）
 - 接受的代价: 简单 GET 请求也需要嵌套结构
 
 **替代方案:**
+
 - **GraphQL:** 学习成本/性能难以控制，团队不熟悉，前端不需要灵活查询
 - **gRPC:** 不适合浏览器直调，多一层网关复杂度
 
 **重新审视条件:** 流量 > 5 万并发用户时评估是否需要 GraphQL 聚合查询
 
----
+***
 
 ### ADR-002: MySQL 8.x + GORM AutoMigrate + Redis + RabbitMQ + OSS
 
@@ -305,15 +326,17 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** SPEC NF-2 要求 MySQL 主库 + Redis 热数据 + RabbitMQ 异步任务 + OSS 文件存储。Rule R-DB-1/2/3/4 严格定义了数据库安全规范。
 
 **Decision（决策）:**
+
 - **主存储:** MySQL 8.x + GORM v2 AutoMigrate，86 个模型自动建表
 - **缓存:** Redis 7.x — 播放量 INCR（10s 落库）、弹幕冷却 SET NX EX（5s）、Token 黑名单、热搜 ZINCRBY、直播观众 SET
 - **消息队列:** RabbitMQ 3.x — 视频转码任务（`task_type=transcode`），预留 `subtitle_asr`
 - **文件存储:** 阿里云 OSS（`mini-bili` Bucket），目录前缀分区；本地文件系统兜底（Docker 卷 `uploads_data`）
 - **ID 策略:** 自增 uint64 主键
-- **索引策略:** GORM tag `index` + `uniqueIndex`，核心查询字段（play_count, created_at, user_id, video_id）必须建索引
+- **索引策略:** GORM tag `index` + `uniqueIndex`，核心查询字段（play\_count, created\_at, user\_id, video\_id）必须建索引
 - **事务:** 多表写操作使用 GORM 事务（如投币：INSERT coin → UPDATE balance → INSERT ledger）
 
 **Consequences（后果） — 对所有开发锁定:**
+
 - 严禁硬编码连接字符串（必须从环境变量读取）
 - 严禁拼接 SQL（必须使用 GORM 参数化查询）
 - 数据库变更必须通过 AutoMigrate（在 `internal/data/migrate.go` 注册模型）
@@ -322,13 +345,14 @@ ES 全文检索（ik 中文分词）
 - 接受的代价: 不支持复杂迁移（如列重命名）；生产缺乏版本控制
 
 **替代方案:**
+
 - **PostgreSQL:** 团队不熟悉，阿里云 MySQL 成本更低
 - **MongoDB:** 关系型数据不适用（用户/视频/评论多表关联）
 - **golang-migrate:** 1 人团队增加维护负担
 
 **重新审视条件:** 生产部署或多人协作时切换 golang-migrate
 
----
+***
 
 ### ADR-003: 独立管理员 JWT 双 Token 认证
 
@@ -337,6 +361,7 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** 用户端和管理端需要完全独立的认证体系。SPEC NF-3 要求双 JWT 体系隔离。
 
 **Decision（决策）:**
+
 - **用户 JWT:** Access Token 2h + Refresh Token **30d**（实际代码，非文档声称的 7d）
 - **管理员 JWT:** Access Token 2h + Refresh Token **3d**
 - 密码存储: `golang.org/x/crypto/bcrypt`（cost=12）
@@ -345,6 +370,7 @@ ES 全文检索（ik 中文分词）
 - 管理员和用户使用独立的中间件（`AdminJWTAuth` / `JWTAuth`），路由分组隔离
 
 **Consequences（后果） — 对所有开发锁定:**
+
 - 用户端和管理端 API 路由必须分离（`/api/v1/admin/*` vs `/api/v1/*`）
 - 严禁 Refresh Token 用于业务 API 访问
 - 刷新后必须标记旧 Refresh Token 失效
@@ -352,12 +378,13 @@ ES 全文检索（ik 中文分词）
 - 变得容易: 无状态认证，无需 session 存储
 
 **替代方案:**
+
 - **统一 JWT + Role 字段:** 权限边界模糊，攻击面增大
 - **Session:** 需要额外存储，不支持水平扩展
 
 **重新审视条件:** OAuth2/OIDC 集成需求出现时重新评估
 
----
+***
 
 ### ADR-004: RBAC resource:action 细粒度授权（23 种权限码）
 
@@ -366,6 +393,7 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** 23 个运营模块需要差异化访问控制。SPEC 定义的 23 种权限码（`resource:action` 格式）覆盖所有管理操作。
 
 **Decision（决策）:**
+
 - **模型:** `admin_roles` + `admin_permissions` + `role_permissions`(关联) + `admin_role_assignments` 四表
 - **权限格式:** `resource:action`（如 `video:approve`, `user:ban`, `risk:manage`）
 - **中间件:** `RequirePermission(db, resource, action) gin.HandlerFunc`
@@ -380,17 +408,19 @@ ES 全文检索（ik 中文分词）
 - 前端侧边栏按 `GET /admin/rbac/me/permissions` 返回权限列表动态过滤
 
 **Consequences（后果） — 对所有开发锁定:**
+
 - 新增管理操作必须在 `rbac_seed.go` 注册权限码
 - 路由注册时通过 `admin.Group("", RequirePermission(...))` 分组保护
 - 所有写操作自动记录 `audit_logs`（ADR-006）
 - 变得容易: 自建 3 表 JOIN 即可满足，无额外依赖
 
 **替代方案:**
+
 - **Casbin:** DSL 学习成本高，23 种简单权限无需引入额外复杂度
 
 **重新审视条件:** 需要 ABAC（基于属性）如"仅工作日可操作"时
 
----
+***
 
 ### ADR-005: 模块化单体架构 (Gin)
 
@@ -400,43 +430,93 @@ ES 全文检索（ik 中文分词）
 
 **权衡:** 见第 9 节。
 
----
+***
 
 ### ADR-006: 全写操作自动审计日志
 
 **状态:** 已接受   **驱动:** NFR-3
 
 **Decision（决策）:**
+
 - 所有 admin 写操作 handler 调用 `recordAudit(db, adminID, action, resourceType, resourceID, result, c)`
 - `audit_logs` 表: `id, admin_id, action, resource_type, resource_id, result, ip, created_at`
 - 索引: `(admin_id, created_at)`, `(resource_type, resource_id)`
 
 **锁定规则:** 新增 admin 写操作必须调用 `recordAudit`；审计日志 append-only，不可删除。
 
----
+***
 
 ### ADR-007: 统一错误码体系
 
 **状态:** 已接受   **驱动:** NFR-4
 
 **Decision（决策）:**
+
 - 20+ 错误码映射表（`internal/errcode/errcode.go`）
 - 分类: 0=成功, 40001-40099 参数校验, 40100-40199 认证, 40300-40399 权限, 40400-40499 资源, 50000-50099 服务器
 - `errmsg.GetMsg(code)` 获取国际化消息
 
----
+***
 
 ### ADR-008: Feature Flag FNV-1a 灰度策略
 
 **状态:** 已接受   **驱动:** NFR-6
 
 **Decision（决策）:**
+
 - `feature_flags` 表: `flag_key, enabled, rollout_pct, whitelist JSON`
 - FNV-1a hash 分桶: `hash(user_id) % 100 < rollout_pct` → 灰度命中
 - 白名单优先级高于灰度
-- 配置发布流程: 模块注册 → Flag 管理 → 版本发布（快照→部署→回滚，draft→deployed→rolled_back）
+- 配置发布流程: 模块注册 → Flag 管理 → 版本发布（快照→部署→回滚，draft→deployed→rolled\_back）
 
----
+***
+
+### ADR-015: 直播流媒体技术选型 — Node-Media-Server（当前本地默认）/ SRS（生产正轨，可切换）
+
+**状态:** 已实施   **驱动:** FR-050, NFR-LIVE-1/2, NFR-COST-1
+
+**Context（背景）:** 直播需要 RTMP 推流接入 + 分发播放 + `publish/done` 回调通知后端。项目存在**两套并存的启动路径**：`docker-compose.yml` 部署 SRS 5.x（`deploy/srs-docker.conf`），本地单点脚本 `scripts/start.ps1` 运行 Node-Media-Server（`scripts/rtmp-server.js`）。2026-08-17 公网通道停用、回退本地单点后，实际在用的是 **nms**。仓库无正式"从 SRS 迁至 nms"的决策记录——准确表述是"当前本地部署默认 nms，SRS 作为可切换的生产正轨保留"。
+
+**Decision（决策）:**
+
+- **两套流服务器并存**，通过启动环境选择，代码零改动切换（FLV URL 格式两者一致：`http://<host>:8000/live/{key}.flv`）。
+  - **本地单点（当前现实）:** nms — `scripts/rtmp-server.js`，`node` 运行，RTMP :1935 + HTTP-FLV :8000 + `/api/streams` 供 App 真在播判定。纯 npm 即用，复用已装的 Node，零新增运行时。
+  - **容器化/生产正轨:** SRS 5.x — `docker-compose.yml` 的 `srs` 服务 + `deploy/srs-docker.conf`，`ossrs/srs:5`。
+- **播放链路:** PC 端 flv.js 走 HTTP-FLV；App 端 nvue `<live-player>` 直连原生 RTMP（`rtmp://host:1935/live/{key}`）。
+- **真在播判定:** 查 nms `:8000/api/streams` 的 `publisher` 字段，App 首页直播 tab 仅显示有 active publisher 的房间。
+
+**Consequences（后果） — 对所有开发锁定:**
+
+- 新增直播流场景使用同一 URL 规范，不得硬编码 `localhost`；沿用 `VITE_API_BASE_URL_APP` / nms host 提取。
+- 回调对接后端 `handler/router.go` 的 `SRSOnPublish` / `SRSOnDone`，函数名沿用历史命名，不因 nms 改函数名。
+- 未来恢复公网 / 观众规模上升时，切到 SRS 正轨；nms 用于本地低成本联调。
+
+**技术权衡（权衡核心）:**
+
+| 维度           | SRS                                                  | nms（当前本地默认）                                           |
+| ------------ | ---------------------------------------------------- | ----------------------------------------------------- |
+| 语言/形态        | C++ 二进制，docker/编译                                    | Node.js npm 包                                         |
+| Windows 本地部署 | 需 Docker 或手动编二进制                                     | `cd scripts && npm install && node rtmp-server.js` 即用 |
+| 依赖新增         | 引入 Docker 运行时                                        | 零新增（Node 前端本就需装）                                      |
+| 并发能力         | 数千级连接、多码率、WebRTC、集群                                  | 数十\~百级；Node 单线程，旁路转码/高并播放会卡                           |
+| 延迟           | 更低（原生 HTTP-FLV/WebRTC）                               | 够用（单房间小延时）                                            |
+| 内置 HLS       | 成熟                                                   | 功能不可靠（曾需手动 ffmpeg，见 Lessons Learned）                  |
+| FLV URL 格式   | `http://host:8000/live/{key}.flv`（host 8000→容器 8080） | 同格式，天然兼容                                              |
+
+**为何当前选 nms（trade-off，非性能定论）:**
+
+- SRS 性能的确更好，但当前瓶颈不在流服务器——单直播间、个位数\~几十观众、`NFR-COST-1`（月 ≤500 元）。SRS 的高并发/多码率/WebRTC 在该规模下是零收益。
+- nms 的短板（Node 单线程、内置 HLS 不可靠）在规模未上去前不构成实际损失，且本地零成本启动。
+- SRS 已就绪、URL 兼容，切回无代码代价，故不删除、保留为生产正轨。
+
+**替代方案:**
+
+- **ZLMediaKit:** 功能更强（多协议/WebRTC），但 C++ 部署重，不匹配 1 人团队 + 低成本约束。
+- **agora/腾讯云直播（B 站用自研/商业 CDN）:** 商业化依赖，违反 Non-Commercial License 与 ≤500 元约束，不作考虑。
+
+**重新审视条件:** 恢复公网部署 或 观众规模显著上升（需多码率/更低延迟/录制回放）时，切换/统一到 SRS 生产正轨。
+
+***
 
 ### ADR-016: ItemCF 协同过滤推荐引擎
 
@@ -445,6 +525,7 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** SPEC F17 定义。当前在线服务已有 MMR 多样性重排序和四路召回。
 
 **已实施:**
+
 - 在线服务: `GET /api/v1/feed/recommendation` + 分区推荐 + 订阅源 + 排行榜
 - 重排序: MMR 算法（λ=0.7） + 类目打散 + 频控
 - 四路召回: 热门 + 内容 + 社交 + **ItemCF**（2026-08-20 落地）
@@ -453,10 +534,11 @@ ES 全文检索（ik 中文分词）
 - 在线召回: `FeedService.itemCFRecall` — 登录用户按最近交互（like/coin/fav）查相似视频，与热池合并后进 MMR
 
 **待实施:**
+
 - 冷启动策略: 新用户热门兜底（已有），新视频内容相似度提权×2.0 未实现
 - 相似度阈值与矩阵规模的自动裁剪（视频量 > 10 万时评估 Embedding 召回，见 §11）
 
----
+***
 
 ### ADR-018: 轻量状态机治理（internal/pkg/statemachine）
 
@@ -465,33 +547,36 @@ ES 全文检索（ik 中文分词）
 **Context（背景）:** 全平台 10+ 业务域（视频/文章/工单/举报/版权/审批/用户等）的状态流转此前是"隐式状态机"——状态字符串散落 30+ 处、部分写入点无前置校验（如 `failed` 视频可被直接置 `published`）、时间驱动变迁（SLA/定时发布/自动解封）存在"无消费者"缺口（`scheduled_publishes` 有表无执行器、SLA worker 用 `updated_at` 而非 `sla_deadline`）。
 
 **Decision（决策）:**
+
 - 自研轻量状态机包 `internal/pkg/statemachine`（约 150 行，零第三方依赖）：`Machine{Name, Transitions}` + `Can(from,to)` + `Transition(from,to,actor)`（校验 + 可选 `OnChange` 审计钩子）+ `IllegalTransitionError`
 - 8 个域集中定义：Video / Article / Ticket / Report / Copyright / ApprovalFlow / ApprovalStep / User（见 `domains.go`）
 - 接入范围（2026-08-20）：
-  - `service/video_publish.go` `PublishVideo`：仅 processing/pending_review → published
+  - `service/video_publish.go` `PublishVideo`：仅 processing/pending\_review → published
   - `service/video_service.go` `Publish/Reject`（原孤儿方法，补前置状态校验）
-  - `worker/transcode.go`：转码成功仅 processing → pending_review/published；失败仅 processing → failed
+  - `worker/transcode.go`：转码成功仅 processing → pending\_review/published；失败仅 processing → failed
   - `handler/admin_ticket.go` `AdminUpdateTicketStatus`：以转移表替代白名单（收紧 open 不得直跳 resolved/closed）
   - `handler/admin_copyright.go` `AdminTakedownContent`/`AdminRestoreContent`：takedown/restore 前置校验
   - `handler/admin_article.go` 审核、`handler/admin_rbac.go` 审批流：以状态机检查替代散落 if
 - 时间驱动执行器（`worker/scheduler.go`，每 1min）：
   - `scheduleScheduledPublishes`：**补齐定时发布消费者**（PublishAt 到期 → draft → processing，原无消费者）
-  - `scheduleSLAEscalation`：按 `sla_deadline` 驱动升级 urgent（替代 main.go 按 updated_at 的旧逻辑；不再自动关单，人工审核优先）
+  - `scheduleSLAEscalation`：按 `sla_deadline` 驱动升级 urgent（替代 main.go 按 updated\_at 的旧逻辑；不再自动关单，人工审核优先）
   - `scheduleAutoUnban`：到期解封走用户状态机（banned → active）
 
 **Consequences（后果）:**
+
 - 非法转移统一返回 `IllegalTransitionError`，调用方在写库前拦截
 - 状态定义集中一处，新增状态先改 `domains.go`
-- 审计钩子与 ADR-006 对接（OnChange 可写 audit_logs）
+- 审计钩子与 ADR-006 对接（OnChange 可写 audit\_logs）
 - 未来转移图复杂化时，转移表可 1:1 映射到事件驱动 FSM（looplab/fsm），无需重构业务代码
 
 **替代方案:**
+
 - **looplab/fsm 等框架:** 事件驱动模型（State+Event+Callback），本项目转移以"操作→状态"线性流为主，框架能力用不上；引入需重写全部写状态点 + 学习成本
 - **维持现状（裸 if）:** 状态散落、非法转移无防护、时间驱动缺失——本次评审判定已失守
 
 **重新审视条件:** 某域出现复杂嵌套流转（如工单 SLA 多级升级 + 审批流嵌套）时，将对应域迁移到事件驱动 FSM。
 
----
+***
 
 ## 4. 组件设计
 
@@ -546,7 +631,8 @@ ES 全文检索（ik 中文分词）
      └───────────────┘     └────────────────┘
              │
      ┌───────▼───────┐
-     │   SRS 5.x     │
+     │  Node-Media-  │
+     │  Server (nms) │
      │  (直播推流)   │
      └───────────────┘
 ```
@@ -613,10 +699,10 @@ ES 全文检索（ik 中文分词）
 
 #### 组件: Live Streaming
 
-**职责:** 直播间创建/管理 + SRS 推流 + flv.js 播放 + WebSocket 聊天+礼物
-**实现:** `handler/live.go`, `handler/admin_live.go`, `handler/ws.go`（直播 WS 通道）
+**职责:** 直播间创建/管理 + Node-Media-Server 推流 + HTTP-FLV/RTMP 播放 + WebSocket 聊天+礼物
+**实现:** `handler/live.go`, `handler/admin_live.go`, `handler/ws.go`（直播 WS 通道）, `scripts/rtmp-server.js`（nms 实例）
 **提供的接口:** `/live/rooms/*`, `/live/callback/*`, `/admin/live/*`
-**需要的接口:** SRS RTMP 服务器, flv.js 前端播放器
+**需要的接口:** Node-Media-Server RTMP 服务器（`:8000/api/streams` 供真在播判定）, flv.js / nvue `<live-player>`
 **拥有的数据:** `LiveRoom`, `LiveWarnTemplate`
 **约束它的 ADR:** ADR-015
 **处理的 NFR:** NFR-LIVE-1/2（已达标）
@@ -671,7 +757,7 @@ src/
 
 **锁定规则:** 所有新增 admin 页面通过 `@/api/admin` barrel 导入 API；列表页优先使用 `AdminDataTable`；表单弹窗优先使用 `AdminFormDialog`。
 
----
+***
 
 ## 5. 数据模型
 
@@ -679,58 +765,73 @@ src/
 
 ### 核心实体（6 张）
 
-| 实体 | 表名 | 字段数 | 关键属性 |
-|------|------|--------|---------|
-| `User` | `users` | 23+ | id, username, password(bcrypt), nickname, avatar_url, bio, status, coin_balance_tenths, level, cake_id, first_published_at |
-| `Video` | `videos` | 29+ | id, user_id, title, description, cover_url, duration, status(processing/published/failed/pending_review/rejected), play_count, zone_id, deleted_at(gorm.DeletedAt) |
-| `Article` | `articles` | 20+ | id, user_id, title, content(markdown), cover_url, category, view_count, status, tags JSON, comments_closed, comments_curated |
-| `Danmaku` | `danmakus` | 10+ | id, user_id, video_id, content, position_sec, color, type, mode, font_size, like_count |
-| `Comment` | `comments` | 12+ | id, user_id, video_id, content, parent_id, root_id, level, like_count, is_pinned, is_featured, approved, curated_ignored |
-| `Admin` | `admins` | 8 | id, username, password_hash(bcrypt), display_name, status(active/disabled) |
+| 实体        | 表名         | 字段数 | 关键属性                                                                                                                                                                     |
+| --------- | ---------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `User`    | `users`    | 23+ | id, username, password(bcrypt), nickname, avatar\_url, bio, status, coin\_balance\_tenths, level, cake\_id, first\_published\_at                                         |
+| `Video`   | `videos`   | 29+ | id, user\_id, title, description, cover\_url, duration, status(processing/published/failed/pending\_review/rejected), play\_count, zone\_id, deleted\_at(gorm.DeletedAt) |
+| `Article` | `articles` | 20+ | id, user\_id, title, content(markdown), cover\_url, category, view\_count, status, tags JSON, comments\_closed, comments\_curated                                        |
+| `Danmaku` | `danmakus` | 10+ | id, user\_id, video\_id, content, position\_sec, color, type, mode, font\_size, like\_count                                                                              |
+| `Comment` | `comments` | 12+ | id, user\_id, video\_id, content, parent\_id, root\_id, level, like\_count, is\_pinned, is\_featured, approved, curated\_ignored                                         |
+| `Admin`   | `admins`   | 8   | id, username, password\_hash(bcrypt), display\_name, status(active/disabled)                                                                                             |
 
 ### 视频互动（10 张）
+
 `danmakus`, `comments`, `comment_likes`, `comment_dislikes`, `video_likes`, `video_coins`, `video_favorites`, `favorite_folders`, `watch_laters`, `danmaku_likes`
 
 ### 文章互动（6 张）
+
 `articles`, `article_comments`, `article_favorites`, `article_coins`, `a_comment_likes`, `a_comment_dislikes`
 
 ### 关注社交（4 张）
+
 `user_follows`, `user_blocks`, `user_follow_groups`, `u_follow_group_members`
 
 ### 消息通知（5 张）
+
 `dm_conversations`, `dm_messages`, `dm_participants`, `notifications`, `like_notif_mutes`
 
 ### 动态系统（5 张）
+
 `user_dynamics`, `user_dynamic_likes`, `dynamic_comments`, `d_comment_likes`, `d_comment_dislikes`
 
 ### 直播系统（2 张）
+
 `live_rooms`, `live_warn_templates`
 
 ### 历史记录（6 张）
+
 `video_view_histories`, `article_view_histories`, `live_view_histories`, `user_search_histories`, `user_daily_tasks`, `coin_ledgers`
 
 ### 运营基础（8 张）
+
 `agent_profiles`, `agent_settings`, `home_banners`, `hot_search_ops`, `hot_search_display_layout`, `llm_configs`, `llm_providers`, `reports`
 
 ### 工单风控（7 张）
+
 `tickets`, `ticket_messages`, `ticket_satisfactions`, `risk_rules`, `risk_hit_logs`, `black_white_lists`, `risk_rate_counters`
 
 ### 版权管理（2 张）
+
 `copyright_complaints`, `counter_notices`
 
 ### 数据报表（2 张）
+
 `saved_reports`, `video_daily_stats`
 
 ### 客服后台（3 张）
+
 `cs_templates`, `cs_conversations`, `cs_messages`
 
 ### 运维监控（6 张）
+
 `task_logs`, `alert_rules`, `alert_records`, `trace_records`, `cdn_refresh_tasks`, `oss_lifecycle_rules`
 
 ### 配置权限（12 张）
+
 `feature_flags`, `release_records`, `admin_roles`, `admin_permissions`, `role_permissions`, `admin_role_assignments`, `admin_login_logs`, `audit_logs`, `approval_flows`, `approval_steps`, `special_pages`, `campaigns`
 
 ### 模块扩展（6 张）
+
 `video_chapters`, `video_bitrates`, `subtitles`, `comment_images`, `scheduled_publishes`, `notification_records`
 
 ### 存储策略
@@ -743,18 +844,18 @@ src/
 
 ### 关键索引设计
 
-| 表 | 索引类型 | 字段 | 作用 |
-|----|----------|------|------|
-| `users` | UNIQUE | `username` | 登录名全局唯一 |
-| `videos` | INDEX | `user_id`, `status`, `play_count`, `created_at` | 多维度查询排序 |
-| `video_likes` | UNIQUE | `(user_id, video_id)` | 每用户每视频限赞一次 |
-| `video_coins` | UNIQUE | `(user_id, video_id)` | 每用户每视频限投币一次 |
-| `video_favorites` | UNIQUE | `(user_id, video_id, folder_id)` | 同视频可放多收藏夹 |
-| `user_follows` | UNIQUE | `(follower_id, followee_id)` | 防重复关注 |
-| `dm_conversations` | UNIQUE | `(user_low, user_high)` | 两人对话唯一 |
-| `audit_logs` | INDEX | `(admin_id, created_at)`, `(resource_type, resource_id)` | 审计追溯 |
+| 表                  | 索引类型   | 字段                                                       | 作用          |
+| ------------------ | ------ | -------------------------------------------------------- | ----------- |
+| `users`            | UNIQUE | `username`                                               | 登录名全局唯一     |
+| `videos`           | INDEX  | `user_id`, `status`, `play_count`, `created_at`          | 多维度查询排序     |
+| `video_likes`      | UNIQUE | `(user_id, video_id)`                                    | 每用户每视频限赞一次  |
+| `video_coins`      | UNIQUE | `(user_id, video_id)`                                    | 每用户每视频限投币一次 |
+| `video_favorites`  | UNIQUE | `(user_id, video_id, folder_id)`                         | 同视频可放多收藏夹   |
+| `user_follows`     | UNIQUE | `(follower_id, followee_id)`                             | 防重复关注       |
+| `dm_conversations` | UNIQUE | `(user_low, user_high)`                                  | 两人对话唯一      |
+| `audit_logs`       | INDEX  | `(admin_id, created_at)`, `(resource_type, resource_id)` | 审计追溯        |
 
----
+***
 
 ## 6. API 规范
 
@@ -763,18 +864,18 @@ src/
 **协议:** REST over HTTP
 **认证:** Bearer JWT（用户端 + 管理端双体系）
 **版本化:** URL 路径 `/api/v1/`
-**端点总计:** ~380 条路由（admin ~190 + 用户端 ~140 + 公开 ~46 + WS 3 + 回调 2）
+**端点总计:** \~380 条路由（admin \~190 + 用户端 \~140 + 公开 \~46 + WS 3 + 回调 2）
 
 ### 6.1 认证端点
 
-| 方法 | 路径 | 认证 | 说明 |
-|------|------|:--:|------|
-| POST | `/api/v1/auth/login` | 否 | 用户登录 → Access(2h) + Refresh(30d) |
-| POST | `/api/v1/auth/refresh` | 否 | 刷新 Token |
-| POST | `/api/v1/users` | 否 | 用户注册 |
-| POST | `/api/v1/admin/auth/login` | 否 | 管理员登录 → Access(2h) + Refresh(3d) |
-| POST | `/api/v1/admin/auth/refresh` | 否 | 管理员刷新 |
-| GET | `/api/v1/admin/me` | Admin JWT | 当前管理员信息 |
+| 方法   | 路径                           |     认证    | 说明                               |
+| ---- | ---------------------------- | :-------: | -------------------------------- |
+| POST | `/api/v1/auth/login`         |     否     | 用户登录 → Access(2h) + Refresh(30d) |
+| POST | `/api/v1/auth/refresh`       |     否     | 刷新 Token                         |
+| POST | `/api/v1/users`              |     否     | 用户注册                             |
+| POST | `/api/v1/admin/auth/login`   |     否     | 管理员登录 → Access(2h) + Refresh(3d) |
+| POST | `/api/v1/admin/auth/refresh` |     否     | 管理员刷新                            |
+| GET  | `/api/v1/admin/me`           | Admin JWT | 当前管理员信息                          |
 
 ### 6.2 用户端核心 API
 
@@ -803,31 +904,31 @@ POST   /api/v1/live/room/create          ← 创建直播间
 
 ### 6.3 运营后台核心 API
 
-| 路由组 | 权限 | 端点示例 | 数量 |
-|--------|------|---------|:--:|
-| 管理员认证 | 无 | `POST /admin/auth/login`, `POST /admin/auth/refresh`, `GET /admin/me` | 3 |
-| 数据概览 | 只读 | `GET /admin/dashboard`, `GET /admin/bi/summary`, `GET /admin/bi/*` | 10 |
-| 用户管理 | `user.ban` | `GET /admin/users`, `POST /admin/users/:id/ban\|unban\|delete` | 6 |
-| 视频审核 | `video.approve` | `GET /admin/videos`, `POST /admin/videos/:id/approve\|reject\|delete` | 7 |
-| 专栏审核 | `article.approve` | `GET /admin/articles`, `POST /admin/articles/:id/approve\|reject` | 6 |
-| 直播管理 | `live.manage` | `GET /admin/live/rooms`, `POST /admin/live/room/:id/ban\|warn` | 9 |
-| 动态管理 | `dynamic.manage` | `GET /admin/dynamics`, `GET /admin/dynamics/unified`(三表UNION) | 4 |
-| 评论管理 | `comment.delete` | `GET /admin/comments`, `POST /admin/comments/:id/delete` | 4 |
-| 举报处理 | `ticket.handle` | `GET /admin/reports`, `POST /admin/reports/:id/handle` | 5 |
-| 工单管理 | `ticket.handle` | `GET /admin/tickets`, `POST /admin/tickets/:id/assign\|close` | 10 |
-| 风控管理 | `risk.manage` | `GET /admin/risk/rules`, `POST /admin/risk/rules`, CRUD + toggle | 10 |
-| 版权管理 | `copyright.handle` | `GET /admin/copyright/complaints`, accept/reject/takedown | 6 |
-| 客服后台 | `cs.manage` | `GET /admin/cs/conversations`, assign/message/close + templates | 9 |
-| 运维监控 | `ops.manage` | `GET /admin/ops/tasks\|health\|traces`, CRUD + evaluate/sync | 20 |
-| 配置发布 | `config.manage` | `GET /admin/config/feature-flags`, releases CRUD + deploy/rollback | 11 |
-| 权限审计 | `rbac.manage` | `GET /admin/rbac/*`, roles/permissions/admins/audit-logs/approval-flows | 19 |
-| Banner | `banner.manage` | `GET /admin/home-banners`, CRUD + upload-image | 5 |
-| 热搜运营 | `hotsearch.manage` | `GET /admin/hot-search/ops`, CRUD + reorder/boost | 10 |
-| AI 角色 | `agent.manage` | `GET /admin/agent-profiles`, CRUD + avatar + settings | 9 |
-| 系统设置 | `setting.manage` | `GET /admin/settings`, PUT + LLM config/providers CRUD | 12 |
-| 字幕管理 | `subtitle.manage` | `GET /admin/subtitles`, CRUD | 4 |
-| 专题活动 | `special.manage` | `GET /admin/specials\|campaigns`, CRUD | 8 |
-| 播放器高级 | `video.approve` | `GET /admin/videos/:id/chapters\|bitrates`, CRUD | 6 |
+| 路由组    | 权限                 | 端点示例                                                                    |  数量 |
+| ------ | ------------------ | ----------------------------------------------------------------------- | :-: |
+| 管理员认证  | 无                  | `POST /admin/auth/login`, `POST /admin/auth/refresh`, `GET /admin/me`   |  3  |
+| 数据概览   | 只读                 | `GET /admin/dashboard`, `GET /admin/bi/summary`, `GET /admin/bi/*`      |  10 |
+| 用户管理   | `user.ban`         | `GET /admin/users`, `POST /admin/users/:id/ban\|unban\|delete`          |  6  |
+| 视频审核   | `video.approve`    | `GET /admin/videos`, `POST /admin/videos/:id/approve\|reject\|delete`   |  7  |
+| 专栏审核   | `article.approve`  | `GET /admin/articles`, `POST /admin/articles/:id/approve\|reject`       |  6  |
+| 直播管理   | `live.manage`      | `GET /admin/live/rooms`, `POST /admin/live/room/:id/ban\|warn`          |  9  |
+| 动态管理   | `dynamic.manage`   | `GET /admin/dynamics`, `GET /admin/dynamics/unified`(三表UNION)           |  4  |
+| 评论管理   | `comment.delete`   | `GET /admin/comments`, `POST /admin/comments/:id/delete`                |  4  |
+| 举报处理   | `ticket.handle`    | `GET /admin/reports`, `POST /admin/reports/:id/handle`                  |  5  |
+| 工单管理   | `ticket.handle`    | `GET /admin/tickets`, `POST /admin/tickets/:id/assign\|close`           |  10 |
+| 风控管理   | `risk.manage`      | `GET /admin/risk/rules`, `POST /admin/risk/rules`, CRUD + toggle        |  10 |
+| 版权管理   | `copyright.handle` | `GET /admin/copyright/complaints`, accept/reject/takedown               |  6  |
+| 客服后台   | `cs.manage`        | `GET /admin/cs/conversations`, assign/message/close + templates         |  9  |
+| 运维监控   | `ops.manage`       | `GET /admin/ops/tasks\|health\|traces`, CRUD + evaluate/sync            |  20 |
+| 配置发布   | `config.manage`    | `GET /admin/config/feature-flags`, releases CRUD + deploy/rollback      |  11 |
+| 权限审计   | `rbac.manage`      | `GET /admin/rbac/*`, roles/permissions/admins/audit-logs/approval-flows |  19 |
+| Banner | `banner.manage`    | `GET /admin/home-banners`, CRUD + upload-image                          |  5  |
+| 热搜运营   | `hotsearch.manage` | `GET /admin/hot-search/ops`, CRUD + reorder/boost                       |  10 |
+| AI 角色  | `agent.manage`     | `GET /admin/agent-profiles`, CRUD + avatar + settings                   |  9  |
+| 系统设置   | `setting.manage`   | `GET /admin/settings`, PUT + LLM config/providers CRUD                  |  12 |
+| 字幕管理   | `subtitle.manage`  | `GET /admin/subtitles`, CRUD                                            |  4  |
+| 专题活动   | `special.manage`   | `GET /admin/specials\|campaigns`, CRUD                                  |  8  |
+| 播放器高级  | `video.approve`    | `GET /admin/videos/:id/chapters\|bitrates`, CRUD                        |  6  |
 
 ### 6.4 错误响应约定
 
@@ -837,7 +938,7 @@ POST   /api/v1/live/room/create          ← 创建直播间
 
 HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 / 404 不存在 / 500 服务器错误。
 
----
+***
 
 ## 7. FR/NFR 覆盖矩阵
 
@@ -845,123 +946,124 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 功能需求覆盖
 
-| ID | 类型 | 需求 | 组件 | ADR | 状态 |
-|----|------|------|------|-----|------|
-| FR-001 | FR | 用户认证（注册/登录/JWT双Token） | Authentication | ADR-003 | 已处理 |
-| FR-002 | FR | 视频上传+转码 Pipeline | Video Pipeline | ADR-002 | 已处理 |
-| FR-003 | FR | 实时弹幕（WebSocket+5s冷却+敏感词） | Danmaku Engine | ADR-001 | 已处理 |
-| FR-004 | FR | 三级嵌套评论（视频/文章/动态） | Comment System | ADR-002 | 已处理 |
-| FR-005 | FR | 社交互动（关注/拉黑/私信/动态/收藏） | Social System | ADR-002/003 | 已处理 |
-| FR-006 | FR | 硬币经济（每日任务+投币+账本） | Social System | ADR-002 | 已处理 |
-| FR-007 | FR | ES 全文搜索+热搜+历史 | Search Engine | — | 已处理 |
-| FR-008 | FR | Feed 推荐（MMR重排序+四路召回） | Feed Engine | ADR-016 | 已处理 |
-| FR-009 | FR | 直播系统（SRS+flv.js+聊天+礼物+审核） | Live Streaming | ADR-015 | 已处理 |
-| FR-010 | FR | 运营仪表盘 + BI 报表（9卡片+ECharts图表） | Dashboard/BI | ADR-001/002 | 已处理 |
-| FR-011 | FR | 视频/专栏/动态审核 | Content Review | ADR-004/006 | 已处理 |
-| FR-012 | FR | 直播审核（警告/封禁） | Live Admin | ADR-004/015 | 已处理 |
-| FR-013 | FR | 举报处理+工单系统 | Ticket & Report | ADR-004/006 | 已处理 |
-| FR-014 | FR | 风控引擎（keyword/regex/rate_limit+黑白名单） | Risk Engine | ADR-004/006 | 已处理 |
-| FR-015 | FR | 版权投诉+反通知 | Copyright | ADR-004/006 | 已处理 |
-| FR-016 | FR | 客服后台（会话+模板+快捷回复） | Customer Service | ADR-004/006 | 已处理 |
-| FR-017 | FR | 运维监控5合1（队列/告警/追踪/健康/CDN） | Ops Monitoring | ADR-004 | 已处理 |
-| FR-018 | FR | Feature Flag 灰度发布+模块注册+版本发布 | Config Management | ADR-008 | 已处理 |
-| FR-019 | FR | RBAC 23权限码+审计+审批流+登录日志 | RBAC Management | ADR-004/006/009 | 已处理 |
-| FR-020 | FR | 用户管理（列表/封禁/信息编辑） | User Management | ADR-002 | 已处理 |
-| FR-021 | FR | 评论管理（跨3表联合+待审隔离） | Comment Management | ADR-002 | 已处理 |
-| FR-022 | FR | Banner/热搜/专题运营 | Content Ops | ADR-002/004 | 已处理 |
-| FR-023 | FR | AI 角色+LLM 配置管理 | Agent Management | ADR-004 | 已处理 |
-| FR-024 | FR | 播放器高级（章节+多码率） | Player Advanced | ADR-002 | 已处理 |
-| FR-025 | FR | 字幕管理（CRUD+VTT/SRT） | Subtitle Management | ADR-002/004 | 已处理 |
-| FR-026 | FR | 评论增强（图片评论+举报+排序配置） | Comment Enhancement | ADR-002 | 已处理 |
-| FR-027 | FR | 创作者中心（统计API+章节管理API） | Creator Center | ADR-002 | 已处理 |
-| FR-028 | FR | 动态管理（三表UNION统一视图） | Dynamic Management | ADR-004 | 已处理 |
+| ID     | 类型 | 需求                                   | 组件                  | ADR             | 状态  |
+| ------ | -- | ------------------------------------ | ------------------- | --------------- | --- |
+| FR-001 | FR | 用户认证（注册/登录/JWT双Token）                | Authentication      | ADR-003         | 已处理 |
+| FR-002 | FR | 视频上传+转码 Pipeline                     | Video Pipeline      | ADR-002         | 已处理 |
+| FR-003 | FR | 实时弹幕（WebSocket+5s冷却+敏感词）             | Danmaku Engine      | ADR-001         | 已处理 |
+| FR-004 | FR | 三级嵌套评论（视频/文章/动态）                     | Comment System      | ADR-002         | 已处理 |
+| FR-005 | FR | 社交互动（关注/拉黑/私信/动态/收藏）                 | Social System       | ADR-002/003     | 已处理 |
+| FR-006 | FR | 硬币经济（每日任务+投币+账本）                     | Social System       | ADR-002         | 已处理 |
+| FR-007 | FR | ES 全文搜索+热搜+历史                        | Search Engine       | —               | 已处理 |
+| FR-008 | FR | Feed 推荐（MMR重排序+四路召回）                 | Feed Engine         | ADR-016         | 已处理 |
+| FR-009 | FR | 直播系统（nms+HTTP-FLV/RTMP+聊天+礼物+审核）     | Live Streaming      | ADR-015         | 已处理 |
+| FR-010 | FR | 运营仪表盘 + BI 报表（9卡片+ECharts图表）         | Dashboard/BI        | ADR-001/002     | 已处理 |
+| FR-011 | FR | 视频/专栏/动态审核                           | Content Review      | ADR-004/006     | 已处理 |
+| FR-012 | FR | 直播审核（警告/封禁）                          | Live Admin          | ADR-004/015     | 已处理 |
+| FR-013 | FR | 举报处理+工单系统                            | Ticket & Report     | ADR-004/006     | 已处理 |
+| FR-014 | FR | 风控引擎（keyword/regex/rate\_limit+黑白名单） | Risk Engine         | ADR-004/006     | 已处理 |
+| FR-015 | FR | 版权投诉+反通知                             | Copyright           | ADR-004/006     | 已处理 |
+| FR-016 | FR | 客服后台（会话+模板+快捷回复）                     | Customer Service    | ADR-004/006     | 已处理 |
+| FR-017 | FR | 运维监控5合1（队列/告警/追踪/健康/CDN）             | Ops Monitoring      | ADR-004         | 已处理 |
+| FR-018 | FR | Feature Flag 灰度发布+模块注册+版本发布          | Config Management   | ADR-008         | 已处理 |
+| FR-019 | FR | RBAC 23权限码+审计+审批流+登录日志               | RBAC Management     | ADR-004/006/009 | 已处理 |
+| FR-020 | FR | 用户管理（列表/封禁/信息编辑）                     | User Management     | ADR-002         | 已处理 |
+| FR-021 | FR | 评论管理（跨3表联合+待审隔离）                     | Comment Management  | ADR-002         | 已处理 |
+| FR-022 | FR | Banner/热搜/专题运营                       | Content Ops         | ADR-002/004     | 已处理 |
+| FR-023 | FR | AI 角色+LLM 配置管理                       | Agent Management    | ADR-004         | 已处理 |
+| FR-024 | FR | 播放器高级（章节+多码率）                        | Player Advanced     | ADR-002         | 已处理 |
+| FR-025 | FR | 字幕管理（CRUD+VTT/SRT）                   | Subtitle Management | ADR-002/004     | 已处理 |
+| FR-026 | FR | 评论增强（图片评论+举报+排序配置）                   | Comment Enhancement | ADR-002         | 已处理 |
+| FR-027 | FR | 创作者中心（统计API+章节管理API）                 | Creator Center      | ADR-002         | 已处理 |
+| FR-028 | FR | 动态管理（三表UNION统一视图）                    | Dynamic Management  | ADR-004         | 已处理 |
 
 ### 非功能需求覆盖
 
-| ID | 类型 | 需求 | 组件 | ADR | 状态 |
-|----|------|------|------|-----|------|
-| NFR-1 | 性能 | 弹幕100在线≤200ms; 管理~50并发 | Danmaku/Arch | ADR-005 | 已处理 |
-| NFR-2 | 存储 | MySQL+Redis+RabbitMQ+OSS | Data Layer | ADR-002 | 已处理 |
-| NFR-3 | 鉴权 | 双JWT+RBAC 23权限码+审计 | Auth/RBAC | ADR-003/004/006 | 已处理 |
-| NFR-4 | API | RESTful+JSON信封+错误码 | All Handlers | ADR-001/007 | 已处理 |
-| NFR-5 | 前端 | Vue3+Vite SPA+AdminLayout | Frontend | — | 已处理 |
-| NFR-6 | 配置 | .env updateEnvKeys()+Feature Flag灰度 | Config | ADR-008 | 已处理 |
-| NFR-7 | 测试 | go build ./... 编译验证 | CI | — | 已处理 |
-| NFR-SEC-2 | 安全 | bcrypt密码(cost=12) | Auth | ADR-003 | 已处理 |
-| NFR-SEC-3 | 安全 | 输入验证(GORM tag+Gin binding) | All Handlers | ADR-001 | 已处理 |
-| NFR-SEC-4 | 安全 | API 限流 | Middleware | — | 推迟 |
-| NFR-OBS-1 | 可观测 | Zap 结构化日志 | Logger | — | 已处理 |
-| NFR-OBS-2 | 可观测 | 链路追踪（trace_id贯穿） | Trace Middleware | — | 已处理 |
-| NFR-OBS-3 | 可观测 | 系统指标采集+告警评估 | Ops Monitoring | — | 已处理 |
-| NFR-REL-1 | 可靠性 | MySQL 每日备份 | 运维脚本 | ADR-002 | 待处理 |
-| NFR-REL-2 | 可靠性 | 灾难恢复（RPO=24h, RTO=4h） | 运维流程 | — | 待处理 |
-| NFR-REL-3 | 可靠性 | 健康检查端点 | Ops (GET /ops/health) | — | 已处理 |
-| NFR-AVAIL-1 | 可用性 | 99% 正常运行时间 | 部署架构 | — | 已处理 |
-| NFR-AVAIL-3 | 可用性 | 监控告警（CPU/内存/磁盘/错误率） | Ops | — | 已处理 |
-| NFR-DI-1 | 数据完整 | 多表写事务 | Service Layer | ADR-002 | 已处理 |
-| NFR-DI-2 | 数据完整 | 外键约束+复合唯一索引 | GORM Model | ADR-002 | 已处理 |
-| NFR-DI-3 | 数据完整 | 强一致性（单MySQL实例） | Data Layer | ADR-002 | 已处理 |
-| NFR-COMP-2 | 合规 | 审计日志不可篡改（append-only） | AuditLog | ADR-006 | 已处理 |
-| NFR-COST-1 | 成本 | 月基础设施 ≤500 CNY | 部署架构 | — | 已处理 |
-| NFR-COST-2 | 成本 | OSS 生命周期30天自动清理 | OSSLifecycleRule | — | 已处理 |
-| NFR-MAINT-1 | 可维护 | go build ./... 零错误 | CI | — | 已处理 |
-| NFR-MAINT-2 | 可维护 | go fmt + ESLint 代码风格 | 开发流程 | — | 已处理 |
-| NFR-UA-1 | 可用性 | PC端浏览器兼容（Chrome/Firefox/Edge） | Vue3 SPA | — | 已处理 |
-| NFR-UA-2 | 可用性 | 中文界面全覆盖 | 前端 | — | 已处理 |
-| NFR-LIVE-1 | 性能 | 直播 FLV 延迟 ≤3s | Live Streaming | ADR-015 | 已处理 |
-| NFR-LIVE-2 | 性能 | 单直播间 WebSocket 多观众并发 | Live WS | ADR-015 | 已处理 |
-| NFR-REC-1 | 性能 | 推荐接口延迟 ≤50ms（Redis缓存） | Feed Engine | ADR-016 | 已处理 |
-| NFR-REC-2 | 离线 | ItemCF 离线相似度计算 | Feed Engine | ADR-016 | 待处理 |
+| ID          | 类型   | 需求                                  | 组件                    | ADR             | 状态  |
+| ----------- | ---- | ----------------------------------- | --------------------- | --------------- | --- |
+| NFR-1       | 性能   | 弹幕100在线≤200ms; 管理\~50并发             | Danmaku/Arch          | ADR-005         | 已处理 |
+| NFR-2       | 存储   | MySQL+Redis+RabbitMQ+OSS            | Data Layer            | ADR-002         | 已处理 |
+| NFR-3       | 鉴权   | 双JWT+RBAC 23权限码+审计                  | Auth/RBAC             | ADR-003/004/006 | 已处理 |
+| NFR-4       | API  | RESTful+JSON信封+错误码                  | All Handlers          | ADR-001/007     | 已处理 |
+| NFR-5       | 前端   | Vue3+Vite SPA+AdminLayout           | Frontend              | —               | 已处理 |
+| NFR-6       | 配置   | .env updateEnvKeys()+Feature Flag灰度 | Config                | ADR-008         | 已处理 |
+| NFR-7       | 测试   | go build ./... 编译验证                 | CI                    | —               | 已处理 |
+| NFR-SEC-2   | 安全   | bcrypt密码(cost=12)                   | Auth                  | ADR-003         | 已处理 |
+| NFR-SEC-3   | 安全   | 输入验证(GORM tag+Gin binding)          | All Handlers          | ADR-001         | 已处理 |
+| NFR-SEC-4   | 安全   | API 限流                              | Middleware            | —               | 推迟  |
+| NFR-OBS-1   | 可观测  | Zap 结构化日志                           | Logger                | —               | 已处理 |
+| NFR-OBS-2   | 可观测  | 链路追踪（trace\_id贯穿）                   | Trace Middleware      | —               | 已处理 |
+| NFR-OBS-3   | 可观测  | 系统指标采集+告警评估                         | Ops Monitoring        | —               | 已处理 |
+| NFR-REL-1   | 可靠性  | MySQL 每日备份                          | 运维脚本                  | ADR-002         | 待处理 |
+| NFR-REL-2   | 可靠性  | 灾难恢复（RPO=24h, RTO=4h）               | 运维流程                  | —               | 待处理 |
+| NFR-REL-3   | 可靠性  | 健康检查端点                              | Ops (GET /ops/health) | —               | 已处理 |
+| NFR-AVAIL-1 | 可用性  | 99% 正常运行时间                          | 部署架构                  | —               | 已处理 |
+| NFR-AVAIL-3 | 可用性  | 监控告警（CPU/内存/磁盘/错误率）                 | Ops                   | —               | 已处理 |
+| NFR-DI-1    | 数据完整 | 多表写事务                               | Service Layer         | ADR-002         | 已处理 |
+| NFR-DI-2    | 数据完整 | 外键约束+复合唯一索引                         | GORM Model            | ADR-002         | 已处理 |
+| NFR-DI-3    | 数据完整 | 强一致性（单MySQL实例）                      | Data Layer            | ADR-002         | 已处理 |
+| NFR-COMP-2  | 合规   | 审计日志不可篡改（append-only）               | AuditLog              | ADR-006         | 已处理 |
+| NFR-COST-1  | 成本   | 月基础设施 ≤500 CNY                      | 部署架构                  | —               | 已处理 |
+| NFR-COST-2  | 成本   | OSS 生命周期30天自动清理                     | OSSLifecycleRule      | —               | 已处理 |
+| NFR-MAINT-1 | 可维护  | go build ./... 零错误                  | CI                    | —               | 已处理 |
+| NFR-MAINT-2 | 可维护  | go fmt + ESLint 代码风格                | 开发流程                  | —               | 已处理 |
+| NFR-UA-1    | 可用性  | PC端浏览器兼容（Chrome/Firefox/Edge）       | Vue3 SPA              | —               | 已处理 |
+| NFR-UA-2    | 可用性  | 中文界面全覆盖                             | 前端                    | —               | 已处理 |
+| NFR-LIVE-1  | 性能   | 直播延迟 ≤3s（HTTP-FLV/RTMP）             | Live Streaming        | ADR-015         | 已处理 |
+| NFR-LIVE-2  | 性能   | 单直播间 WebSocket 多观众并发                | Live WS               | ADR-015         | 已处理 |
+| NFR-REC-1   | 性能   | 推荐接口延迟 ≤50ms（Redis缓存）               | Feed Engine           | ADR-016         | 已处理 |
+| NFR-REC-2   | 离线   | ItemCF 离线相似度计算                      | Feed Engine           | ADR-016         | 待处理 |
 
 ### 覆盖缺口
 
-| ID | 需求 | 缺口 | 状态 |
-|----|------|------|------|
-| FR-032 | ASR 自动转写 | Worker 预留 `subtitle_asr` 但未实现 Whisper 集成 | 待实施 |
-| FR-031 | 字幕编辑器前端 | 后端就绪，用户端缺字幕时间轴编辑器 UI | 待实施 |
-| FR-035 | 创作者数据中心 | API + `CreatorDashboard.vue`（stats/video-stats/7日趋势/稿件表）均已就绪 | ✅ 已完成（2026-08-20 复核） |
-| NFR-REL-1 | 每日备份 | `scripts/backup.sh` 就绪（uploads 冷备 + mysqldump）；定时执行待挂 Windows 计划任务 | 部分实施 |
-| NFR-REL-2 | 灾难恢复 | `migrations/` 基线 + backup.sh 恢复说明 | 部分实施 |
-| NFR-SEC-4 | API 限流 | `ratelimit.go` 滑动窗口 + config 7 项 + 路由接入 + 错误码 42900 全链路落地 | ✅ 已完成（2026-08-20 复核） |
-| NFR-REC-2 | ItemCF 离线计算 | `itemcf.go` 离线计算 + scheduler 每日任务 + feed 在线召回已实现 | 部分实施（冷启动提权待补） |
+| ID        | 需求          | 缺口                                                                 | 状态                   |
+| --------- | ----------- | ------------------------------------------------------------------ | -------------------- |
+| FR-032    | ASR 自动转写    | Worker 预留 `subtitle_asr` 但未实现 Whisper 集成                           | 待实施                  |
+| FR-031    | 字幕编辑器前端     | 后端就绪，用户端缺字幕时间轴编辑器 UI                                               | 待实施                  |
+| FR-035    | 创作者数据中心     | API + `CreatorDashboard.vue`（stats/video-stats/7日趋势/稿件表）均已就绪       | ✅ 已完成（2026-08-20 复核） |
+| NFR-REL-1 | 每日备份        | `scripts/backup.sh` 就绪（uploads 冷备 + mysqldump）；定时执行待挂 Windows 计划任务 | 部分实施                 |
+| NFR-REL-2 | 灾难恢复        | `migrations/` 基线 + backup.sh 恢复说明                                  | 部分实施                 |
+| NFR-SEC-4 | API 限流      | `ratelimit.go` 滑动窗口 + config 7 项 + 路由接入 + 错误码 42900 全链路落地          | ✅ 已完成（2026-08-20 复核） |
+| NFR-REC-2 | ItemCF 离线计算 | `itemcf.go` 离线计算 + scheduler 每日任务 + feed 在线召回已实现                   | 部分实施（冷启动提权待补）        |
 
----
+***
 
 ## 8. 技术栈
 
 > 每项选择附带理由。不用"因为它流行"。
 
-| 层级 | 选择 | 版本 | 理由（→ 驱动因素） | ADR |
-|------|------|------|-------------------|-----|
-| 前端框架 | Vue 3 + Vite | 3.5+ / 5.x | SPEC NF-5 约束；纯 SPA 无需 SSR；中文社区成熟 | — |
-| 前端状态 | Vuex | 4.x | 管理后台状态集中管理；配合 `vue-router` 路由守卫 | — |
-| 前端 UI | Element Plus | 2.x | 中文社区成熟，管理后台组件库丰富 | — |
-| 前端图表 | ECharts | 5.x | BI 报表柱状/饼图/折线面积/多系列图 | — |
-| 后端语言 | Go | 1.24+ | SPEC 约束；高性能并发；标准项目布局 | — |
-| 后端框架 | Gin | 1.10+ | 高性能 HTTP 路由；中间件链式组合；社区成熟 | ADR-005 |
-| ORM | GORM v2 | 2.x | AutoMigrate 消除 SQL 管理；预加载处理关联查询 | ADR-002 |
-| 数据库 | MySQL | 8.x | 关系型数据（86 模型多表关联）；阿里云 RDS 集成 | ADR-002 |
-| 缓存 | Redis | 7.x | 播放量 INCR；弹幕冷却；Token 黑名单；热搜 ZSET | ADR-002 |
-| 消息队列 | RabbitMQ | 3.x | 视频转码异步解耦；死信队列 | ADR-002 |
-| 文件存储 | 阿里云 OSS + 本地 | — | SPEC 约束；本地文件 Docker 卷兜底 | ADR-002 |
-| 认证 | JWT (golang-jwt) | 5.x | 无状态认证；双 Token 轮换；独立管理员体系 | ADR-003 |
-| 密码哈希 | bcrypt | — | SPEC 约束（R-AUTH-2）；cost=12 | — |
-| 日志 | Zap | 1.x | 结构化高性能日志；JSON 格式 | — |
-| 实时通信 | gorilla/websocket | 1.5+ | 三套独立 WS 通道 | — |
-| 直播流媒体 | SRS + flv.js | 5.x / 1.6+ | RTMP 推流→HTTP-FLV 低延迟播放 | ADR-015 |
-| 视频处理 | FFmpeg | 7.0+ | H.264 MP4 转码 + 封面截帧 | — |
-| 搜索引擎 | Elasticsearch | 8.x（可选） | ik 中文分词全文搜索 | — |
-| Markdown | bluemonday + goldmark | — | 文章安全渲染 | — |
-| IP 定位 | ip2region | — | IP 归属地查询 | — |
-| 移动端框架 | uni-app + Vue 3 + TS + Pinia | 3.x | 复用现有 180+ 端点；主色 #FB7299；2026-08 立项 | — |
+| 层级       | 选择                           | 版本         | 理由（→ 驱动因素）                                       | ADR     |
+| -------- | ---------------------------- | ---------- | ------------------------------------------------ | ------- |
+| 前端框架     | Vue 3 + Vite                 | 3.5+ / 5.x | SPEC NF-5 约束；纯 SPA 无需 SSR；中文社区成熟                 | —       |
+| 前端状态     | Vuex                         | 4.x        | 管理后台状态集中管理；配合 `vue-router` 路由守卫                  | —       |
+| 前端 UI    | Element Plus                 | 2.x        | 中文社区成熟，管理后台组件库丰富                                 | —       |
+| 前端图表     | ECharts                      | 5.x        | BI 报表柱状/饼图/折线面积/多系列图                             | —       |
+| 后端语言     | Go                           | 1.24+      | SPEC 约束；高性能并发；标准项目布局                             | —       |
+| 后端框架     | Gin                          | 1.10+      | 高性能 HTTP 路由；中间件链式组合；社区成熟                         | ADR-005 |
+| ORM      | GORM v2                      | 2.x        | AutoMigrate 消除 SQL 管理；预加载处理关联查询                  | ADR-002 |
+| 数据库      | MySQL                        | 8.x        | 关系型数据（86 模型多表关联）；阿里云 RDS 集成                      | ADR-002 |
+| 缓存       | Redis                        | 7.x        | 播放量 INCR；弹幕冷却；Token 黑名单；热搜 ZSET                  | ADR-002 |
+| 消息队列     | RabbitMQ                     | 3.x        | 视频转码异步解耦；死信队列                                    | ADR-002 |
+| 文件存储     | 阿里云 OSS + 本地                 | —          | SPEC 约束；本地文件 Docker 卷兜底                          | ADR-002 |
+| 认证       | JWT (golang-jwt)             | 5.x        | 无状态认证；双 Token 轮换；独立管理员体系                         | ADR-003 |
+| 密码哈希     | bcrypt                       | —          | SPEC 约束（R-AUTH-2）；cost=12                        | —       |
+| 日志       | Zap                          | 1.x        | 结构化高性能日志；JSON 格式                                 | —       |
+| 实时通信     | gorilla/websocket            | 1.5+       | 三套独立 WS 通道                                       | —       |
+| 直播流媒体    | Node-Media-Server            | 2.x（npm）   | RTMP 推流→HTTP-FLV（PC flv.js）/ RTMP 原生（App nvue）播放 | ADR-015 |
+| 视频处理     | FFmpeg                       | 7.0+       | H.264 MP4 转码 + 封面截帧                              | —       |
+| 搜索引擎     | Elasticsearch                | 8.x（可选）    | ik 中文分词全文搜索                                      | —       |
+| Markdown | bluemonday + goldmark        | —          | 文章安全渲染                                           | —       |
+| IP 定位    | ip2region                    | —          | IP 归属地查询                                         | —       |
+| 移动端框架    | uni-app + Vue 3 + TS + Pinia | 3.x        | 复用现有 180+ 端点；主色 #FB7299；2026-08 立项               | —       |
 
 **考虑的替代方案:**
+
 - **PostgreSQL:** 团队不熟悉，阿里云 MySQL 生态更成熟
 - **Pinia（替代 Vuex）:** Vuex 4 当前版本足够，切换成本不值得
 - **gRPC:** 不适合浏览器直调，多一层网关复杂度
-- **ZLMediaKit（替代 SRS）:** SRS 社区更大，文档更完善
+- **ZLMediaKit:** 功能更强（多协议/WebRTC），但 C++ 部署重；nms 纯 npm 即装即用，匹配 1 人团队与 ≤500 元成本约束
 
----
+***
 
 ## 9. 权衡分析
 
@@ -969,12 +1071,12 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 **决策:** 模块化单体（ADR-005）
 
-| 维度 | 模块化单体 | Kratos 微服务 |
-|------|-----------|--------------|
+| 维度    | 模块化单体  | Kratos 微服务          |
+| ----- | ------ | ------------------- |
 | 部署复杂度 | 1 个二进制 | 10+ 个服务 + 注册中心 + 网关 |
-| 调试效率 | 单步调试 | 分布式追踪 |
-| 扩缩容 | 整体扩容 | 按模块独立扩容 |
-| 团队适配 | 1 人开发 | 3+ 人团队 |
+| 调试效率  | 单步调试   | 分布式追踪               |
+| 扩缩容   | 整体扩容   | 按模块独立扩容             |
+| 团队适配  | 1 人开发  | 3+ 人团队              |
 
 **理由:** 1 人团队维护微服务不可行；当前并发（<50 管理员 + 普通用户量）无需独立扩缩容；文件级拆分已为未来过渡预留路径。
 
@@ -1000,15 +1102,15 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 **重新审视条件:** 生产环境或多人协作时切换 golang-migrate
 
----
+***
 
 ## 10. 部署架构
 
 ### 环境
 
 - **开发:** Windows 本地 — `go build` + `npm run dev`
-- **容器化:** `docker-compose.yml`（MySQL + Redis + RabbitMQ + SRS + Go后端 + Nginx前端，6 服务）
-- **生产（2026-07-01 ~ 08-17 实际形态）:** Render（Go 后端）+ Netlify（前端 SPA）+ 阿里云 RDS（MySQL）+ Upstash（Redis）；Render 冷启动 ~30s，UptimeRobot 保活
+- **容器化:** `docker-compose.yml`（MySQL + Redis + RabbitMQ + nms + Go后端 + Nginx前端，6 服务）
+- **生产（2026-07-01 \~ 08-17 实际形态）:** Render（Go 后端）+ Netlify（前端 SPA）+ 阿里云 RDS（MySQL）+ Upstash（Redis）；Render 冷启动 \~30s，UptimeRobot 保活
 - **生产（2026-08-17 至今，当前现实）:** ⚠️ 公网通道全部停用（Render 后端 / Netlify 前端 / 阿里云 OSS / cloudflared 隧道均过期或下线）→ **回退本地单点**：Windows + MySQL80 本机服务 + Redis Windows 服务 + `mini-bili.exe`（:8080）；移动端真机经 `192.168.1.100:8080` 局域网访问；启动脚本已内置内部连接兜底
 - **目标形态（设计基线，恢复公网时复用）:** 单台 Linux 服务器（阿里云 ECS）— systemd + Nginx，见下方拓扑图
 
@@ -1025,7 +1127,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
         ┌───────────┼───────────┬──────────┬──────────┐
         ▼           ▼           ▼          ▼          ▼
    ┌─────────┐ ┌───────┐ ┌──────────┐ ┌──────┐ ┌──────────┐
-   │ Gin App │ │ Redis │ │ RabbitMQ │ │ SRS  │ │ FFmpeg   │
+   │ Gin App │ │ Redis │ │ RabbitMQ │ │ nms  │ │ FFmpeg   │
    │ :8080   │ │ :6379 │ │ :5672    │ │ :1935│ │ (内置)   │
    └────┬────┘ └───────┘ └──────────┘ │ :8000│ └──────────┘
         │                             └──────┘
@@ -1047,7 +1149,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 - **文件存储:** 无需云存储即可运行（本地文件系统 Docker 卷）；配置 `OSS_*` 环境变量后自动切换
 - **公网恢复（待决策）:** 2026-08-17 后公网通道全停，移动端 APK 仅限局域网。恢复方案：重开 Render/Netlify（低成本）或自建 ECS（可控），决策前移动端对外交付受限
 
----
+***
 
 ## 11. 未来考虑
 
@@ -1077,19 +1179,19 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 重新审视触发条件（汇总自 ADR）
 
-| 触发条件 | 应重新评估的决策 |
-|---------|----------------|
-| 管理并发 > 200 | ADR-004: RBAC 权限缓存到 Redis |
-| 团队规模 > 3 人 | ADR-005: 启动微服务拆分 |
-| 每日审计日志 > 10 万条 | ADR-006: 审计日志异步写入 + 分表 |
-| 流量 > 5 万并发用户 | ADR-001: 评估 GraphQL 聚合查询 |
-| 需要 ABAC 访问控制 | ADR-004: 评估 Casbin 迁移 |
-| 推荐系统上线 | ADR-016: ItemCF 离线任务每日凌晨重算；相似度阈值 0.15 |
-| 视频量 > 10 万 | ADR-016: ItemCF 矩阵过大 → 升级 Embedding 召回 |
-| 移动端流量 > 20% | 评估独立移动端 SPA 或 PWA |
-| 恢复公网生产部署 | ADR-002: 切换 golang-migrate（当前本地单点仍用 AutoMigrate，触发即切换） |
+| 触发条件           | 应重新评估的决策                                               |
+| -------------- | ------------------------------------------------------ |
+| 管理并发 > 200     | ADR-004: RBAC 权限缓存到 Redis                              |
+| 团队规模 > 3 人     | ADR-005: 启动微服务拆分                                       |
+| 每日审计日志 > 10 万条 | ADR-006: 审计日志异步写入 + 分表                                 |
+| 流量 > 5 万并发用户   | ADR-001: 评估 GraphQL 聚合查询                               |
+| 需要 ABAC 访问控制   | ADR-004: 评估 Casbin 迁移                                  |
+| 推荐系统上线         | ADR-016: ItemCF 离线任务每日凌晨重算；相似度阈值 0.15                  |
+| 视频量 > 10 万     | ADR-016: ItemCF 矩阵过大 → 升级 Embedding 召回                 |
+| 移动端流量 > 20%    | 评估独立移动端 SPA 或 PWA                                      |
+| 恢复公网生产部署       | ADR-002: 切换 golang-migrate（当前本地单点仍用 AutoMigrate，触发即切换） |
 
----
+***
 
 ## 12. 移动端架构（2026-08 新增）
 
@@ -1097,14 +1199,14 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 12.1 技术栈与结构
 
-| 项 | 选择 | 说明 |
-|----|------|------|
-| 框架 | uni-app + Vue 3 + TypeScript + Vite | CLI 工程（非 HBuilderX 向导工程） |
-| 状态 | Pinia | 与 PC 端 Vuex 4 并存，互不干扰 |
-| UI | uni-ui + 自定义组件 | 主色 #FB7299（B 站粉） |
-| 页面 | 4 个 tab + 19 个二级页面 | tab：首页/关注/会员购/我的，中间 midButton 发布器 |
-| API 层 | `src/api/` 19 个模块 | axios + JWT 401 自动刷新 + `{code,msg,data}` 信封 |
-| 构建 | `npm run build:h5` / `npm run build:app` | H5 → `dist/build/h5/`；App → `dist/build/app/`（www 资源） |
+| 项     | 选择                                       | 说明                                                    |
+| ----- | ---------------------------------------- | ----------------------------------------------------- |
+| 框架    | uni-app + Vue 3 + TypeScript + Vite      | CLI 工程（非 HBuilderX 向导工程）                              |
+| 状态    | Pinia                                    | 与 PC 端 Vuex 4 并存，互不干扰                                 |
+| UI    | uni-ui + 自定义组件                           | 主色 #FB7299（B 站粉）                                      |
+| 页面    | 4 个 tab + 19 个二级页面                       | tab：首页/关注/会员购/我的，中间 midButton 发布器                     |
+| API 层 | `src/api/` 19 个模块                        | axios + JWT 401 自动刷新 + `{code,msg,data}` 信封           |
+| 构建    | `npm run build:h5` / `npm run build:app` | H5 → `dist/build/h5/`；App → `dist/build/app/`（www 资源） |
 
 ### 12.2 后端地址机制
 
@@ -1114,16 +1216,16 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 12.3 移动端架构决策（MD-ADR）
 
-| ID | 决策 | 理由 |
-|----|------|------|
-| MD-ADR-001 | 复用 Go API，不自建 BFF | 180+ 端点覆盖 90% 需求；1 人团队维护 BFF 是净负担 |
-| MD-ADR-002 | 图标优先纯 CSS 绘制，其次静态 PNG，emoji/svg 不可靠 | HBuilder 基座 WebView 对 emoji/svg/彩色 img 渲染不可靠（8/20 信封图标排查实证） |
+| ID         | 决策                                                                                 | 理由                                                                        |
+| ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| MD-ADR-001 | 复用 Go API，不自建 BFF                                                                  | 180+ 端点覆盖 90% 需求；1 人团队维护 BFF 是净负担                                         |
+| MD-ADR-002 | 图标优先纯 CSS 绘制，其次静态 PNG，emoji/svg 不可靠                                                | HBuilder 基座 WebView 对 emoji/svg/彩色 img 渲染不可靠（8/20 信封图标排查实证）               |
 | MD-ADR-003 | 安全区适配：`App.vue` onLaunch 注入 `--status-bar-height` + 全局 `.safe-area-top !important` | uni-app App-vue 页面不自动提供该变量；scoped `padding` 简写权重 (0,2,0) 会静默覆盖全局类 (0,1,0) |
 
 ### 12.4 已知平台坑（实测沉淀）
 
-- **`uni-image :src` + swiper**：src binding 不传递到 DOM → 用原生 `scroll-view scroll-x + <img>` 替代（首页 banner 自动轮播）
-- **API 返回 `{items:[...]}` 包装**：前端必须 `.then(d => d.items)` 拆一层
+- **`uni-image :src`** **+ swiper**：src binding 不传递到 DOM → 用原生 `scroll-view scroll-x + <img>` 替代（首页 banner 自动轮播）
+- **API 返回** **`{items:[...]}`** **包装**：前端必须 `.then(d => d.items)` 拆一层
 - **v-if + 长列表时序竞争**：v-if 从 false 变 true 时组件重新挂载，可能出现空 DOM
 - **遍历对象数组 v-for**：模板必须 `item.xxx`，直接 `{{ item }}` 会渲染 JSON 字符串
 
@@ -1133,29 +1235,29 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 - 弹幕播放器（nvue 或 renderjs）
 - 公网通道恢复（当前仅局域网可用，见 §10）
 
----
+***
 
 ## 附录
 
 ### 术语表
 
-| 术语 | 定义 |
-|------|------|
-| Cakecake | 用户端品牌名，项目仓库名 |
-| Mini-Bili / minibili | 后端 Go 模块名 |
-| 模块化单体 | 单进程部署，handler 文件级模块拆分，为未来微服务预留边界的架构模式 |
-| RBAC | 基于角色的访问控制 (Role-Based Access Control)，resource:action 细粒度 |
-| ADR | 架构决策记录 (Architecture Decision Record) |
-| Feature Flag | 功能开关，FNV-1a hash 分桶 + 白名单 + rollout_pct 三层灰度 |
-| MMR | 最大边际相关性重排序算法，控制推荐多样性 |
-| ItemCF | 基于物品的协同过滤推荐算法 |
+| 术语                   | 定义                                                        |
+| -------------------- | --------------------------------------------------------- |
+| Cakecake             | 用户端品牌名，项目仓库名                                              |
+| Mini-Bili / minibili | 后端 Go 模块名                                                 |
+| 模块化单体                | 单进程部署，handler 文件级模块拆分，为未来微服务预留边界的架构模式                     |
+| RBAC                 | 基于角色的访问控制 (Role-Based Access Control)，resource:action 细粒度 |
+| ADR                  | 架构决策记录 (Architecture Decision Record)                     |
+| Feature Flag         | 功能开关，FNV-1a hash 分桶 + 白名单 + rollout\_pct 三层灰度             |
+| MMR                  | 最大边际相关性重排序算法，控制推荐多样性                                      |
+| ItemCF               | 基于物品的协同过滤推荐算法                                             |
 
 ### 参考代码（从代码逆向提取，非推测）
 
 - **Go 源文件:** 193 个（`internal/` 目录）
 - **GORM 模型:** 86 个（`internal/data/migrate.go` AutoMigrate 列表）
 - **RBAC 权限码:** 23 种（`internal/data/rbac_seed.go`）
-- **路由注册:** ~380 条（`internal/handler/router.go`）
+- **路由注册:** \~380 条（`internal/handler/router.go`）
 - **Service 文件:** 19 个（`internal/service/`）
 - **Handler 文件:** 83 个（`internal/handler/`，含 25 个 admin handler + 58 个用户端）
 
@@ -1170,17 +1272,17 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 文档历史
 
-| 版本 | 日期 | 作者 | 变更 |
-|------|------|------|------|
-| 1.0 | 2026-06-25 | Winston | 初始架构（从现有代码逆向提取） |
-| 1.2 | 2026-06-28 | Winston | P0 修复：直播纳入范围、数据模型补全 |
-| 2.0 | 2026-06-28 | Winston | 重评估：Service层+WS+ES+组件补全，NFR全面覆盖 |
-| 3.0 | 2026-06-30 | Winston | 审计修正：RefreshToken时长(30d/3d)、RBAC权限(23→23保持一致)、API端点(~190 admin)、模型数(86)、ADR-016状态更新；新增 BI summary/engagement-stats、Dynamic统一端点、LLMProvider；补充风控引擎详述、MMR重排序 |
-| 4.0 | 2026-08-20 | Winston | 文档一致性对齐：§1 补移动端规模；§8 补移动端技术栈；§10 对齐公网通道停用（Render/Netlify/OSS/隧道 8/17 下线 → 本地单点）；§11 路线图标记移动端完成 + 触发条件更新；新增 §12 移动端架构（MD-ADR-001~003） |
-| 4.1 | 2026-08-20 | Winston | 缺口修复落地：ADR-016 状态更新（ItemCF 离线计算 itemcf.go + scheduler + 在线召回）；§7 覆盖缺口复核（NFR-SEC-4 限流与 FR-035 创作者中心标记已完成）；新增 `migrations/` 版本化迁移（DB_MIGRATE_TOOL 开关，零依赖，文件兼容 golang-migrate）；新增 `scripts/backup.sh` 冷备 |
-| 4.2 | 2026-08-20 | Winston | 新增 ADR-018 轻量状态机治理：statemachine 包（8 域）+ 6 域接入（视频/文章/工单/版权/审批）+ 3 时间驱动执行器（定时发布消费者补齐/SLA 按 sla_deadline/自动解封走状态机）；main.go 旧 SLA/unban 逻辑收敛入 scheduler |
+| 版本  | 日期         | 作者      | 变更                                                                                                                                                                                                      |
+| --- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0 | 2026-06-25 | Winston | 初始架构（从现有代码逆向提取）                                                                                                                                                                                         |
+| 1.2 | 2026-06-28 | Winston | P0 修复：直播纳入范围、数据模型补全                                                                                                                                                                                     |
+| 2.0 | 2026-06-28 | Winston | 重评估：Service层+WS+ES+组件补全，NFR全面覆盖                                                                                                                                                                         |
+| 3.0 | 2026-06-30 | Winston | 审计修正：RefreshToken时长(30d/3d)、RBAC权限(23→23保持一致)、API端点(\~190 admin)、模型数(86)、ADR-016状态更新；新增 BI summary/engagement-stats、Dynamic统一端点、LLMProvider；补充风控引擎详述、MMR重排序                                             |
+| 4.0 | 2026-08-20 | Winston | 文档一致性对齐：§1 补移动端规模；§8 补移动端技术栈；§10 对齐公网通道停用（Render/Netlify/OSS/隧道 8/17 下线 → 本地单点）；§11 路线图标记移动端完成 + 触发条件更新；新增 §12 移动端架构（MD-ADR-001\~003）                                                                   |
+| 4.1 | 2026-08-20 | Winston | 缺口修复落地：ADR-016 状态更新（ItemCF 离线计算 itemcf.go + scheduler + 在线召回）；§7 覆盖缺口复核（NFR-SEC-4 限流与 FR-035 创作者中心标记已完成）；新增 `migrations/` 版本化迁移（DB\_MIGRATE\_TOOL 开关，零依赖，文件兼容 golang-migrate）；新增 `scripts/backup.sh` 冷备 |
+| 4.2 | 2026-08-20 | Winston | 新增 ADR-018 轻量状态机治理：statemachine 包（8 域）+ 6 域接入（视频/文章/工单/版权/审批）+ 3 时间驱动执行器（定时发布消费者补齐/SLA 按 sla\_deadline/自动解封走状态机）；main.go 旧 SLA/unban 逻辑收敛入 scheduler                                                    |
+| 4.3 | 2026-08-22 | Winston | ADR-015 补全：直播流媒体选型澄清为 nms（本地默认）/ SRS（生产正轨）双轨并存，新增完整详情段（Context/Decision/Consequences/权衡矩阵/替代方案/重审条件）；同步 §1 范围/基础设施、§2 组件图、§4 Live Streaming 组件、§7 FR-009/NFR-LIVE-1、§8 技术栈、§10 部署环境与拓扑                  |
 
-
----
+***
 
 **文档结束** — 验证通过后即可进入下一阶段（Epic 拆分与 Sprint 规划）。

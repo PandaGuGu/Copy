@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>仿 B 站的全栈视频社交平台</b><br>
-  <sub>视频上传/异步转码 · 弹幕 WebSocket · 直播 SRS · 评论/私信/硬币 · 23 模块运营后台 · Docker 一键部署</sub>
+  <sub>视频上传/异步转码 · 弹幕 WebSocket · 直播 nms（本地默认）/ SRS（Docker） · 评论/私信/硬币 · 23 模块运营后台 · Docker 一键部署</sub>
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 | 评论/文章/动态 | 三套独立表 · 3 级嵌套 · UP 主管理 · 点赞/投币/收藏 |
 | 社交 | 关注/拉黑/分组 · 私信（WS 实时）· 通知聚合 · 硬币账本 |
 | 搜索/推荐 | ES 全文搜索（可选）· 协同过滤 + MMR 重排序 |
-| 直播 | SRS RTMP 推流 → HTTP-FLV 播放 · WS 聊天 + 礼物 |
+| 直播 | Node-Media-Server（本地默认）RTMP 推流 → HTTP-FLV 播放 · SRS（Docker 正轨，可切换） · WS 聊天 + 礼物 |
 | 移动端 App | uni-app（Vue3 + TS + Pinia）· 19 页面 · 复用后端 180+ API（见 [docs/APP.md](./docs/APP.md)） |
 | 运营后台 | 23 模块全前后端对齐，RBAC 权限控制（见下） |
 
@@ -47,7 +47,7 @@
 | 后端 | Go 1.25 + Gin + GORM（200+ 源文件，分层 handler/service/model/data） |
 | 存储 | MySQL 8（88 表，GORM AutoMigrate 自动建表）· Redis 7（播放计数/冷却/黑名单） |
 | 中间件 | RabbitMQ（转码队列）· WebSocket（gorilla，弹幕/私信/直播 3 通道） |
-| 直播/视频 | SRS 5 + flv.js · FFmpeg 7（H.264 转码） |
+| 直播/视频 | Node-Media-Server（本地，`scripts/rtmp-server.js`）· SRS 5（Docker）· FFmpeg 7（H.264 转码） |
 | 移动端 | uni-app + Vue3 + TS + Pinia（`cakecake-vue/cakecake-app/`，复用后端 API） |
 
 ---
@@ -85,7 +85,7 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 | 前端 Nginx | 80 | SPA + API 反代 + WebSocket 代理 |
 | Go 后端 | 8080 | REST API + WebSocket |
 | MySQL / Redis / RabbitMQ | 3306 / 6379 / 5672 | 数据库 / 缓存 / 转码队列 |
-| SRS | 1935 / 8000 | RTMP 推流 / HTTP-FLV 播放 |
+| 直播流服务器 | 1935 / 8000 | RTMP 推流 / HTTP-FLV 播放（本地 nms；Docker 用 SRS 5） |
 
 文件存储默认本地卷（`uploads_data`），配置 `OSS_*` 后自动切换阿里云 OSS，**无需云存储即可完整运行**。ES 为可选组件，默认不启动。
 
@@ -115,7 +115,7 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 ```
 ├── cmd/mini-bili/          # Go 入口
 ├── internal/
-│   ├── handler/            # 90 个 handler（含 25 个 admin）
+│   ├── handler/            # 90 个 .go（含测试；非测试 83，其中 25 个 admin）
 │   ├── service/            # 业务逻辑层（21 文件）
 │   ├── model/              # 88 个 GORM 模型
 │   ├── data/               # 数据层（AutoMigrate + seed）
