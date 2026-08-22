@@ -303,30 +303,37 @@ git push origin --delete feature/your-feature   # 删除远程分支
 
 ## 八、安全提醒
 
-### ⚠️ 当前仓库 Token 暴露问题
+### ✅ 当前仓库远程 URL（已核查：无内嵌 Token）
 
-当前 Git remote URL 中嵌入了 GitHub Token：
+当前配置的远程地址均为干净 URL（不含 Token）：
 
 ```
-origin  https://ghp_xxxx@github.com/PandaGuGu/Copy.git
+copy    https://github.com/PandaGuGu/Copy.git     # HTTPS，通过凭据管理器/ssh 鉴权，无内嵌 token
+origin  git@github.com:PandaGuGu/Copy.git         # SSH key 鉴权
 ```
 
-**风险**：任何能读取 `.git/config` 的人都能获取你的 Token。
-
-**修复建议**：
+检查命令（确认任意远程 URL 中是否误嵌入 token）：
 
 ```bash
-# 1. 移除 URL 中的 token
-git remote set-url origin https://github.com/PandaGuGu/Copy.git
+git remote -v
+cat .git/config
+```
 
-# 2. 使用 Git Credential Manager 缓存凭证
-git config --global credential.helper manager
+**判断要点**：`https://<用户名>:<token>@...` 或 `https://<token>@...` 形式均为内嵌 token（以 `ghp_` / `github_pat_` 开头），应立即清理并撤销该 token。当前仓库为 HTTPS（无 token）+ SSH 组合，符合预期。
 
-# 3. 或使用 SSH
+> 历史备注：早期本文档示例中的 `ghp_xxxx@...` 仅为示意，当前的 `remote -v`/`.git/config` 已核查不含 token。
+
+**预防建议**：
+
+```bash
+# 避免在 remote URL 里嵌 token；优先 SSH
 git remote set-url origin git@github.com:PandaGuGu/Copy.git
 
-# 4. 在 GitHub 上撤销已暴露的 Token
-#    Settings → Developer settings → Personal access tokens → Delete
+# 使用 Git Credential Manager 缓存 HTTPS 凭证
+git config --global credential.helper manager
+
+# 若曾误提交/泄露 token，应立即在 GitHub 撤销：
+# Settings → Developer settings → Personal access tokens → Delete
 ```
 
 ---
