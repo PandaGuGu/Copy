@@ -46,7 +46,7 @@ jobs:
         run: go vet ./...
 
       - name: Go test
-        run: go test ./... -count=1 -timeout 120s -v 2>&1 || true
+        run: go test ./... -count=1 -race -timeout 180s
 
   # ============================================================
   # 前端检查
@@ -122,3 +122,68 @@ jobs:
         with:
           path: .
           extra_args: --only-verified --exclude-paths=.trufflehog-exclude
+
+  # ============================================================
+  # 性能回归门槛（k6 SLO）
+  # 流程: 起 MySQL/Redis → development 模式起后端(自动建表) → k6 跑 SLO 压测
+  # 若任何 SLO 超限，k6 以 exit 99 退出，本 job 变红阻塞合并。
+  # ============================================================
+  perf-check:
+    name: Performance (k6 SLO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go Proxy (China)
+        run: go env -w GOPROXY=https://goproxy.cn,direct
+
+      # 只起后端依赖（mysql/redis），后端在宿主进程跑以便连接本机端口
+      - name: Start MySQL & Redis
+        run: |
+          docker compose up -d mysql redis
+          for i in $(seq 1 30); do
+            if docker exec cake-mysql mysqladmin ping -h localhost >/dev/null 2>&1; then
+              echo "mysql ready"; break
+            fi
+            sleep 3
+          done
+
+      - name: Build backend
+        run: go build -o mini-bili ./cmd/mini-bili/
+
+      # development 模式会自动建表（data.go: AutoMigrate 仅在 APP_ENV=development 生效），
+      # 用 compose 的默认凭据连接本机端口
+      - name: Start backend (dev, auto-migrate)
+        run: |
+          export APP_ENV=development
+          export HTTP_ADDR=:8080
+          export MYSQL_DSN='minibili:cakecake123@tcp(127.0.0.1:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local'
+          export REDIS_ADDR=127.0.0.1:6379
+          nohup ./mini-bili > backend.log 2>&1 &
+          echo $! > backend.pid
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; then
+              echo "backend ready"; break
+            fi
+            sleep 3
+          done
+          curl -sf http://127.0.0.1:8080/api/v1/health || { echo "backend failed"; cat backend.log; exit 1; }
+
+      # k6 在 host 网络容器中打宿主机 8080
+      - name: Run k6 SLO load test
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/scripts/k6:/scripts" \
+            grafana/k6:latest run /scripts/load.js
+
+      - name: Show backend log (on continuation)
+        if: always()
+        run: cat backend.log || true
