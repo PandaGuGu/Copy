@@ -86,9 +86,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get PR Commits
+        id: get-pr-commits
+        uses: tim-actions/get-pr-commits@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Validate commit messages
         uses: tim-actions/commit-message-checker@v0.3.1
         with:
+          commits: ${{ steps.get-pr-commits.outputs.commits }}
           pattern: '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|wip)(\([^)]+\))?!?: .{1,100}$'
           error: |
             提交信息不符合 Conventional Commits 规范！
@@ -102,8 +109,6 @@ jobs:
             示例:
               feat(video): 添加弹幕发送功能
               fix(auth): 修复 JWT 刷新 Token 过期逻辑
-
-          check-all-commits: true
 
   # ============================================================
   # 敏感信息扫描
@@ -132,6 +137,13 @@ jobs:
     name: Performance (k6 SLO)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # 后端启动必需变量；JWT_SECRET 不能留空（main.go 校验非空）
+      JWT_SECRET: ci-test-secret
+      APP_ENV: development
+      HTTP_ADDR: :8080
+      MYSQL_DSN: "minibili:cakecake123@tcp(127.0.0.1:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local"
+      REDIS_ADDR: 127.0.0.1:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,13 +172,9 @@ jobs:
         run: go build -o mini-bili ./cmd/mini-bili/
 
       # development 模式会自动建表（data.go: AutoMigrate 仅在 APP_ENV=development 生效），
-      # 用 compose 的默认凭据连接本机端口
+      # 数据库用 compose 的默认凭据（minibili/cakecake123）连本机端口
       - name: Start backend (dev, auto-migrate)
         run: |
-          export APP_ENV=development
-          export HTTP_ADDR=:8080
-          export MYSQL_DSN='minibili:cakecake123@tcp(127.0.0.1:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local'
-          export REDIS_ADDR=127.0.0.1:6379
           nohup ./mini-bili > backend.log 2>&1 &
           echo $! > backend.pid
           for i in $(seq 1 40); do
