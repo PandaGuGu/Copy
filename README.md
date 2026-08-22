@@ -185,13 +185,23 @@ cd cakecake-vue/bilibili-vue && npm test          # 前端单元测试（如配�
 cd cakecake-vue/cakecake-app && npm run type-check # 移动端类型检查
 ```
 
-### 性能压测（压测脚本工具）
+### 性能压测与优化
 
 ```bash
-go run ./scripts/bench        # 压测脚本（需先启动后端，见 bench.go）
+go run ./scripts/bench                 # 仓库自带压测脚本（需先启动后端，见 bench.go）
+k6 run scripts/k6/load.js -e BASE_URL=http://127.0.0.1:8080   # k6 压测
 ```
 
-压测思路参考上游 [earthcake2233/cakecake](https://github.com/earthcake2233/cakecake)：用仓库内 `go test -cover` 统计覆盖、用独立压测脚本对目标接口并发高压并配合 pprof 定位瓶颈（系统调用 / GORM-MySQL 查询链 / JSON 序列化）。
+压测与性能治理做了什么、用了什么工具：
+
+- **压测工具**：仓库内 `scripts/bench/bench.go` 做并发压测；`scripts/k6/load.js` 用 k6 压测，设 p95/p99/吞吐/5xx 错误率四重 SLO 门槛，作为 CI `perf-check` 性能回归任务。5xx 用自定义 `server_errors` 计量，避免把限流 429 误判为失败。
+- **可观测性**：`GET /api/v1/metrics` 输出 Prometheus text 格式（请求计数/延迟直方图/限流拒绝数/熔断状态），Grafana 可直接抓取。
+- **限流**：Redis 三级滑动窗口，超配额返回 `429 + Retry-After`；实测 3000 并发下 99.7% 被按设计拒绝、配额内零错误。
+- **熔断**：`internal/middleware/circuitbreaker.go` 实现 closed → open → half-open 状态机（50% 错误率阈值 + 最小样本 20 + 10s 窗口），5 个单元测试通过。
+- **性能基线与瓶颈定位**：全链路（DB + 限流 + 追踪）干净样本 536 QPS / p99 30ms（8/20），开发机负载下 183 QPS / p99 110ms；50 并发出现秒级 p99 与少量 5xx，指向 GORM/MySQL 连接池饱和拐点（可观测容量边界，非代码硬伤）。结合 `pprof` 定位系统调用 / GORM-MySQL 查询链 / JSON 序列化瓶颈。
+- CI 用 `go test ./... -race -count=1` 做并发安全与回归门槛，k6 SLO 门槛超限即阻断合并。
+
+详细基准与验证过程见 [docs/PERF-REPORT.md](./docs/PERF-REPORT.md)。
 
 ---
 
