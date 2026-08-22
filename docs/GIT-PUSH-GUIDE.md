@@ -212,6 +212,53 @@ BYPASS_PUSH=1 git push origin main
 
 > ⚠️ 跳过检查不推荐，仅在紧急生产故障时使用
 
+### 5.4.1 直推 main（BYPASS_PUSH 完整用法）
+
+**场景**：仓库 owner 单人在本地小改、不想走功能分支 + PR，直接推到受保护的 `main`。
+
+`pre-push` 钩子只拦截**客户端侧**推送（GitHub 服务端未强制要求 PR 时可用）。确认远程是否真被服务端保护：若 `BYPASS_PUSH=1` 仍被拒，说明 GitHub 开启了服务端 Branch Protection，则必须回到 PR 流程。
+
+**跨平台写法：**
+
+```bash
+# Linux / macOS
+BYPASS_PUSH=1 git push origin main
+```
+
+```powershell
+# Windows / PowerShell
+$env:BYPASS_PUSH='1'; git push origin main
+```
+
+> Windows 上 `$env:BYPASS_PUSH='1';` 仅对当前终端生效，重启终端后即失效（更安全）。
+
+**完整直推流程（含清理冗余分支）：**
+
+```powershell
+# 先确认提交已在本地 main 上
+git switch main
+
+# 直推 main（绕过 pre-push 钩子）
+$env:BYPASS_PUSH='1'; git push origin main
+
+# 核对推送已生效
+git fetch origin
+git status -sb            # 应显示 ## main...origin/main（无 ahead/behind）
+git ls-remote origin main # 与本地 HEAD 一致
+```
+
+**如果误把提交推到了功能分支、又直推到 main，可删掉冗余分支：**
+
+```powershell
+# 先确认提交已在 origin/main（git ls-remote origin main）
+git branch -d feature/your-feature              # 删除本地分支
+git push origin --delete feature/your-feature   # 删除远程分支
+```
+
+**BYPASS_PUSH 跳过的 pre-push 检查**：保护分支拦截、`go build`、`go test`。
+
+> ⚠️ 代价：绕过了 `go build`/`go test` 与 Code Review 门禁。仅适合 owner 本人改动；改写共享分支/他人代码时务必走 PR。
+
 ---
 
 ## 六、CODEOWNERS 配置
