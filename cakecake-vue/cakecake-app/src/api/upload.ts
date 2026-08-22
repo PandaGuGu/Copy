@@ -15,7 +15,7 @@ export const uploadApi = {
   uploadVideo(token: string, filePath: string, title: string, description = ''): Promise<UploadResult> {
     // App 端无 vite 代理，必须用局域网 IP（与 request.ts 同款条件编译）
     // #ifdef APP-PLUS
-    const apiBase = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+    const apiBase = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:18080'
     // #endif
     // #ifndef APP-PLUS
     const apiBase = import.meta.env.VITE_API_BASE_URL || ''

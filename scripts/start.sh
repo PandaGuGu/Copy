@@ -116,8 +116,8 @@ fi
 # ════════════════════════════════════════
 #  [4/6] Go 后端
 # ════════════════════════════════════════
-echo -ne "[4/6] Backend (8080)..."
-if port_listening 8080; then
+echo -ne "[4/6] Backend (18080)..."
+if port_listening 18080; then
   echo -e " ${GREEN}OK (已运行)${NC}"
 else
   BIN="$ROOT/bin/mini-bili"
@@ -128,7 +128,7 @@ else
   if [ -f "$BIN" ]; then
     "$BIN" &
     sleep 4
-    port_listening 8080 && echo -e " ${GREEN}OK${NC}" || echo -e " ${YELLOW}启动中（检查 logs/）${NC}"
+    port_listening 18080 && echo -e " ${GREEN}OK${NC}" || echo -e " ${YELLOW}启动中（检查 logs/）${NC}"
   else
     echo -e " ${RED}构建失败 — 请执行 go build -o ./bin/mini-bili ./cmd/mini-bili/${NC}"
   fi
@@ -186,5 +186,5 @@ echo -e "${CYAN}========================================${NC}"
 echo -e "${GREEN}  启动完成!${NC}"
 echo -e "${CYAN}  前端:  http://localhost:8888${NC}"
 echo -e "${CYAN}  后台:  http://localhost:8888/#/admin${NC}"
-echo -e "${GRAY}  API:   http://localhost:8080/api/v1/health${NC}"
+echo -e "${GRAY}  API:   http://localhost:18080/api/v1/health${NC}"
 echo -e "${CYAN}========================================${NC}"

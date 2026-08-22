@@ -23,7 +23,7 @@ import { apiCache } from './cache'
 // - H5/小程序 生产：VITE_API_BASE_URL 直连后端
 let appBaseURL = ''
 // #ifdef APP-PLUS
-appBaseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+appBaseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:18080'
 // #endif
 // #ifndef APP-PLUS
 appBaseURL = import.meta.env.VITE_API_BASE_URL || ''

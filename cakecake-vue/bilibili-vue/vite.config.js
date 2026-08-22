@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, "");
   const minibili =
     env.VITE_MINIBILI_API === "true" || env.VITE_MINIBILI_API === "1";
-  const backend = (env.VITE_REMOTE_API_BASE || "http://127.0.0.1:8080").replace(
+  const backend = (env.VITE_REMOTE_API_BASE || "http://127.0.0.1:18080").replace(
     /\/$/,
     ""
   );
@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
                 res.end(
                   JSON.stringify({
                     code: statusCode,
-                    msg: "后端未启动或不可达，请确认 127.0.0.1:8080 已运行"
+                    msg: "后端未启动或不可达，请确认 127.0.0.1:18080 已运行"
                   })
                 );
                 return;
@@ -70,7 +70,7 @@ export default defineConfig(({ mode }) => {
       }
     : {
         "/api": {
-          target: backend || "http://127.0.0.1:8080",
+          target: backend || "http://127.0.0.1:18080",
           changeOrigin: true,
           rewrite: p => p.replace(/^\/api/, "/api/v1")
         }

@@ -2,7 +2,7 @@
 //
 // Usage:
 //
-//	go run ./scripts/bench/bench.go -url http://127.0.0.1:8080/api/v1/videos -n 2000 -c 50
+//	go run ./scripts/bench/bench.go -url http://127.0.0.1:18080/api/v1/videos -n 2000 -c 50
 //
 // Output: total time, QPS, avg / p50 / p95 / p99 latency, status-code histogram.
 package main
@@ -25,7 +25,7 @@ type result struct {
 }
 
 func main() {
-	url := flag.String("url", "http://127.0.0.1:8080/api/v1/videos", "target URL")
+	url := flag.String("url", "http://127.0.0.1:18080/api/v1/videos", "target URL")
 	total := flag.Int("n", 1000, "total requests")
 	conc := flag.Int("c", 20, "concurrency")
 	timeout := flag.Duration("timeout", 10*time.Second, "per-request timeout")
