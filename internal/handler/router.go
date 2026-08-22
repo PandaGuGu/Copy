@@ -125,6 +125,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		pub.GET("/specials/:slug", a.GetPublicSpecialPage)
 		// Live: public
 		pub.GET("/live/rooms", a.ListLiveRooms)
+		pub.GET("/live/featured", a.GetLiveFeatured)
 		pub.GET("/live/room/my", middleware.OptionalJWT(jwtm), a.GetOrCreateMyLiveRoom)
 		pub.GET("/live/room/:id", a.GetLiveRoom)
 
@@ -293,6 +294,15 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		riskOps.DELETE("/risk/bw-list/:id", a.AdminDeleteBWEntry)
 		riskOps.GET("/risk/hits", a.AdminListRiskHitLogs)
 		riskOps.GET("/risk/stats", a.AdminGetRiskStats)
+		riskOps.GET("/appeals", a.AdminListAppeals)
+		riskOps.POST("/appeals/:id/handle", a.AdminHandleAppeal)
+		riskOps.GET("/users/:id/capabilities", a.AdminListUserCapabilities)
+		riskOps.POST("/users/:id/capabilities", a.AdminRestrictUserCapability)
+		riskOps.DELETE("/users/:id/capabilities/:capability", a.AdminRestoreUserCapability)
+		riskOps.GET("/usercap/templates", a.AdminListCapReasonTemplates)
+		riskOps.POST("/usercap/templates", a.AdminCreateCapReasonTemplate)
+		riskOps.PUT("/usercap/templates/:id", a.AdminUpdateCapReasonTemplate)
+		riskOps.DELETE("/usercap/templates/:id", a.AdminDeleteCapReasonTemplate)
 
 		// Permission-protected: copyright.handle
 		crOps := admin.Group("", middleware.RequirePermission(a.DB, "copyright", "handle"))
@@ -398,6 +408,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		// Live: manage permission
 		liveOps := admin.Group("", middleware.RequirePermission(a.DB, "live", "manage"))
 		liveOps.GET("/live/rooms", a.AdminListLiveRooms)
+		liveOps.GET("/live/featured", a.AdminListLiveFeatured)
+		liveOps.POST("/live/featured", a.AdminSetLiveFeatured)
 		liveOps.GET("/live/room/:id", a.AdminGetLiveRoomDetail)
 		liveOps.POST("/live/room/:id/ban", a.AdminBanLiveRoom)
 		liveOps.POST("/live/room/:id/unban", a.AdminUnbanLiveRoom)
@@ -411,6 +423,10 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 
 	authd := r.Group("/api/v1")
 	authd.Use(middleware.JWTAuth(jwtm))
+	// Restricted session: banned users may log in but are confined to appeal/status.
+	authd.Use(middleware.RestrictBanned(a.DB))
+	// Capability-level restrictions (灰度开关 USERCAP_ENABLED).
+	authd.Use(middleware.UserCapabilityRestrict(a.DB, a.Redis, a.Cfg.UserCapEnabled))
 	{
 		authd.GET("/users/me", a.GetMe)
 		authd.GET("/users/me/daily-rewards", a.GetMeDailyRewards)
@@ -436,8 +452,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.PUT("/users/me/follow-groups/:groupId", a.UpdateFollowGroup)
 		authd.DELETE("/users/me/follow-groups/:groupId", a.DeleteFollowGroup)
 		authd.GET("/users/me/following/:followeeId/groups", a.ListFolloweeGroupIDs)
-		authd.GET("/users/me/followings", a.ListMyFollowing)               // 移动端关注页：我的关注列表
-		authd.GET("/dynamics/following", a.ListFollowingDynamics)          // 移动端关注页：关注动态流
+		authd.GET("/users/me/followings", a.ListMyFollowing)      // 移动端关注页：我的关注列表
+		authd.GET("/dynamics/following", a.ListFollowingDynamics) // 移动端关注页：关注动态流
 		authd.POST("/users/me/follow-groups/:groupId/members", a.AddFollowGroupMember)
 		authd.DELETE("/users/me/follow-groups/:groupId/members/:followeeId", a.RemoveFollowGroupMember)
 		authd.PUT("/users/me/password", a.UpdateMePassword)
@@ -539,6 +555,10 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		authd.GET("/dm/conversations/:id/messages", a.ListDmMessages)
 		authd.POST("/dm/conversations/:id/messages", a.PostDmMessage)
 		authd.POST("/reports", a.PostReport)
+		// Module: 治理申诉（用户侧）
+		authd.POST("/appeals", a.PostAppeal)
+		authd.GET("/appeals/me", a.ListMyAppeals)
+		authd.GET("/appeals/:id", a.GetAppeal)
 		// Module 3: Subtitle upload/delete (auth)
 		authd.POST("/videos/:id/subtitles", a.UploadSubtitle)
 		authd.DELETE("/videos/:id/subtitles/:subtitleId", a.DeleteSubtitle)

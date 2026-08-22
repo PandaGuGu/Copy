@@ -48,6 +48,7 @@ func StartScheduler(ctx context.Context, cfg *config.C, db *gorm.DB, rdb *redis.
 		scheduleScheduledPublishes(db, log)
 		scheduleSLAEscalation(db, log)
 		scheduleAutoUnban(db, log)
+		scheduleExpireUserCapabilities(db, log)
 	})
 }
 
@@ -276,5 +277,31 @@ func scheduleAutoUnban(db *gorm.DB, log *zap.Logger) {
 			continue
 		}
 		log.Info("auto unban user", zap.Uint64("user_id", u.ID))
+	}
+}
+
+// scheduleExpireUserCapabilities lifts capability restrictions whose expires_at
+// passed (能力级限制到期自动恢复). Kept with status restored for audit.
+func scheduleExpireUserCapabilities(db *gorm.DB, log *zap.Logger) {
+	rows, err := db.Where("status = 'active' AND expires_at IS NOT NULL AND expires_at <= ?", time.Now()).
+		Find(&model.UserCapabilityRestriction{}).Rows()
+	if err != nil {
+		log.Warn("expire user capabilities scan", zap.Error(err))
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r model.UserCapabilityRestriction
+		if err := db.ScanRows(rows, &r); err != nil {
+			continue
+		}
+		now := time.Now()
+		if db.Model(&r).Updates(map[string]interface{}{
+			"status": "restored", "restored_at": &now,
+		}).Error == nil {
+			log.Info("expire user capability",
+				zap.Uint64("user_id", r.UserID), zap.String("capability", r.Capability))
+		}
 	}
 }

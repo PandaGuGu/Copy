@@ -601,6 +601,43 @@ export async function mbGetMe(): Promise<UserMe> {
   return unwrap<UserMe>(r);
 }
 
+export interface MyAppealItem {
+  id: number;
+  target_id: number;
+  target_type: string;
+  reason_type: string; // ban / takedown / warn
+  content: string;
+  status: string;        // pending / approved / rejected
+  status_label: string;
+  admin_note?: string;
+  created_at?: string;
+}
+
+/** 我的申诉列表（未分页时返回 items + total）。 */
+export async function mbListMyAppeals(params?: {
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ items: MyAppealItem[]; total: number }> {
+  const r = await http.get("/api/v1/appeals/me", { params: params || {}, ...authAxiosOpts });
+  return unwrap(r);
+}
+
+export interface MyAppealPayload {
+  target_type: string;
+  target_id: number;
+  reason_type: string;
+  content: string;
+  evidence_urls?: string;
+  source_report_id?: number;
+}
+
+/** 提交一条申诉。target_type 为 user 时 target_id 必须是当前用户 id。 */
+export async function mbPostAppeal(body: MyAppealPayload): Promise<{ id: number; status: string }> {
+  const r = await http.post("/api/v1/appeals", body, authAxiosOpts);
+  return unwrap(r);
+}
+
 export interface DailyRewardTaskItem {
   exp: number;
   done: boolean;

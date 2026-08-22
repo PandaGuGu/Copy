@@ -61,6 +61,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.HotSearchDisplayLayout{},
 		&model.LLMConfig{},
 		&model.Report{},
+		&model.Appeal{},
 		// ─── Module extension models (23-module expansion) ───
 		&model.VideoChapter{},
 		&model.VideoBitrate{},
@@ -102,8 +103,11 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.CounterNotice{},
 		&model.NotificationRecord{},
 		&model.LiveRoom{},
+		&model.LiveFeaturedRoom{},
 		&model.LLMProvider{},
 		&model.VideoSimilarity{},
+		&model.UserCapabilityRestriction{},
+		&model.CapabilityReasonTemplate{},
 	); err != nil {
 		return err
 	}

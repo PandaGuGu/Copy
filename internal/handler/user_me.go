@@ -22,9 +22,9 @@ import (
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/username"
 	"minibili/internal/pkg/usercoin"
 	"minibili/internal/pkg/userlevel"
+	"minibili/internal/pkg/username"
 )
 
 type updateMeUsernameReq struct {
@@ -160,6 +160,19 @@ func (a *API) GetMe(c *gin.Context) {
 	out["space_privacy"] = priv
 	out["level_info"] = userlevel.FromExperience(u.Experience)
 	out["coin_balance"] = usercoin.BalanceFloat(u.CoinBalanceTenths)
+	// Restricted-session: expose ban info so the limited-mode UI can surface it.
+	out["status"] = u.Status
+	out["banned_reason"] = u.BannedReason
+	if u.BannedAt != nil {
+		out["banned_at"] = u.BannedAt.Format(time.RFC3339)
+	} else {
+		out["banned_at"] = nil
+	}
+	if u.BanExpiresAt != nil {
+		out["ban_expires_at"] = u.BanExpiresAt.Format(time.RFC3339)
+	} else {
+		out["ban_expires_at"] = nil
+	}
 	resp.OK(c, out)
 }
 

@@ -112,11 +112,10 @@ func (a *API) Login(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
-	// Admin-banned accounts cannot log in
-	if u.Status == "banned" {
-		resp.Err(c, http.StatusForbidden, errcode.CodeAccountBanned)
-		return
-	}
+	// Banned users may log in but are confined to a restricted session
+	// (appeal/status only) via the RestrictBanned middleware; this is the
+	// "被限制权力的用户可恢复部分/全部权力" appeal path (limited login).
+	// No 40307 block here.
 	access, refresh, _, err := a.JWT.IssuePair(u.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -145,11 +144,7 @@ func (a *API) Refresh(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeAccountClosed)
 		return
 	}
-	// Admin-banned accounts cannot refresh token
-	if u.Status == "banned" {
-		resp.Err(c, http.StatusForbidden, errcode.CodeAccountBanned)
-		return
-	}
+	// Banned accounts may refresh (they keep their restricted session).
 	ctx := context.Background()
 	if a.Redis.Exists(ctx, data.RefreshInvalidKey(tokenID)).Val() == 1 {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
@@ -163,4 +158,3 @@ func (a *API) Refresh(c *gin.Context) {
 	}
 	resp.OK(c, tokenPairResp{AccessToken: access, RefreshToken: refresh})
 }
-

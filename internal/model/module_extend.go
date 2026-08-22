@@ -8,9 +8,9 @@ import "time"
 
 // VideoChapter marks a chapter point inside a video (multi-P / chapter navigation).
 type VideoChapter struct {
-	ID        uint64 `gorm:"primaryKey"`
-	VideoID   uint64 `gorm:"index:idx_chapter_video;not null"`
-	Title     string `gorm:"size:80;not null"`
+	ID        uint64  `gorm:"primaryKey"`
+	VideoID   uint64  `gorm:"index:idx_chapter_video;not null"`
+	Title     string  `gorm:"size:80;not null"`
 	TimeSec   float64 `gorm:"not null"` // chapter start time in seconds
 	CreatedAt time.Time
 }
@@ -25,7 +25,7 @@ type VideoBitrate struct {
 	Width     int    `gorm:"not null;default:0"`
 	Height    int    `gorm:"not null;default:0"`
 	Kbps      int    `gorm:"not null;default:0"` // bitrate in kbps
-	URL       string `gorm:"size:1024;not null"`  // OSS URL for this variant
+	URL       string `gorm:"size:1024;not null"` // OSS URL for this variant
 	CreatedAt time.Time
 }
 
@@ -70,12 +70,12 @@ func (CommentImage) TableName() string { return "comment_images" }
 
 // ScheduledPublish records a future publish time for a draft video.
 type ScheduledPublish struct {
-	ID           uint64    `gorm:"primaryKey"`
-	VideoID      uint64    `gorm:"uniqueIndex:idx_scheduled_publish_video;not null"`
-	PublishAt    time.Time `gorm:"index;not null"`
-	Published    bool      `gorm:"not null;default:0"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID        uint64    `gorm:"primaryKey"`
+	VideoID   uint64    `gorm:"uniqueIndex:idx_scheduled_publish_video;not null"`
+	PublishAt time.Time `gorm:"index;not null"`
+	Published bool      `gorm:"not null;default:0"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (ScheduledPublish) TableName() string { return "scheduled_publishes" }
@@ -86,32 +86,32 @@ func (ScheduledPublish) TableName() string { return "scheduled_publishes" }
 
 // Ticket is a support/operations work order.
 type Ticket struct {
-	ID            uint64    `gorm:"primaryKey"`
-	ReporterID    uint64    `gorm:"index;not null"` // user who created the ticket
-	AssigneeID    *uint64   `gorm:"index"`           // admin assigned to handle
-	Category      string    `gorm:"size:32;not null"` // report / copyright / appeal / general
-	Subject       string    `gorm:"size:200;not null"`
-	Description   string    `gorm:"type:text;not null"`
-	Status        string    `gorm:"size:32;not null;default:open;index"` // open / assigned / processing / resolved / closed / reopened
-	Priority      string    `gorm:"size:16;not null;default:normal"` // low / normal / high / urgent
-	RelatedID     uint64    `gorm:"index"` // related entity (video/article/dynamic id)
-	RelatedType   string    `gorm:"size:32"` // video / article / dynamic / user / danmaku
-	SLADeadline   *time.Time `gorm:"index"` // computed SLA deadline
-	ResolvedAt    *time.Time
-	ClosedAt      *time.Time
-	CreatedAt     time.Time `gorm:"index"`
-	UpdatedAt     time.Time
+	ID          uint64     `gorm:"primaryKey"`
+	ReporterID  uint64     `gorm:"index;not null"`   // user who created the ticket
+	AssigneeID  *uint64    `gorm:"index"`            // admin assigned to handle
+	Category    string     `gorm:"size:32;not null"` // report / copyright / appeal / general
+	Subject     string     `gorm:"size:200;not null"`
+	Description string     `gorm:"type:text;not null"`
+	Status      string     `gorm:"size:32;not null;default:open;index"` // open / assigned / processing / resolved / closed / reopened
+	Priority    string     `gorm:"size:16;not null;default:normal"`     // low / normal / high / urgent
+	RelatedID   uint64     `gorm:"index"`                               // related entity (video/article/dynamic id)
+	RelatedType string     `gorm:"size:32"`                             // video / article / dynamic / user / danmaku
+	SLADeadline *time.Time `gorm:"index"`                               // computed SLA deadline
+	ResolvedAt  *time.Time
+	ClosedAt    *time.Time
+	CreatedAt   time.Time `gorm:"index"`
+	UpdatedAt   time.Time
 }
 
 func (Ticket) TableName() string { return "tickets" }
 
 // TicketMessage is a message in a ticket thread (between user and admin).
 type TicketMessage struct {
-	ID         uint64    `gorm:"primaryKey"`
-	TicketID   uint64    `gorm:"index:idx_ticket_msg_ticket;not null"`
-	SenderID   uint64    `gorm:"not null"` // user_id or admin_id
-	SenderType string    `gorm:"size:16;not null;default:user"` // user / admin
-	Content    string    `gorm:"type:text;not null"`
+	ID         uint64 `gorm:"primaryKey"`
+	TicketID   uint64 `gorm:"index:idx_ticket_msg_ticket;not null"`
+	SenderID   uint64 `gorm:"not null"`                      // user_id or admin_id
+	SenderType string `gorm:"size:16;not null;default:user"` // user / admin
+	Content    string `gorm:"type:text;not null"`
 	CreatedAt  time.Time
 }
 
@@ -138,9 +138,9 @@ type RiskRule struct {
 	ID          uint64    `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"size:80;not null" json:"name"`
 	Category    string    `gorm:"size:32;not null;index" json:"category"` // keyword / rate_limit / device_fingerprint / behavior
-	RuleType    string    `gorm:"size:32;not null" json:"rule_type"` // keyword / regex / threshold / rate_limit
-	Pattern     string    `gorm:"type:text;not null" json:"pattern"` // regex / threshold / config JSON
-	Action      string    `gorm:"size:32;not null" json:"action"` // reject / quarantine / notify_admin / auto_ban
+	RuleType    string    `gorm:"size:32;not null" json:"rule_type"`      // keyword / regex / threshold / rate_limit
+	Pattern     string    `gorm:"type:text;not null" json:"pattern"`      // regex / threshold / config JSON
+	Action      string    `gorm:"size:32;not null" json:"action"`         // reject / quarantine / notify_admin / auto_ban
 	DurationSec int       `gorm:"not null;default:0" json:"duration_sec"` // ban duration in seconds (0 = permanent)
 	Enabled     bool      `gorm:"not null;default:1;index" json:"enabled"`
 	Priority    int       `gorm:"not null;default:0" json:"priority"` // higher = first match
@@ -165,9 +165,9 @@ func (RiskRateCounter) TableName() string { return "risk_rate_counters" }
 // BlackWhiteList stores black/white list entries for risk control.
 type BlackWhiteList struct {
 	ID         uint64     `gorm:"primaryKey"`
-	ListType   string     `gorm:"size:16;not null;index"` // blacklist / whitelist
+	ListType   string     `gorm:"size:16;not null;index"`        // blacklist / whitelist
 	TargetType string     `gorm:"size:16;not null;default:user"` // user / ip / device / content
-	Target     string     `gorm:"size:200;not null"` // user_id / ip / device_id / keyword
+	Target     string     `gorm:"size:200;not null"`             // user_id / ip / device_id / keyword
 	Reason     string     `gorm:"size:200"`
 	ExpiresAt  *time.Time `gorm:"index"` // null = permanent
 	CreatedBy  uint64     `gorm:"not null"`
@@ -178,27 +178,27 @@ func (BlackWhiteList) TableName() string { return "black_white_lists" }
 
 // RiskHitLog records each time a risk rule triggers an action.
 type RiskHitLog struct {
-	ID        uint64    `gorm:"primaryKey" json:"id"`
-	RuleID    uint64    `gorm:"index;not null" json:"rule_id"`
-	RuleName  string    `gorm:"size:100" json:"rule_name"`
-	TargetID  uint64    `gorm:"index;not null" json:"target_id"`     // video_id / user_id
-	TargetType string   `gorm:"size:32;not null" json:"target_type"` // video / comment / user
-	MatchText string    `gorm:"size:500" json:"match_text"`          // the matched content snippet
-	Action    string    `gorm:"size:32;not null" json:"action"`      // delete / hide / limit / warn
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint64    `gorm:"primaryKey" json:"id"`
+	RuleID     uint64    `gorm:"index;not null" json:"rule_id"`
+	RuleName   string    `gorm:"size:100" json:"rule_name"`
+	TargetID   uint64    `gorm:"index;not null" json:"target_id"`     // video_id / user_id
+	TargetType string    `gorm:"size:32;not null" json:"target_type"` // video / comment / user
+	MatchText  string    `gorm:"size:500" json:"match_text"`          // the matched content snippet
+	Action     string    `gorm:"size:32;not null" json:"action"`      // delete / hide / limit / warn
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (RiskHitLog) TableName() string { return "risk_hit_logs" }
 
 // AdminLoginLog records every admin login attempt.
 type AdminLoginLog struct {
-	ID        uint64    `gorm:"primaryKey" json:"id"`
-	AdminID   uint64    `gorm:"index;not null" json:"admin_id"`
-	Username  string    `gorm:"size:64" json:"username"`
-	IP        string    `gorm:"size:64" json:"ip"`
-	Success   bool      `gorm:"not null" json:"success"`
-	FailReason string   `gorm:"size:200" json:"fail_reason,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint64    `gorm:"primaryKey" json:"id"`
+	AdminID    uint64    `gorm:"index;not null" json:"admin_id"`
+	Username   string    `gorm:"size:64" json:"username"`
+	IP         string    `gorm:"size:64" json:"ip"`
+	Success    bool      `gorm:"not null" json:"success"`
+	FailReason string    `gorm:"size:200" json:"fail_reason,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (AdminLoginLog) TableName() string { return "admin_login_logs" }
@@ -209,19 +209,19 @@ func (AdminLoginLog) TableName() string { return "admin_login_logs" }
 
 // CopyrightComplaint records a copyright infringement complaint.
 type CopyrightComplaint struct {
-	ID              uint64    `gorm:"primaryKey"`
-	ComplainantID   uint64    `gorm:"index;not null"` // user who filed the complaint
-	RelatedID       uint64    `gorm:"index;not null"` // video/article id being complained
-	RelatedType     string    `gorm:"size:32;not null"` // video / article
-	Description     string    `gorm:"type:text;not null"`
-	EvidenceURLs    string    `gorm:"type:text"` // JSON array of evidence file URLs
-	Status          string    `gorm:"size:32;not null;default:pending;index"` // pending / accepted / rejected / takedown / restored
-	HandlerID       *uint64   `gorm:"index"` // admin who processed
-	HandlerComment  string    `gorm:"size:500"`
-	TakedownAt      *time.Time
-	RestoredAt      *time.Time
-	CreatedAt       time.Time `gorm:"index"`
-	UpdatedAt       time.Time
+	ID             uint64  `gorm:"primaryKey"`
+	ComplainantID  uint64  `gorm:"index;not null"`   // user who filed the complaint
+	RelatedID      uint64  `gorm:"index;not null"`   // video/article id being complained
+	RelatedType    string  `gorm:"size:32;not null"` // video / article
+	Description    string  `gorm:"type:text;not null"`
+	EvidenceURLs   string  `gorm:"type:text"`                              // JSON array of evidence file URLs
+	Status         string  `gorm:"size:32;not null;default:pending;index"` // pending / accepted / rejected / takedown / restored
+	HandlerID      *uint64 `gorm:"index"`                                  // admin who processed
+	HandlerComment string  `gorm:"size:500"`
+	TakedownAt     *time.Time
+	RestoredAt     *time.Time
+	CreatedAt      time.Time `gorm:"index"`
+	UpdatedAt      time.Time
 }
 
 func (CopyrightComplaint) TableName() string { return "copyright_complaints" }
@@ -270,13 +270,13 @@ func (NotificationRecord) TableName() string { return "notification_records" }
 
 // SavedReport is a user-saved BI report configuration.
 type SavedReport struct {
-	ID          uint64    `gorm:"primaryKey"`
-	CreatorID   uint64    `gorm:"index;not null"` // admin who created this report config
-	Name        string    `gorm:"size:80;not null"`
-	Description string    `gorm:"size:200"`
-	QueryConfig string    `gorm:"type:text;not null"` // JSON: dimensions, filters, metrics
-	ChartType   string    `gorm:"size:32;not null;default:table"` // table / bar / line / pie
-	IsPublic    bool      `gorm:"not null;default:0"`
+	ID          uint64 `gorm:"primaryKey"`
+	CreatorID   uint64 `gorm:"index;not null"` // admin who created this report config
+	Name        string `gorm:"size:80;not null"`
+	Description string `gorm:"size:200"`
+	QueryConfig string `gorm:"type:text;not null"`             // JSON: dimensions, filters, metrics
+	ChartType   string `gorm:"size:32;not null;default:table"` // table / bar / line / pie
+	IsPublic    bool   `gorm:"not null;default:0"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -289,11 +289,11 @@ func (SavedReport) TableName() string { return "saved_reports" }
 
 // CSTemplate is a pre-defined customer service response template.
 type CSTemplate struct {
-	ID        uint64    `gorm:"primaryKey"`
-	Name      string    `gorm:"size:80;not null"`
-	Category  string    `gorm:"size:32;not null;index"` // greeting / faq / resolve / escalation
-	Content   string    `gorm:"type:text;not null"`
-	CreatedBy uint64    `gorm:"not null"`
+	ID        uint64 `gorm:"primaryKey"`
+	Name      string `gorm:"size:80;not null"`
+	Category  string `gorm:"size:32;not null;index"` // greeting / faq / resolve / escalation
+	Content   string `gorm:"type:text;not null"`
+	CreatedBy uint64 `gorm:"not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -314,24 +314,24 @@ func (LiveWarnTemplate) TableName() string { return "live_warn_templates" }
 
 // CSConversation records a customer service conversation session.
 type CSConversation struct {
-	ID          uint64    `gorm:"primaryKey"`
-	UserID      uint64    `gorm:"index;not null"` // the user seeking help
-	AdminID     *uint64   `gorm:"index"`          // assigned CS admin
-	TicketID    *uint64   `gorm:"index"`          // linked ticket
-	Status      string    `gorm:"size:32;not null;default:waiting;index"` // waiting / active / resolved / closed
-	CreatedAt   time.Time `gorm:"index"`
-	UpdatedAt   time.Time
+	ID        uint64    `gorm:"primaryKey"`
+	UserID    uint64    `gorm:"index;not null"`                         // the user seeking help
+	AdminID   *uint64   `gorm:"index"`                                  // assigned CS admin
+	TicketID  *uint64   `gorm:"index"`                                  // linked ticket
+	Status    string    `gorm:"size:32;not null;default:waiting;index"` // waiting / active / resolved / closed
+	CreatedAt time.Time `gorm:"index"`
+	UpdatedAt time.Time
 }
 
 func (CSConversation) TableName() string { return "cs_conversations" }
 
 // CSMessage is a message in a customer service conversation.
 type CSMessage struct {
-	ID             uint64    `gorm:"primaryKey"`
-	ConversationID uint64    `gorm:"index:idx_cs_msg_conv;not null"`
-	SenderID       uint64    `gorm:"not null"`
-	SenderType     string    `gorm:"size:16;not null;default:user"` // user / admin / bot
-	Content        string    `gorm:"type:text;not null"`
+	ID             uint64 `gorm:"primaryKey"`
+	ConversationID uint64 `gorm:"index:idx_cs_msg_conv;not null"`
+	SenderID       uint64 `gorm:"not null"`
+	SenderType     string `gorm:"size:16;not null;default:user"` // user / admin / bot
+	Content        string `gorm:"type:text;not null"`
 	CreatedAt      time.Time
 }
 
@@ -343,12 +343,12 @@ func (CSMessage) TableName() string { return "cs_messages" }
 
 // TaskLog records transcode/async task execution for visualization.
 type TaskLog struct {
-	ID         uint64    `gorm:"primaryKey"`
-	TaskType   string    `gorm:"size:32;not null;index"` // transcode / subtitle_asr / report_export / sync
-	TargetID   uint64    `gorm:"index;not null"` // video_id / article_id etc.
-	Status     string    `gorm:"size:32;not null;index"` // pending / running / success / failed / retrying
-	RetryCount int       `gorm:"not null;default:0"`
-	ErrorMsg   string    `gorm:"size:2000"`
+	ID         uint64     `gorm:"primaryKey"`
+	TaskType   string     `gorm:"size:32;not null;index"` // transcode / subtitle_asr / report_export / sync
+	TargetID   uint64     `gorm:"index;not null"`         // video_id / article_id etc.
+	Status     string     `gorm:"size:32;not null;index"` // pending / running / success / failed / retrying
+	RetryCount int        `gorm:"not null;default:0"`
+	ErrorMsg   string     `gorm:"size:2000"`
 	StartedAt  *time.Time `gorm:"index"`
 	FinishedAt *time.Time
 	CreatedAt  time.Time `gorm:"index"`
@@ -362,15 +362,15 @@ func (TaskLog) TableName() string { return "task_logs" }
 
 // AlertRule defines a monitoring alert rule.
 type AlertRule struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Name        string    `gorm:"size:80;not null"`
-	Metric      string    `gorm:"size:64;not null;index"` // cpu / memory / disk / bandwidth / error_rate / queue_depth
-	Threshold   float64   `gorm:"not null"`
-	Operator    string    `gorm:"size:8;not null"` // gt / lt / eq / gte / lte
-	DurationSec int       `gorm:"not null;default:0"` // alert fires after condition persists this long
-	Channel     string    `gorm:"size:32;not null;default:log"` // log / dingtalk / wecom / email
-	ChannelConf string    `gorm:"type:text"` // webhook URL, email list etc.
-	Enabled     bool      `gorm:"not null;default:1;index"`
+	ID          uint64  `gorm:"primaryKey"`
+	Name        string  `gorm:"size:80;not null"`
+	Metric      string  `gorm:"size:64;not null;index"` // cpu / memory / disk / bandwidth / error_rate / queue_depth
+	Threshold   float64 `gorm:"not null"`
+	Operator    string  `gorm:"size:8;not null"`              // gt / lt / eq / gte / lte
+	DurationSec int     `gorm:"not null;default:0"`           // alert fires after condition persists this long
+	Channel     string  `gorm:"size:32;not null;default:log"` // log / dingtalk / wecom / email
+	ChannelConf string  `gorm:"type:text"`                    // webhook URL, email list etc.
+	Enabled     bool    `gorm:"not null;default:1;index"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -379,11 +379,11 @@ func (AlertRule) TableName() string { return "alert_rules" }
 
 // AlertRecord logs a fired alert instance.
 type AlertRecord struct {
-	ID        uint64    `gorm:"primaryKey"`
-	RuleID    uint64    `gorm:"index;not null"`
-	Value     float64   `gorm:"not null"` // actual metric value at alert time
-	Status    string    `gorm:"size:16;not null;default:firing;index"` // firing / resolved
-	AckedBy   *uint64   `gorm:"index"` // admin who acknowledged
+	ID        uint64  `gorm:"primaryKey"`
+	RuleID    uint64  `gorm:"index;not null"`
+	Value     float64 `gorm:"not null"`                              // actual metric value at alert time
+	Status    string  `gorm:"size:16;not null;default:firing;index"` // firing / resolved
+	AckedBy   *uint64 `gorm:"index"`                                 // admin who acknowledged
 	AckedAt   *time.Time
 	CreatedAt time.Time `gorm:"index"`
 }
@@ -416,12 +416,12 @@ func (TraceRecord) TableName() string { return "trace_records" }
 
 // FeatureFlag controls feature availability via toggle.
 type FeatureFlag struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Key         string    `gorm:"size:64;uniqueIndex;not null"` // e.g. "live_stream", "hls_player"
-	Description string    `gorm:"size:200"`
-	Enabled     bool      `gorm:"not null;default:0;index"`
-	RolloutPct  int       `gorm:"not null;default:0"` // 0-100 rollout percentage for gradual enable
-	Whitelist   string    `gorm:"type:text"` // JSON array of whitelisted user_ids
+	ID          uint64 `gorm:"primaryKey"`
+	Key         string `gorm:"size:64;uniqueIndex;not null"` // e.g. "live_stream", "hls_player"
+	Description string `gorm:"size:200"`
+	Enabled     bool   `gorm:"not null;default:0;index"`
+	RolloutPct  int    `gorm:"not null;default:0"` // 0-100 rollout percentage for gradual enable
+	Whitelist   string `gorm:"type:text"`          // JSON array of whitelisted user_ids
 	UpdatedAt   time.Time
 	CreatedAt   time.Time
 }
@@ -432,10 +432,10 @@ func (FeatureFlag) TableName() string { return "feature_flags" }
 type ReleaseRecord struct {
 	ID           uint64     `gorm:"primaryKey"`
 	Version      string     `gorm:"size:32;uniqueIndex;not null"`
-	Title        string     `gorm:"size:200"`                        // human-readable title
-	Type         string     `gorm:"size:16;default:canary"`          // canary / full / hotfix
-	Notes        string     `gorm:"type:text"`                       // release notes
-	Snapshot     string     `gorm:"type:longtext"`                   // JSON snapshot of all configs at release time
+	Title        string     `gorm:"size:200"`                                 // human-readable title
+	Type         string     `gorm:"size:16;default:canary"`                   // canary / full / hotfix
+	Notes        string     `gorm:"type:text"`                                // release notes
+	Snapshot     string     `gorm:"type:longtext"`                            // JSON snapshot of all configs at release time
 	Status       string     `gorm:"size:32;not null;default:deploying;index"` // deploying / released / rolled_out / rolled_back
 	Description  string     `gorm:"size:500"`
 	DeployedBy   uint64     `gorm:"not null"`
@@ -453,11 +453,11 @@ func (ReleaseRecord) TableName() string { return "release_records" }
 
 // CDNRefreshTask records a CDN cache purge / refresh request.
 type CDNRefreshTask struct {
-	ID          uint64    `gorm:"primaryKey"`
-	RefreshType string    `gorm:"size:16;not null"`  // url / directory
-	Urls        string    `gorm:"type:text;not null"` // JSON array of URLs
-	Status      string    `gorm:"size:32;not null;default:pending;index"` // pending / processing / success / failed
-	RequestedBy uint64    `gorm:"not null"`
+	ID          uint64 `gorm:"primaryKey"`
+	RefreshType string `gorm:"size:16;not null"`                       // url / directory
+	Urls        string `gorm:"type:text;not null"`                     // JSON array of URLs
+	Status      string `gorm:"size:32;not null;default:pending;index"` // pending / processing / success / failed
+	RequestedBy uint64 `gorm:"not null"`
 	FinishedAt  *time.Time
 	CreatedAt   time.Time `gorm:"index"`
 }
@@ -466,15 +466,15 @@ func (CDNRefreshTask) TableName() string { return "cdn_refresh_tasks" }
 
 // OSSLifecycleRule configures OSS object lifecycle management.
 type OSSLifecycleRule struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Name        string    `gorm:"size:80;not null"`  // human-readable rule name
-	Bucket      string    `gorm:"size:128;not null"` // OSS bucket name
-	Prefix      string    `gorm:"size:256;not null"` // e.g. "temp/", "originals/"
-	IADays      int       `gorm:"not null;default:0"`     // days before transition to IA
-	ArchiveDays int       `gorm:"not null;default:0"`     // days before transition to Archive
-	DeleteDays  int       `gorm:"not null;default:0"`     // days before deletion
-	Enabled     bool      `gorm:"not null;default:1;index"`
-	CreatedBy   uint64    `gorm:"not null"`
+	ID          uint64 `gorm:"primaryKey"`
+	Name        string `gorm:"size:80;not null"`   // human-readable rule name
+	Bucket      string `gorm:"size:128;not null"`  // OSS bucket name
+	Prefix      string `gorm:"size:256;not null"`  // e.g. "temp/", "originals/"
+	IADays      int    `gorm:"not null;default:0"` // days before transition to IA
+	ArchiveDays int    `gorm:"not null;default:0"` // days before transition to Archive
+	DeleteDays  int    `gorm:"not null;default:0"` // days before deletion
+	Enabled     bool   `gorm:"not null;default:1;index"`
+	CreatedBy   uint64 `gorm:"not null"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -487,9 +487,9 @@ func (OSSLifecycleRule) TableName() string { return "oss_lifecycle_rules" }
 
 // AdminRole defines an admin role for RBAC.
 type AdminRole struct {
-	ID          uint64    `gorm:"primaryKey"`
-	Name        string    `gorm:"size:32;uniqueIndex;not null"` // super_admin / content_admin / cs_admin / risk_admin / stats_admin
-	Description string    `gorm:"size:200"`
+	ID          uint64 `gorm:"primaryKey"`
+	Name        string `gorm:"size:32;uniqueIndex;not null"` // super_admin / content_admin / cs_admin / risk_admin / stats_admin
+	Description string `gorm:"size:200"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -500,8 +500,8 @@ func (AdminRole) TableName() string { return "admin_roles" }
 type AdminPermission struct {
 	ID       uint64 `gorm:"primaryKey"`
 	Code     string `gorm:"size:64;uniqueIndex;not null"` // e.g. "video:review", "user:ban", "report:handle"
-	Resource string `gorm:"size:32;not null;index"` // video / article / user / report / ticket / copyright / setting / dashboard
-	Action   string `gorm:"size:16;not null"` // view / create / update / delete / approve / reject / ban / export
+	Resource string `gorm:"size:32;not null;index"`       // video / article / user / report / ticket / copyright / setting / dashboard
+	Action   string `gorm:"size:16;not null"`             // view / create / update / delete / approve / reject / ban / export
 }
 
 func (AdminPermission) TableName() string { return "admin_permissions" }
@@ -526,27 +526,27 @@ func (AdminRoleAssignment) TableName() string { return "admin_role_assignments" 
 
 // AuditLog records admin operations for audit trail.
 type AuditLog struct {
-	ID         uint64    `gorm:"primaryKey"`
-	AdminID    uint64    `gorm:"index;not null"`
-	Action     string    `gorm:"size:64;not null;index"` // e.g. "ban_user", "approve_video", "delete_comment"
-	Resource   string    `gorm:"size:32;not null;index"` // user / video / article / comment / report / ticket / copyright / setting / role
-	TargetID   uint64    `gorm:"index"` // ID of affected entity
-	Detail     string    `gorm:"type:text"` // JSON detail of what changed
-	IPAddress  string    `gorm:"size:64"`
-	CreatedAt  time.Time `gorm:"index"`
+	ID        uint64    `gorm:"primaryKey"`
+	AdminID   uint64    `gorm:"index;not null"`
+	Action    string    `gorm:"size:64;not null;index"` // e.g. "ban_user", "approve_video", "delete_comment"
+	Resource  string    `gorm:"size:32;not null;index"` // user / video / article / comment / report / ticket / copyright / setting / role
+	TargetID  uint64    `gorm:"index"`                  // ID of affected entity
+	Detail    string    `gorm:"type:text"`              // JSON detail of what changed
+	IPAddress string    `gorm:"size:64"`
+	CreatedAt time.Time `gorm:"index"`
 }
 
 func (AuditLog) TableName() string { return "audit_logs" }
 
 // ApprovalFlow tracks multi-step approval processes.
 type ApprovalFlow struct {
-	ID           uint64    `gorm:"primaryKey"`
-	ResourceType string    `gorm:"size:32;not null;index"` // video / article / ban / copyright
-	ResourceID   uint64    `gorm:"index;not null"`
-	Status       string    `gorm:"size:32;not null;default:pending;index"` // pending / approved / rejected / cancelled
-	CurrentStep  int       `gorm:"not null;default:1"` // current approval step
-	TotalSteps   int       `gorm:"not null;default:2"` // total required steps
-	RequestorID  uint64    `gorm:"not null"`
+	ID           uint64 `gorm:"primaryKey"`
+	ResourceType string `gorm:"size:32;not null;index"` // video / article / ban / copyright
+	ResourceID   uint64 `gorm:"index;not null"`
+	Status       string `gorm:"size:32;not null;default:pending;index"` // pending / approved / rejected / cancelled
+	CurrentStep  int    `gorm:"not null;default:1"`                     // current approval step
+	TotalSteps   int    `gorm:"not null;default:2"`                     // total required steps
+	RequestorID  uint64 `gorm:"not null"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -555,14 +555,14 @@ func (ApprovalFlow) TableName() string { return "approval_flows" }
 
 // ApprovalStep records each step in an approval flow.
 type ApprovalStep struct {
-	ID          uint64    `gorm:"primaryKey"`
-	FlowID      uint64    `gorm:"index:idx_approval_step_flow;not null"`
-	StepNumber  int       `gorm:"not null"`
-	ApproverID  uint64    `gorm:"not null"` // admin assigned to this step
-	Decision    string    `gorm:"size:16"` // approved / rejected / pending
-	Comment     string    `gorm:"size:500"`
-	DecidedAt   *time.Time
-	CreatedAt   time.Time
+	ID         uint64 `gorm:"primaryKey"`
+	FlowID     uint64 `gorm:"index:idx_approval_step_flow;not null"`
+	StepNumber int    `gorm:"not null"`
+	ApproverID uint64 `gorm:"not null"` // admin assigned to this step
+	Decision   string `gorm:"size:16"`  // approved / rejected / pending
+	Comment    string `gorm:"size:500"`
+	DecidedAt  *time.Time
+	CreatedAt  time.Time
 }
 
 func (ApprovalStep) TableName() string { return "approval_steps" }
@@ -642,3 +642,14 @@ type LiveRoom struct {
 }
 
 func (LiveRoom) TableName() string { return "live_rooms" }
+
+// LiveFeaturedRoom pins a live room to the live page's featured layout
+// (1 big slot on top + small slots on the right), ordered by SortOrder.
+type LiveFeaturedRoom struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	RoomID    uint64    `gorm:"uniqueIndex:idx_featured_room;not null" json:"room_id"`
+	SortOrder int       `gorm:"not null;default:0" json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (LiveFeaturedRoom) TableName() string { return "live_featured_rooms" }

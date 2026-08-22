@@ -60,16 +60,23 @@ type C struct {
 	ArticleReviewRequired bool
 	// VideoUploadDisabled: reject video file upload/transcode; metadata-only drafts still allowed.
 	VideoUploadDisabled bool
+	// VideoABREnabled: transcode worker also produces multi-resolution ABR variants
+	// (360p/480p/720p) and writes them into video_bitrates (default true).
+	VideoABREnabled bool
+	// AlertLoopInterval: how often the background alert evaluator runs (seconds).
+	AlertLoopInterval time.Duration
+	// UserCapEnabled: 能力级限制是否启用（灰度开关）。默认关闭，验收后再开。
+	UserCapEnabled bool
 
 	// DeepSeek / AI assistant (optional; empty API key disables replies).
-	DeepSeekAPIKey     string
-	DeepSeekBaseURL    string
-	DeepSeekModel      string
-	AgentBotUsername   string
-	AgentEnabled       bool
-	AgentMaxHistory    int
-	AgentHistoryTTL    time.Duration
-	AgentDailyQuota    int
+	DeepSeekAPIKey      string
+	DeepSeekBaseURL     string
+	DeepSeekModel       string
+	AgentBotUsername    string
+	AgentEnabled        bool
+	AgentMaxHistory     int
+	AgentHistoryTTL     time.Duration
+	AgentDailyQuota     int
 	AgentRequestTimeout time.Duration
 
 	// AI-sensitive review (optional LLM layer on top of keyword filter)
@@ -197,26 +204,29 @@ func Load() *C {
 		),
 		OSSPublicURLPrefix: os.Getenv("OSS_PUBLIC_URL_PREFIX"),
 
-		SensitiveWordsFile: getenv("SENSITIVE_WORDS_FILE", "./configs/sensitive_words.txt"),
-		TempUploadDir:      getenv("TEMP_UPLOAD_DIR", "./data/tmp"),
-		FFprobePath:        strings.TrimSpace(os.Getenv("FFPROBE_PATH")),
-		FFmpegPath:         strings.TrimSpace(os.Getenv("FFMPEG_PATH")),
+		SensitiveWordsFile:    getenv("SENSITIVE_WORDS_FILE", "./configs/sensitive_words.txt"),
+		TempUploadDir:         getenv("TEMP_UPLOAD_DIR", "./data/tmp"),
+		FFprobePath:           strings.TrimSpace(os.Getenv("FFPROBE_PATH")),
+		FFmpegPath:            strings.TrimSpace(os.Getenv("FFMPEG_PATH")),
 		IP2RegionV4XDB:        getenv("IP2REGION_V4_XDB", "./configs/ip2region_v4.xdb"),
-		IP2RegionDevClientIP:    strings.TrimSpace(os.Getenv("IP2REGION_DEV_CLIENT_IP")),
-		AdminSeedUsername:       strings.TrimSpace(os.Getenv("ADMIN_SEED_USERNAME")),
-		AdminSeedPassword:       os.Getenv("ADMIN_SEED_PASSWORD"),
-		VideoReviewRequired:     parseBoolEnv("VIDEO_REVIEW_REQUIRED", true),
-		ArticleReviewRequired:   parseBoolEnv("ARTICLE_REVIEW_REQUIRED", true),
-		VideoUploadDisabled:     parseBoolEnv("VIDEO_UPLOAD_DISABLED", false),
+		IP2RegionDevClientIP:  strings.TrimSpace(os.Getenv("IP2REGION_DEV_CLIENT_IP")),
+		AdminSeedUsername:     strings.TrimSpace(os.Getenv("ADMIN_SEED_USERNAME")),
+		AdminSeedPassword:     os.Getenv("ADMIN_SEED_PASSWORD"),
+		VideoReviewRequired:   parseBoolEnv("VIDEO_REVIEW_REQUIRED", true),
+		ArticleReviewRequired: parseBoolEnv("ARTICLE_REVIEW_REQUIRED", true),
+		VideoUploadDisabled:   parseBoolEnv("VIDEO_UPLOAD_DISABLED", false),
+		VideoABREnabled:       parseBoolEnv("VIDEO_ABR_ENABLED", true),
+		AlertLoopInterval:     time.Duration(atoi(os.Getenv("ALERT_LOOP_INTERVAL"), 30)) * time.Second,
+		UserCapEnabled:        parseBoolEnv("USERCAP_ENABLED", false),
 
-		DeepSeekAPIKey:  strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
-		DeepSeekBaseURL: strings.TrimRight(strings.TrimSpace(getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")), "/"),
-		DeepSeekModel:   getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-		AgentBotUsername: getenv("AGENT_BOT_USERNAME", "minibili_ai"),
-		AgentEnabled: parseBoolEnv("AGENT_ENABLED", strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")) != ""),
-		AgentMaxHistory:    atoi(os.Getenv("AGENT_MAX_HISTORY"), 20),
-		AgentHistoryTTL:    mustParseDuration(os.Getenv("AGENT_HISTORY_TTL"), 30*24*time.Hour),
-		AgentDailyQuota:    atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
+		DeepSeekAPIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
+		DeepSeekBaseURL:     strings.TrimRight(strings.TrimSpace(getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")), "/"),
+		DeepSeekModel:       getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+		AgentBotUsername:    getenv("AGENT_BOT_USERNAME", "minibili_ai"),
+		AgentEnabled:        parseBoolEnv("AGENT_ENABLED", strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")) != ""),
+		AgentMaxHistory:     atoi(os.Getenv("AGENT_MAX_HISTORY"), 20),
+		AgentHistoryTTL:     mustParseDuration(os.Getenv("AGENT_HISTORY_TTL"), 30*24*time.Hour),
+		AgentDailyQuota:     atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
 
 		AISensitiveEnabled: parseBoolEnv("AI_SENSITIVE_ENABLED", false),

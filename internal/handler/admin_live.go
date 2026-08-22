@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -83,7 +84,7 @@ func (a *API) AdminBanLiveRoom(c *gin.Context) {
 
 	// Broadcast ban to all viewers in the room
 	if a.Hub != nil {
-		a.Hub.BroadcastJSON(room.ID, gin.H{
+		a.hubFanout(context.Background(), room.ID, gin.H{
 			"type": "admin_ban",
 			"msg":  "直播间已被管理员封禁",
 		})
@@ -169,18 +170,18 @@ func (a *API) AdminGetLiveRoomDetail(c *gin.Context) {
 	var u model.User
 	_ = a.DB.Select("username").First(&u, room.UserID).Error
 	resp.OK(c, gin.H{
-		"id":          room.ID,
-		"title":       room.Title,
-		"host_name":   room.HostName,
-		"avatar_url":  room.AvatarURL,
-		"cover_url":   room.CoverURL,
-		"stream_key":  room.StreamKey,
-		"status":      room.Status,
+		"id":           room.ID,
+		"title":        room.Title,
+		"host_name":    room.HostName,
+		"avatar_url":   room.AvatarURL,
+		"cover_url":    room.CoverURL,
+		"stream_key":   room.StreamKey,
+		"status":       room.Status,
 		"viewer_count": room.ViewerCount,
-		"user_id":     room.UserID,
-		"username":    model.DisplayUsername(&u),
-		"started_at":  room.StartedAt,
-		"created_at":  room.CreatedAt,
+		"user_id":      room.UserID,
+		"username":     model.DisplayUsername(&u),
+		"started_at":   room.StartedAt,
+		"created_at":   room.CreatedAt,
 	})
 }
 
@@ -215,7 +216,7 @@ func (a *API) AdminWarnLiveRoom(c *gin.Context) {
 
 	// Broadcast warning to all viewers via WebSocket
 	if a.Hub != nil {
-		a.Hub.BroadcastJSON(room.ID, gin.H{
+		a.hubFanout(context.Background(), room.ID, gin.H{
 			"type":   "admin_warning",
 			"reason": reason,
 			"msg":    fmt.Sprintf("⚠ 管理员警告：%s", reason),

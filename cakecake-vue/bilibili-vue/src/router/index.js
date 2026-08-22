@@ -453,6 +453,12 @@ const routes = [
         meta: { title: "风控管理 - 运营后台", perm: "risk:manage" }
       },
       {
+        path: "appeals",
+        name: "adminAppeals",
+        component: () => import("@/pages/admin/social/AppealManage.vue"),
+        meta: { title: "治理申诉 - 运营后台", perm: "risk:manage" }
+      },
+      {
         path: "copyright",
         name: "adminCopyrightManage",
         component: () => import("@/pages/admin/social/CopyrightManage.vue"),
@@ -511,6 +517,12 @@ const routes = [
         name: "adminLiveManage",
         component: () => import("@/pages/admin/review/LiveManage.vue"),
         meta: { title: "直播管理 - 运营后台", perm: "live:manage" }
+      },
+      {
+        path: "live/featured",
+        name: "adminLiveFeatured",
+        component: () => import("@/pages/admin/live/LiveFeaturedManage.vue"),
+        meta: { title: "直播运营 - 运营后台", perm: "live:manage" }
       }
     ]
   },

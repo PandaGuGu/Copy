@@ -58,9 +58,10 @@
       <el-table-column prop="created_at" label="注册时间" width="170">
         <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" size="small" link @click="viewDetail(row)">详情</el-button>
+          <el-button type="primary" size="small" link @click="openCapabilities(row)">能力</el-button>
           <template v-if="row.status === 'banned'">
             <el-button type="success" size="small" link @click="confirmUnban(row)">解封</el-button>
           </template>
@@ -252,11 +253,77 @@
         <el-button type="danger" :loading="deleting" @click="doDelete">确认注销</el-button>
       </template>
     </el-dialog>
+
+    <!-- 能力限制管理 -->
+    <el-dialog v-model="capVisible" :title="`能力限制：${capUser ? (capUser.nickname || capUser.username) : ''}`" width="560px" destroy-on-close>
+      <div v-if="capUser">
+        <p class="cap-head-desc">可单独限制用户某项功能；被限制的能力用户将无法使用，但账号仍可正常登录其它功能。</p>
+        <div v-loading="capLoading" class="cap-grid">
+          <div v-for="c in capItems" :key="c.name" class="cap-item">
+            <div class="cap-item__main">
+              <div class="cap-item__label">{{ c.label }}</div>
+              <div v-if="c.activeReason" class="cap-item__reason">{{ c.activeReason }}</div>
+            </div>
+            <el-switch
+              :model-value="c.active"
+              :loading="c.saving"
+              @change="(v) => toggleCap(c, v)"
+            />
+          </div>
+        </div>
+        <div class="cap-reason">
+          <div class="cap-reason__head">
+            <div class="cap-reason__label">限制原因</div>
+            <el-button size="small" link type="primary" @click="capTplManageVisible = !capTplManageVisible">
+              {{ capTplManageVisible ? '收起模板管理' : '管理模板' }}
+            </el-button>
+          </div>
+          <div v-if="!capTplManageVisible" class="cap-reason__tpls">
+            <span
+              v-for="t in capReasonTemplates"
+              :key="t"
+              class="cap-reason__tpl"
+              :class="{ 'is-on': capReason === t }"
+              @click="capReason = t"
+            >{{ t }}</span>
+          </div>
+          <div v-else class="cap-tpl-manage">
+            <div class="cap-tpl-row">
+              <el-input v-model="capTplInput" placeholder="输入新模板，回车添加" size="small" @keyup.enter="addCapTpl" />
+              <el-button type="primary" size="small" @click="addCapTpl">添加</el-button>
+            </div>
+            <div v-for="tpl in capTplItems" :key="tpl.id" class="cap-tpl-row">
+              <template v-if="tpl.editing">
+                <el-input v-model="tpl.draft" size="small" @keyup.enter="saveCapTpl(tpl)" />
+                <el-button type="primary" size="small" @click="saveCapTpl(tpl)">保存</el-button>
+                <el-button size="small" @click="tpl.editing = false">取消</el-button>
+              </template>
+              <template v-else>
+                <span class="cap-tpl-text">{{ tpl.content }}</span>
+                <el-button size="small" link type="primary" @click="startEditCapTpl(tpl)">改</el-button>
+                <el-button size="small" link type="danger" @click="delCapTpl(tpl)">删</el-button>
+              </template>
+            </div>
+          </div>
+          <el-input
+            v-model="capReason"
+            type="textarea"
+            :rows="2"
+            placeholder="开启任何一项能力限制前，请先在此填写原因（开启时必填；可点上方模板快速填入）"
+            style="margin-top: 8px"
+          />
+          <div class="cap-reason__hint">此原因会展示给该用户，并记录在后台可追溯。</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="capVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { adminListUsers, adminGetUser, adminBanUser, adminUnbanUser, adminDeleteUser, adminGetUserViolations } from "@/api/admin";
+import { adminListUsers, adminGetUser, adminBanUser, adminUnbanUser, adminDeleteUser, adminGetUserViolations, adminListUserCapabilities, adminRestrictUserCapability, adminRestoreUserCapability, adminListCapReasonTemplates, adminAddCapReasonTemplate, adminUpdateCapReasonTemplate, adminDeleteCapReasonTemplate } from "@/api/admin";
 import AdminDataTable from "@/components/admin/AdminDataTable.vue";
 
 export default {
@@ -284,7 +351,17 @@ export default {
       // delete
       deleteVisible: false,
       deleteTarget: null,
-      deleting: false
+      deleting: false,
+      // capabilities
+      capVisible: false,
+      capUser: null,
+      capLoading: false,
+      capItems: [],
+      capReason: "",
+      capReasonTemplates: [],
+      capTplManageVisible: false,
+      capTplItems: [],
+      capTplInput: ""
     };
   },
   created() {
@@ -377,6 +454,110 @@ export default {
     confirmDelete(row) {
       this.deleteTarget = row;
       this.deleteVisible = true;
+    },
+    async openCapabilities(row) {
+      this.capUser = row;
+      this.capVisible = true;
+      this.capReason = "";
+      this.capLoading = true;
+      try {
+        const d = await adminListUserCapabilities(row.id);
+        const data = (d && d.data) || d || {};
+        const activeMap = {};
+        (data.active || []).forEach((c) => { activeMap[c] = true; });
+        const reasons = {};
+        (data.items || []).forEach((it) => {
+          if (it.status === "active" && it.reason) reasons[it.capability] = it.reason;
+        });
+        const caps = data.capabilities || [];
+        this.capItems = caps.map((c) => ({
+          name: c.name,
+          label: c.label,
+          active: !!activeMap[c.name],
+          activeReason: reasons[c.name] || "",
+          saving: false
+        }));
+        this.capReasonTemplates = data.reason_templates || [];
+      } catch {
+        this.$message.error("加载能力信息失败");
+        this.capItems = [];
+      } finally {
+        this.capLoading = false;
+      }
+      this.loadCapTpls();
+    },
+    async loadCapTpls() {
+      try {
+        const d = await adminListCapReasonTemplates();
+        const data = (d && d.data) || d || {};
+        this.capTplItems = (data.templates || []).map((t) => ({
+          id: t.id, content: t.content, editing: false, draft: ""
+        }));
+        this.capReasonTemplates = this.capTplItems.map((t) => t.content);
+      } catch {
+        /* ignore */
+      }
+    },
+    async addCapTpl() {
+      const c = String(this.capTplInput || "").trim();
+      if (!c) { this.$message.warning("请输入模板内容"); return; }
+      try {
+        await adminAddCapReasonTemplate(c);
+        this.capTplInput = "";
+        this.$message.success("已添加");
+        await this.loadCapTpls();
+      } catch {
+        this.$message.error("添加失败");
+      }
+    },
+    startEditCapTpl(tpl) {
+      tpl.draft = tpl.content;
+      tpl.editing = true;
+    },
+    async saveCapTpl(tpl) {
+      const c = String(tpl.draft || "").trim();
+      if (!c) { this.$message.warning("内容不能为空"); return; }
+      try {
+        await adminUpdateCapReasonTemplate(tpl.id, c);
+        this.$message.success("已保存");
+        await this.loadCapTpls();
+      } catch {
+        this.$message.error("保存失败");
+      }
+    },
+    async delCapTpl(tpl) {
+      try {
+        await adminDeleteCapReasonTemplate(tpl.id);
+        this.$message.success("已删除");
+        await this.loadCapTpls();
+      } catch {
+        this.$message.error("删除失败");
+      }
+    },
+    async toggleCap(item, on) {
+      if (!this.capUser) return;
+      if (on && !String(this.capReason || "").trim()) {
+        this.$message.warning(`请先在下方填写限制原因，再开启「${item.label}」`);
+        this.capItems = this.capItems.map((c) => ({ ...c, active: c.active }));
+        return;
+      }
+      item.saving = true;
+      try {
+        if (on) {
+          await adminRestrictUserCapability(this.capUser.id, { capability: item.name, reason: String(this.capReason).trim() });
+          item.activeReason = String(this.capReason).trim();
+          this.capReason = "";
+        } else {
+          await adminRestoreUserCapability(this.capUser.id, item.name);
+          item.activeReason = "";
+        }
+        item.active = on;
+        this.$message.success(on ? "已限制" : "已恢复");
+      } catch {
+        this.$message.error("操作失败");
+      } finally {
+        item.saving = false;
+      }
     },
     async doDelete() {
       this.deleting = true;
@@ -508,4 +689,70 @@ export default {
   margin: 0; word-break: break-word;
 }
 .user-detail-violation__time { font-size: 11px; color: #c0c4cc; }
+
+/* ——— 能力限制管理 ——— */
+.cap-head-desc { font-size: 13px; color: #61666d; line-height: 1.6; margin: 0 0 14px; }
+.cap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-height: 120px;
+}
+.cap-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f6f7f8;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+.cap-item__main { min-width: 0; }
+.cap-item__label { font-size: 14px; font-weight: 600; color: #18191c; }
+.cap-item__reason {
+  font-size: 12px; color: #e6a23c; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+}
+
+.cap-reason { margin-top: 14px; }
+.cap-reason__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cap-reason__label { font-size: 13px; font-weight: 600; color: #18191c; }
+.cap-reason__tpls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.cap-reason__tpl {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #e3e5e7;
+  background: #fafafa;
+  color: #61666d;
+  cursor: pointer;
+  transition: all .15s;
+  user-select: none;
+}
+.cap-reason__tpl:hover { border-color: #00a1d6; color: #00a1d6; background: #f0faff; }
+.cap-reason__tpl.is-on { border-color: #00a1d6; color: #00a1d6; background: #e6f7ff; font-weight: 600; }
+.cap-reason__hint { font-size: 12px; color: #9499a0; margin-top: 6px; }
+
+.cap-tpl-manage {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafafa;
+  margin-bottom: 8px;
+}
+.cap-tpl-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.cap-tpl-row:last-child { margin-bottom: 0; }
+.cap-tpl-row .el-input { flex: 1; }
+.cap-tpl-text {
+  flex: 1;
+  font-size: 13px;
+  color: #18191c;
+  word-break: break-all;
+}
 </style>

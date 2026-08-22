@@ -106,3 +106,85 @@ func IsPermanentTranscodeFailure(stderr string) bool {
 	}
 	return false
 }
+
+// Variant describes one ABR (adaptive-bitrate) rendition to transcode.
+// Width==0/Height==0 means "keep source resolution" (the master rendition).
+type Variant struct {
+	Label  string // e.g. "720p", "480p", "360p", "原始"
+	Width  int
+	Height int
+	Kbps   int
+	CRF    string
+}
+
+// ABRLadder returns the downscale ladder for a given source height (px).
+// It yields only renditions strictly smaller than the source, ordered from
+// highest to lowest. For unknown/small sources it returns nil (single master).
+func ABRLadder(sourceHeight int) []Variant {
+	// {label, height, bitrateKbps, crf}
+	tiers := []Variant{
+		{Label: "720p", Height: 720, Kbps: 2800, CRF: "20"},
+		{Label: "480p", Height: 480, Kbps: 1300, CRF: "23"},
+		{Label: "360p", Height: 360, Kbps: 750, CRF: "26"},
+	}
+	if sourceHeight <= 0 {
+		return nil
+	}
+	out := make([]Variant, 0, len(tiers))
+	for _, t := range tiers {
+		if sourceHeight > t.Height {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// ProbeVideoHeight returns the video stream height using ffprobe.
+func ProbeVideoHeight(path string) (int, error) {
+	cmd := exec.Command(ffprobeExe,
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=height",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("ffprobe height: %w: %s", err, out.String())
+	}
+	h, err := strconv.Atoi(strings.TrimSpace(out.String()))
+	if err != nil || h <= 0 {
+		return 0, fmt.Errorf("invalid ffprobe height: %q", out.String())
+	}
+	return h, nil
+}
+
+// TranscodeVariant renders a single ABR rendition (H.264 + AAC MP4).
+// Variants with Height==0 keep the source resolution.
+func TranscodeVariant(inputPath, outputPath string, v Variant) (stderr string, err error) {
+	args := []string{
+		"-y",
+		"-i", inputPath,
+		"-c:v", "libx264",
+		"-preset", "veryslow",
+		"-crf", v.CRF,
+	}
+	if v.Height > 0 {
+		args = append(args, "-vf",
+			fmt.Sprintf("scale=-2:%d:force_original_aspect_ratio=decrease", v.Height))
+	}
+	args = append(args,
+		"-c:a", "aac",
+		"-movflags", "+faststart",
+		outputPath,
+	)
+	cmd := exec.Command(ffmpegExe, args...)
+	var eb bytes.Buffer
+	cmd.Stderr = &eb
+	if err := cmd.Run(); err != nil {
+		return eb.String(), fmt.Errorf("ffmpeg variant %s: %w", v.Label, err)
+	}
+	return eb.String(), nil
+}

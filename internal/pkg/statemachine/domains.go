@@ -48,31 +48,38 @@ var (
 	// CopyrightComplaint: pending → (accepted | rejected)
 	// accepted → takedown → restored (counter-notice flow).
 	Copyright = New("copyright").
-		AllowMany("pending", "accepted", "rejected").
-		AllowMany("accepted", "takedown").
-		AllowMany("takedown", "restored").
-		AllowMany("restored", "takedown")
+			AllowMany("pending", "accepted", "rejected").
+			AllowMany("accepted", "takedown").
+			AllowMany("takedown", "restored").
+			AllowMany("restored", "takedown")
 
 	// ApprovalFlow: multi-step serial approval (ADR-009).
 	// Flow: pending → (approved | rejected); steps: pending → (approved | rejected).
 	ApprovalFlow = New("approval_flow").
-		AllowMany("pending", "approved", "rejected").
-		AllowMany("approved", "pending").
-		AllowMany("rejected", "pending")
+			AllowMany("pending", "approved", "rejected").
+			AllowMany("approved", "pending").
+			AllowMany("rejected", "pending")
 
 	ApprovalStep = New("approval_step").
-		AllowMany("pending", "approved", "rejected").
-		AllowMany("approved", "rejected").
-		AllowMany("rejected", "approved")
+			AllowMany("pending", "approved", "rejected").
+			AllowMany("approved", "rejected").
+			AllowMany("rejected", "approved")
 
 	// User: account lifecycle (ban / unban / delete).
 	User = New("user").
 		AllowMany("active", "banned", "deleted").
 		AllowMany("banned", "active", "deleted").
 		AllowMany("deleted", "active")
+
+	// Appeal: user-side governance appeal.
+	// pending → (approved | rejected) ; decided appeals can be reopened.
+	Appeal = New("appeal").
+		AllowMany("pending", "approved", "rejected").
+		AllowMany("approved", "pending").
+		AllowMany("rejected", "pending")
 )
 
 // All returns every registered machine for introspection / docs.
 func All() []*Machine {
-	return []*Machine{Video, Article, Ticket, Report, Copyright, ApprovalFlow, ApprovalStep, User}
+	return []*Machine{Video, Article, Ticket, Report, Copyright, ApprovalFlow, ApprovalStep, User, Appeal}
 }
