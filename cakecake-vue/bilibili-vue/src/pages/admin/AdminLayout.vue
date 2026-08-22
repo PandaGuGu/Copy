@@ -55,7 +55,8 @@ const GROUPS = [
     { name:"adminSpecialManage", label:"专题活动", perm:"special:manage" },
     { name:"adminDynamicManage", label:"动态管理", perm:"dynamic:manage" },
     { name:"adminSubtitleManage", label:"字幕管理", perm:"subtitle:manage" },
-    { name:"adminPlayerAdvanced", label:"播放器高级", perm:"video:approve" }
+    { name:"adminPlayerAdvanced", label:"播放器高级", perm:"video:approve" },
+    { name:"adminLiveFeatured", label:"直播运营", perm:"live:manage" }
   ]},
   { key:"audit", title:"审核", items:[
     { name:"adminVideoReview", label:"视频审核",      perm:"video:approve" },
@@ -64,7 +65,8 @@ const GROUPS = [
     { name:"adminComments", label:"评论管理",          perm:"comment:delete" },
     { name:"adminReports", label:"举报处理",           perm:"report:handle" },
     { name:"adminCopyrightManage", label:"版权管理",   perm:"copyright:handle" },
-    { name:"adminRiskManage", label:"风控管理",        perm:"risk:manage" }
+    { name:"adminRiskManage", label:"风控管理",        perm:"risk:manage" },
+    { name:"adminAppeals", label:"治理申诉",           perm:"risk:manage" }
   ]},
   { key:"user",  title:"用户", items:[
     { name:"adminUsers", label:"用户管理",     perm:"user:ban" },

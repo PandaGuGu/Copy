@@ -216,21 +216,21 @@ func (a *API) ServeLiveChat(c *gin.Context) {
 
 	// Send current audience list and user info
 	conn.WriteJSON(gin.H{
-		"type":         "user_info",
-		"username":     username,
-		"users":        globalAudience.list(roomID),
-		"user_count":   len(globalAudience.list(roomID)),
-		"broadcaster":  room.UserID == userID,
+		"type":        "user_info",
+		"username":    username,
+		"users":       globalAudience.list(roomID),
+		"user_count":  len(globalAudience.list(roomID)),
+		"broadcaster": room.UserID == userID,
 	})
 
 	// Broadcast audience update
-	a.Hub.BroadcastJSON(roomID, gin.H{
-		"type":    "audience",
-		"users":   globalAudience.list(roomID),
-		"count":   len(globalAudience.list(roomID)),
+	a.hubFanout(context.Background(), roomID, gin.H{
+		"type":  "audience",
+		"users": globalAudience.list(roomID),
+		"count": len(globalAudience.list(roomID)),
 	})
 
-	a.Hub.BroadcastJSON(roomID, gin.H{
+	a.hubFanout(context.Background(), roomID, gin.H{
 		"type": "system",
 		"msg":  username + " 进入了直播间",
 	})
@@ -244,7 +244,7 @@ func (a *API) ServeLiveChat(c *gin.Context) {
 
 		var msg struct {
 			Content string `json:"content"`
-			Gift    string `json:"gift"`  // gift type: "rose", "heart", "rocket" etc
+			Gift    string `json:"gift"`   // gift type: "rose", "heart", "rocket" etc
 			Follow  bool   `json:"follow"` // follow broadcaster
 		}
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
@@ -272,19 +272,19 @@ func (a *API) ServeLiveChat(c *gin.Context) {
 			content = string([]rune(content)[:200])
 		}
 
-		a.Hub.BroadcastJSON(roomID, gin.H{
+		a.hubFanout(context.Background(), roomID, gin.H{
 			"type":     "message",
 			"username": username,
 			"content":  content,
 		})
 	}
 
-	a.Hub.BroadcastJSON(roomID, gin.H{
-		"type":    "audience",
-		"users":   globalAudience.list(roomID),
-		"count":   len(globalAudience.list(roomID)),
-		"system":  true,
-		"msg":     username + " 离开了直播间",
+	a.hubFanout(context.Background(), roomID, gin.H{
+		"type":   "audience",
+		"users":  globalAudience.list(roomID),
+		"count":  len(globalAudience.list(roomID)),
+		"system": true,
+		"msg":    username + " 离开了直播间",
 	})
 }
 
@@ -325,7 +325,7 @@ func (a *API) handleLiveGift(conn *websocket.Conn, roomID uint64, username, gift
 		return
 	}
 
-	a.Hub.BroadcastJSON(roomID, gin.H{
+	a.hubFanout(context.Background(), roomID, gin.H{
 		"type":     "gift",
 		"username": username,
 		"gift":     gift,

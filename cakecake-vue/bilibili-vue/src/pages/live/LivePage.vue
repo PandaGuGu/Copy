@@ -159,11 +159,12 @@
 
 <script>
 import http from "@/utils/http";
+import { getFeaturedLiveRooms } from "@/api/live";
 
 export default {
   name: "LivePage",
   data() {
-    return { items: [] };
+    return { items: [], featuredItems: [] };
   },
   computed: {
     liveRooms() {
@@ -171,11 +172,18 @@ export default {
         .filter((r) => r.status === "live")
         .map((r) => this.mapRoom(r));
     },
+    featuredRooms() {
+      return (this.featuredItems || [])
+        .map((r) => this.mapRoom(r))
+        .filter((r) => r.status === "live");
+    },
     topRoom() {
-      return this.liveRooms[0] || null;
+      const src = this.featuredRooms.length ? this.featuredRooms : this.liveRooms;
+      return src[0] || null;
     },
     sideItems() {
-      return this.liveRooms.slice(1, 6);
+      const src = this.featuredRooms.length ? this.featuredRooms : this.liveRooms;
+      return src.slice(1, 6);
     },
     leftBigCards() {
       return this.liveRooms.slice(6, 8);
@@ -202,11 +210,11 @@ export default {
   methods: {
     mapRoom(r) {
       return {
-        id: r.id,
+        id: r.room_id || r.id,
         title: r.title || "直播间",
         cover: r.cover_url || "",
         host: r.host_name || r.uploader || "主播",
-        avatar: r.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${r.id}`,
+        avatar: r.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${r.room_id || r.id}`,
         viewers: r.viewer_count || 0,
         status: r.status || "idle",
         time: r.started_at || "",
@@ -219,7 +227,15 @@ export default {
           this.items = res.data.rooms || res.data.items || res.data || [];
         }
       } catch (e) {
-        console.warn("LivePage fetch:", e);
+        console.warn("LivePage fetch rooms:", e);
+      }
+      try {
+        const fr = await getFeaturedLiveRooms();
+        const body = (fr && fr.data) || {};
+        const arr = Array.isArray(body) ? body : body.data;
+        this.featuredItems = Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        console.warn("LivePage fetch featured:", e);
       }
     },
     fmtCount(n) {

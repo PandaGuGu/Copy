@@ -33,7 +33,7 @@ type FeedService struct {
 	cancel context.CancelFunc
 	mu     sync.RWMutex
 	pool   map[string][]VideoFeatures // segment → candidates
-	hot    []VideoFeatures             // global hot pool
+	hot    []VideoFeatures            // global hot pool
 }
 
 // NewFeedService creates and starts the feed service.
@@ -251,6 +251,16 @@ func (fs *FeedService) rerank(pool []VideoFeatures, limit int, lambda float64) [
 		}
 	}
 
+	// Two-stage ranking: coarse stage trims to a substantial top-N subset
+	// (promoting fresh cold-start videos), then MMR fine rank adds diversity.
+	coarseN := limit * 3
+	if coarseN > len(pool) {
+		coarseN = len(pool)
+	}
+	if coarseN > 0 && coarseN < len(pool) {
+		pool = CoarseTrim(pool, coarseN)
+	}
+
 	adjustedK := limit
 	if adjustedK > len(pool) {
 		adjustedK = len(pool)
@@ -320,6 +330,12 @@ func (fs *FeedService) warmOnce(ctx context.Context) {
 		return
 	}
 
+	// Cold-start: merge recently-published (low/zero engagement) videos into
+	// the pool so brand-new content can surface (NFR-REC cold start).
+	if fresh, ferr := fs.fetchFreshCandidates(ctx, 40); ferr == nil && len(fresh) > 0 {
+		hot = mergeCandidates(fresh, hot)
+	}
+
 	segments := make(map[string][]VideoFeatures)
 
 	// Segment pools: filter from hot pool by zone parent.
@@ -360,6 +376,24 @@ func (fs *FeedService) fetchCandidates(ctx context.Context, zone string, limit i
 		features[i] = ExtractFeatures(&videos[i])
 	}
 	return features, nil
+}
+
+// fetchFreshCandidates returns the newest published videos within the
+// cold-start window, for the cold-start insertion into the warm pool.
+func (fs *FeedService) fetchFreshCandidates(ctx context.Context, limit int) ([]VideoFeatures, error) {
+	var videos []model.Video
+	err := fs.DB.WithContext(ctx).
+		Where("status = ? AND created_at >= ?", "published", time.Now().Add(-ColdStartWindow)).
+		Order("created_at DESC").
+		Limit(limit).Find(&videos).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VideoFeatures, len(videos))
+	for i := range videos {
+		out[i] = ExtractFeatures(&videos[i])
+	}
+	return out, nil
 }
 
 func (fs *FeedService) filterSegmentCandidates(

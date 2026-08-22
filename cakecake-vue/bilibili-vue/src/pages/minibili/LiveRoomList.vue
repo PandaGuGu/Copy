@@ -10,7 +10,18 @@
     </div>
 
     <div v-loading="loading" class="live-list-body">
-      <div v-if="!loading && rooms.length === 0" class="live-list-empty">
+      <div v-if="featured.length" class="live-featured">
+        <LiveRoomCard class="lf-big" :room="featured[0]" @click="goRoom(featured[0].room_id)" />
+        <LiveRoomCard
+          v-for="(room, i) in featured.slice(1, 6)"
+          :key="room.room_id"
+          :class="['lf-small', 'lf-small--' + i]"
+          :room="room"
+          @click="goRoom(room.room_id)"
+        />
+      </div>
+
+      <div v-if="!loading && rooms.length === 0 && featured.length === 0" class="live-list-empty">
         <p class="live-empty-icon">📡</p>
         <h3>暂无直播</h3>
         <p>当前没有主播在线，稍后再来看看</p>
@@ -36,7 +47,7 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { listLiveRooms } from "@/api/live";
+import { listLiveRooms, getFeaturedLiveRooms } from "@/api/live";
 import { getAccessToken } from "@/utils/authTokens";
 import LiveRoomCard from "@/components/live/LiveRoomCard.vue";
 
@@ -48,11 +59,30 @@ export default {
     const loading = ref(true);
     const loadingMore = ref(false);
     const rooms = ref([]);
+    const featured = ref([]);
     const page = ref(1);
     const total = ref(0);
     const pageSize = 20;
 
     const isLoggedIn = ref(!!getAccessToken());
+
+    async function loadFeatured() {
+      try {
+        const res = await getFeaturedLiveRooms();
+        const arr = (res && res.data) || res || [];
+        featured.value = (Array.isArray(arr) ? arr : []).map((r) => ({
+          room_id: r.room_id,
+          id: r.room_id,
+          title: r.title,
+          cover_url: r.cover_url,
+          avatar_url: r.avatar_url || "",
+          viewer_count: r.viewer_count || 0,
+          status: r.status || "live"
+        }));
+      } catch {
+        featured.value = [];
+      }
+    }
 
     async function fetchRooms(reset = false) {
       if (reset) page.value = 1;
@@ -84,9 +114,9 @@ export default {
       router.push(`/minibili/live/${roomId}`);
     }
 
-    onMounted(() => fetchRooms(true));
+    onMounted(() => { loadFeatured(); fetchRooms(true); });
 
-    return { loading, loadingMore, rooms, total, isLoggedIn, loadMore, goRoom };
+    return { loading, loadingMore, rooms, featured, total, isLoggedIn, loadMore, goRoom };
   }
 };
 </script>
@@ -127,4 +157,25 @@ export default {
   text-align: center;
   margin-top: 24px;
 }
+
+/* 直播运营置顶：1 大 + 5 小 bento */
+.live-featured {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, auto);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lf-big {
+  grid-column: 1 / span 2;
+  grid-row: 1 / span 2;
+}
+.lf-small {
+  min-height: 0;
+}
+.lf-small--0 { grid-column: 3; grid-row: 1; }
+.lf-small--1 { grid-column: 3; grid-row: 2; }
+.lf-small--2 { grid-column: 3; grid-row: 3; }
+.lf-small--3 { grid-column: 1; grid-row: 3; }
+.lf-small--4 { grid-column: 2; grid-row: 3; }
 </style>

@@ -34,10 +34,13 @@ export {
 export {
   adminListUsers, adminGetUser, adminBanUser, adminUnbanUser,
   adminDeleteUser, adminGetUserViolations,
+  adminListUserCapabilities, adminRestrictUserCapability, adminRestoreUserCapability,
+  adminListCapReasonTemplates, adminAddCapReasonTemplate, adminUpdateCapReasonTemplate, adminDeleteCapReasonTemplate,
 } from "./admin/user";
 export {
   adminListReports, adminHandleReport, adminBatchHandleReports, adminDeleteReport,
 } from "./admin/report";
+export { adminListAppeals, adminHandleAppeal } from "./admin/appeal";
 export { adminGetSettings, adminPutSettings } from "./admin/settings";
 export { adminGetDashboard } from "./admin/dashboard";
 export {

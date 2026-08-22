@@ -1237,16 +1237,40 @@ func (a *API) syncPlayCounts(ctx context.Context) error {
 func (a *API) AdminEvaluateAlerts(c *gin.Context) {
 	adminID, _ := middleware.AdminID(c)
 
+	checked, fired := a.evalEnabledAlertRules(context.Background(), func(rule model.AlertRule, val float64) {
+		// 告警通知（当前仅 log，后续可扩展 dingtalk/wecom/email）
+		a.Log.Warn("ALERT FIRED",
+			zap.String("rule", rule.Name),
+			zap.String("metric", rule.Metric),
+			zap.Float64("threshold", rule.Threshold),
+			zap.Float64("actual", val),
+			zap.String("channel", rule.Channel),
+		)
+		if adminID != 0 {
+			a.recordAudit(c, adminID, "alert_evaluated", "alert_rule", rule.ID,
+				fmt.Sprintf(`{"metric":"%s","value":%.2f,"threshold":%.2f}`, rule.Metric, val, rule.Threshold))
+		}
+	})
+
+	resp.OK(c, gin.H{
+		"rules_checked": checked,
+		"fired":         fired,
+		"evaluated_at":  time.Now(),
+	})
+}
+
+// evalEnabledAlertRules loads enabled alert rules, collects system metrics
+// once, evaluates each rule, persists fired AlertRecords, and invokes onFire
+// for each newly fired alert. It is the shared core used by both the manual
+// admin endpoint and the periodic background loop.
+func (a *API) evalEnabledAlertRules(ctx context.Context, onFire func(rule model.AlertRule, val float64)) (checked, fired int) {
 	var rules []model.AlertRule
 	if err := a.DB.Where("enabled = ?", true).Find(&rules).Error; err != nil {
-		a.Log.Error("evaluate: load rules", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
+		a.Log.Error("evalEnabledAlertRules: load rules", zap.Error(err))
+		return 0, 0
 	}
 
-	// 采集系统指标
-	metrics := a.collectMetrics(c.Request.Context())
-	fired := 0
+	metrics := a.collectMetrics(ctx)
 
 	for _, rule := range rules {
 		val, ok := metrics[rule.Metric]
@@ -1265,47 +1289,52 @@ func (a *API) AdminEvaluateAlerts(c *gin.Context) {
 			// 简单策略: 最近 duration 内至少已有 1 条记录才触发（避免瞬时抖动）
 			if recentCount == 0 {
 				// 没有持续记录，插入一条占位不触发
-				rec := model.AlertRecord{
-					RuleID: rule.ID,
-					Value:  val,
-					Status: "firing",
-				}
-				a.DB.Create(&rec)
+				a.DB.Create(&model.AlertRecord{RuleID: rule.ID, Value: val, Status: "firing"})
 				continue
 			}
 		}
 
-		rec := model.AlertRecord{
-			RuleID: rule.ID,
-			Value:  val,
-			Status: "firing",
-		}
+		rec := model.AlertRecord{RuleID: rule.ID, Value: val, Status: "firing"}
 		if err := a.DB.Create(&rec).Error; err != nil {
-			a.Log.Warn("evaluate: create alert record", zap.Error(err), zap.String("metric", rule.Metric))
+			a.Log.Warn("evalEnabledAlertRules: create alert record", zap.Error(err), zap.String("metric", rule.Metric))
 			continue
 		}
 		fired++
+		if onFire != nil {
+			onFire(rule, val)
+		}
+	}
+	return len(rules), fired
+}
 
-		// 告警通知（当前仅 log，后续可扩展 dingtalk/wecom/email）
-		a.Log.Warn("ALERT FIRED",
+// StartAlertLoop runs periodic alert evaluation until ctx is cancelled.
+// When no onFire hook is supplied (periodic mode) it logs firings by default.
+func (a *API) StartAlertLoop(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	fireLogger := func(rule model.AlertRule, val float64) {
+		a.Log.Warn("ALERT FIRED (periodic)",
 			zap.String("rule", rule.Name),
 			zap.String("metric", rule.Metric),
 			zap.Float64("threshold", rule.Threshold),
 			zap.Float64("actual", val),
 			zap.String("channel", rule.Channel),
 		)
-
-		if adminID != 0 {
-			a.recordAudit(c, adminID, "alert_evaluated", "alert_rule", rule.ID,
-				fmt.Sprintf(`{"metric":"%s","value":%.2f,"threshold":%.2f}`, rule.Metric, val, rule.Threshold))
-		}
 	}
 
-	resp.OK(c, gin.H{
-		"rules_checked": len(rules),
-		"fired":         fired,
-		"evaluated_at":  time.Now(),
-	})
+	a.evalEnabledAlertRules(ctx, fireLogger)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.evalEnabledAlertRules(ctx, fireLogger)
+		}
+	}
 }
 
 func (a *API) collectMetrics(ctx context.Context) map[string]float64 {

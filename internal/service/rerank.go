@@ -12,6 +12,7 @@ package service
 import (
 	"encoding/json"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,11 +25,11 @@ const (
 	DefaultLambda = 0.7
 
 	// Score weights (relevance).
-	WeightPlay     = 1.0
-	WeightLike     = 10.0
-	WeightCoin     = 20.0
-	WeightFav      = 5.0
-	WeightDanmaku  = 3.0
+	WeightPlay    = 1.0
+	WeightLike    = 10.0
+	WeightCoin    = 20.0
+	WeightFav     = 5.0
+	WeightDanmaku = 3.0
 
 	// Time decay: e^(-λ * days), λ = 0.01.
 	// 7d → 0.93x, 30d → 0.74x.
@@ -44,8 +45,8 @@ const (
 
 // VideoFeatures holds pre-extracted features for one candidate.
 type VideoFeatures struct {
-	Video   *model.Video
-	Tags    []string
+	Video      *model.Video
+	Tags       []string
 	ZoneParent string
 }
 
@@ -201,13 +202,101 @@ func MMRVideos(pool []VideoFeatures, k int, lambda float64) []*model.Video {
 	return result
 }
 
+// ─── Cold start + two-stage (coarse→fine) ranking ───────────────
+
+const (
+	// ColdStartWindow: a video still benefits from the cold-start floor if
+	// it was published within this window and has no engagement yet.
+	ColdStartWindow = 72 * time.Hour
+	// ColdStartPlayFloor: engagement-equivalent floor so a brand-new 0-play
+	// video can surface instead of being buried by decayed old videos.
+	ColdStartPlayFloor = 120.0
+)
+
+// ColdStartEligible reports whether a video is a cold-start candidate: fresh
+// and with zero accumulated engagement.
+func ColdStartEligible(v *model.Video) bool {
+	if v == nil {
+		return false
+	}
+	if time.Since(v.CreatedAt) > ColdStartWindow {
+		return false
+	}
+	return v.PlayCount+v.LikeCount+v.CoinCount+v.FavCount+v.DanmakuCount <= 0
+}
+
+// EffectiveRelevance is the coarse-stage relevance. It is identical to
+// RelevanceScore except that cold-start videos get a floor so they can
+// compete for the top-k candidate subset before the MMR fine rank.
+func EffectiveRelevance(v *model.Video) float64 {
+	if v == nil {
+		return 0
+	}
+	if ColdStartEligible(v) {
+		base := float64(v.PlayCount)*WeightPlay +
+			float64(v.LikeCount)*WeightLike +
+			float64(v.CoinCount)*WeightCoin +
+			float64(v.FavCount)*WeightFav +
+			float64(v.DanmakuCount)*WeightDanmaku
+		if base < ColdStartPlayFloor {
+			return ColdStartPlayFloor
+		}
+	}
+	return RelevanceScore(v)
+}
+
+// CoarseRank returns the pool indices ordered by EffectiveRelevance
+// (desc), truncated to at most topN. This is the coarse stage of the
+// two-stage (coarse → MMR fine) ranking.
+func CoarseRank(pool []VideoFeatures, topN int) []int {
+	if len(pool) == 0 {
+		return nil
+	}
+	if len(pool) <= topN {
+		out := make([]int, len(pool))
+		for i := range out {
+			out[i] = i
+		}
+		return out
+	}
+	type scored struct {
+		i int
+		s float64
+	}
+	arr := make([]scored, len(pool))
+	for i, f := range pool {
+		arr[i] = scored{i: i, s: EffectiveRelevance(f.Video)}
+	}
+	sort.SliceStable(arr, func(a, b int) bool { return arr[a].s > arr[b].s })
+	out := make([]int, topN)
+	for i := 0; i < topN; i++ {
+		out[i] = arr[i].i
+	}
+	return out
+}
+
+// CoarseTrim reduces the candidate pool to the top-N by coarse relevance,
+// in pool order as selected (coarse first). Used to feed the MMR fine rank.
+func CoarseTrim(pool []VideoFeatures, topN int) []VideoFeatures {
+	idxs := CoarseRank(pool, topN)
+	if len(idxs) == len(pool) {
+		return pool
+	}
+	out := make([]VideoFeatures, len(idxs))
+	for i, idx := range idxs {
+		out[i] = pool[idx]
+	}
+	return out
+}
+
 // ─── DPP (optional, for future use) ──────────────────────────
 
 // DPP selects up to k items via Determinantal Point Process (greedy MAP).
 //
 // Kernel: L_ii = quality_i²,  L_ij = quality_i × quality_j × similarity(i,j)
 // Greedy step: j = argmax L_jj − Σ_{i∈S} (L_ij² / L_ii)
-//             = argmax q_j² × (1 − Σ_{i∈S} sim(i,j)²)
+//
+//	= argmax q_j² × (1 − Σ_{i∈S} sim(i,j)²)
 func DPP(pool []VideoFeatures, k int) []int {
 	if k <= 0 || len(pool) == 0 {
 		return nil

@@ -16,6 +16,17 @@ export function getLiveRoom(roomId) {
   return http.get(`/api/v1/live/room/${roomId}`);
 }
 
+// 直播运营：置顶直播间（用户端取展示，管理端设/列）
+export function getFeaturedLiveRooms() {
+  return http.get("/api/v1/live/featured");
+}
+export function adminListLiveFeatured() {
+  return adminHttp.get("/api/v1/admin/live/featured");
+}
+export function adminSetLiveFeatured(roomIds) {
+  return adminHttp.post("/api/v1/admin/live/featured", { room_ids: roomIds });
+}
+
 export function createLiveRoom(payload) {
   return http.post("/api/v1/live/room/create", payload);
 }

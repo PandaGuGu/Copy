@@ -107,6 +107,7 @@ func main() {
 		log.Warn("seed default admin", zap.Error(err))
 	}
 	data.SeedRBAC(db, log)
+	data.SeedCapReasonTemplates(db, log)
 	if err := data.EnsureAgentProfiles(db, cfg, log); err != nil {
 		log.Warn("ensure agent profiles", zap.Error(err))
 	}
@@ -158,7 +159,8 @@ func main() {
 		defer t.Stop()
 		for {
 			select {
-			case <-ctx.Done(): return
+			case <-ctx.Done():
+				return
 			case <-t.C:
 				if err := riskAPI.CleanExpiredBWEntries(); err != nil {
 					log.Warn("risk clean bw-list", zap.Error(err))
@@ -213,9 +215,9 @@ func main() {
 	var agentGW *aigateway.Gateway
 	{
 		llmClient := &aigateway.Client{
-			APIKey:  cfg.DeepSeekAPIKey,
-			BaseURL: cfg.DeepSeekBaseURL,
-			Model:   cfg.DeepSeekModel,
+			APIKey:     cfg.DeepSeekAPIKey,
+			BaseURL:    cfg.DeepSeekBaseURL,
+			Model:      cfg.DeepSeekModel,
 			HTTPClient: &http.Client{Timeout: cfg.AgentRequestTimeout},
 			// Allow runtime DB overrides from admin panel
 			DBConfig: func() (string, string, string) {
@@ -224,10 +226,10 @@ func main() {
 			},
 		}
 		agentGW = &aigateway.Gateway{
-			LLM:          llmClient,
-			Redis:        rdb,
-			MaxHistory:   cfg.AgentMaxHistory,
-			HistoryTTL:   cfg.AgentHistoryTTL,
+			LLM:        llmClient,
+			Redis:      rdb,
+			MaxHistory: cfg.AgentMaxHistory,
+			HistoryTTL: cfg.AgentHistoryTTL,
 		}
 		log.Info("ai gateway enabled",
 			zap.String("model", cfg.DeepSeekModel),
@@ -274,6 +276,9 @@ func main() {
 		deps.MQ = mq
 	}
 	api := &handler.API{Dependencies: deps}
+
+	// Periodic background alert evaluation (M-可观测).
+	go api.StartAlertLoop(ctx, cfg.AlertLoopInterval)
 
 	if cfg.AppEnv == "development" {
 		gin.SetMode(gin.DebugMode)

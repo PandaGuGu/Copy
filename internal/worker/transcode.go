@@ -181,6 +181,11 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	videoURL := cfg.OSSObjectURL(videoKey)
 	coverURL := cfg.OSSObjectURL(coverKey)
 
+	// ABR: produce multi-resolution ladder + sync video_bitrates. Non-fatal.
+	if cfg.VideoABREnabled {
+		upsertVideoBitrates(cfg, db, ossClient, lg, job, outMP4, videoURL)
+	}
+
 	updates := map[string]interface{}{
 		"video_url": videoURL,
 		"cover_url": coverURL,
@@ -220,6 +225,64 @@ func cleanupPaths(paths ...string) {
 	}
 }
 
+// upsertVideoBitrates renders an ABR ladder from the transcoded master and
+// syncs video_bitrates rows (master "原始" + downscale variants). Non-fatal:
+// any variant failure degrades to fewer renditions while master stays playable.
+func upsertVideoBitrates(cfg *config.C, db *gorm.DB, ossClient storage.FileStorager, lg *zap.Logger, job TranscodeJob, masterPath, masterURL string) {
+	srcH, err := ffmpeg.ProbeVideoHeight(masterPath)
+	if err != nil {
+		lg.Warn("abr probe height failed", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+		return
+	}
+
+	bitrates := []model.VideoBitrate{
+		{VideoID: job.VideoID, Label: "原始", Height: srcH, Kbps: 0, URL: masterURL},
+	}
+
+	outDir := filepath.Dir(masterPath)
+	for _, v := range ffmpeg.ABRLadder(srcH) {
+		outPath := filepath.Join(outDir, fmt.Sprintf("%d_%s.mp4", job.VideoID, v.Label))
+		_ = os.Remove(outPath)
+		if _, err := ffmpeg.TranscodeVariant(masterPath, outPath, v); err != nil {
+			lg.Warn("abr variant transcode failed",
+				zap.Uint64("video_id", job.VideoID), zap.String("label", v.Label), zap.Error(err))
+			_ = os.Remove(outPath)
+			continue
+		}
+		key := fmt.Sprintf("videos/%d/%s.mp4", job.VideoID, v.Label)
+		if err := ossClient.UploadFile(key, outPath); err != nil {
+			lg.Warn("abr variant upload failed",
+				zap.Uint64("video_id", job.VideoID), zap.String("label", v.Label), zap.Error(err))
+			_ = os.Remove(outPath)
+			continue
+		}
+		_ = os.Remove(outPath)
+		bitrates = append(bitrates, model.VideoBitrate{
+			VideoID: job.VideoID, Label: v.Label, Width: v.Width, Height: v.Height, Kbps: v.Kbps,
+			URL: cfg.OSSObjectURL(key),
+		})
+		lg.Info("abr variant done",
+			zap.Uint64("video_id", job.VideoID), zap.String("label", v.Label), zap.Int("height", v.Height))
+	}
+
+	if err := replaceVideoBitrates(db, job.VideoID, bitrates); err != nil {
+		lg.Warn("replace video bitrates failed", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+	}
+}
+
+// replaceVideoBitrates atomically replaces all bitrate rows for a video.
+func replaceVideoBitrates(db *gorm.DB, videoID uint64, bitrates []model.VideoBitrate) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("video_id = ?", videoID).Delete(&model.VideoBitrate{}).Error; err != nil {
+			return err
+		}
+		if len(bitrates) == 0 {
+			return nil
+		}
+		return tx.Create(&bitrates).Error
+	})
+}
+
 func failVideo(db *gorm.DB, id uint64, reason string) {
 	msg := strings.TrimSpace(reason)
 	if msg != "" {
@@ -242,7 +305,7 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 func finishTaskLog(db *gorm.DB, taskID uint64, status, errMsg string) {
 	now := time.Now()
 	upd := map[string]interface{}{
-		"status":     status,
+		"status":      status,
 		"finished_at": &now,
 	}
 	if errMsg != "" {

@@ -106,10 +106,10 @@ func (a *API) ListDanmakus(c *gin.Context) {
 		"code": errcode.CodeSuccess,
 		"msg":  errcode.GetMsg(errcode.CodeSuccess),
 		"data": gin.H{
-			"items":        items,
-			"total":        total,
-			"next_offset":  nextOffset,
-			"has_more":     nextOffset > 0,
+			"items":       items,
+			"total":       total,
+			"next_offset": nextOffset,
+			"has_more":    nextOffset > 0,
 		},
 	})
 }
@@ -247,6 +247,20 @@ func (a *API) PostDanmaku(c *gin.Context) {
 		"user":       model.DisplayUsername(&u),
 		"created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
 	})
+}
+
+// hubFanout pushes a payload to a room's realtime channel. When a Redis
+// DanmakuRelay is configured (multi-instance deployment), it publishes to
+// Redis and every replica's subscriber rebroadcasts locally; otherwise it
+// broadcasts to this process's Hub directly.
+func (a *API) hubFanout(ctx context.Context, roomID uint64, payload interface{}) {
+	if a.DanmakuRelay != nil {
+		if err := a.DanmakuRelay.Publish(ctx, roomID, payload); err != nil {
+			a.Log.Error("hub relay publish", zap.Error(err))
+		}
+		return
+	}
+	a.Hub.BroadcastJSON(roomID, payload)
 }
 
 // ToggleDanmakuLike toggles like on a danmaku.
