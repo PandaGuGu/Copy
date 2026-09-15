@@ -12,7 +12,7 @@ import (
 
 // ItemCF offline computation (SPEC F17 phase ①, NFR-REC-2).
 //
-// Builds a user→(video, weight) interaction matrix from 7 behavior tables,
+// Builds a user→(video, weight) interaction matrix from 6 behavior tables,
 // computes cosine similarity between every video pair sharing ≥1 user,
 // and persists pairs with score >= SimThreshold into `video_similarities`.
 // Designed to run nightly (see worker/scheduler.go scheduleItemCF).
@@ -60,7 +60,7 @@ func ComputeItemCF(db *gorm.DB, log *zap.Logger) (int64, error) {
 		return nil
 	}
 
-	// 2. Load all seven behavior sources.
+	// 2. Load all six behavior sources.
 	if err := load("video_likes", wLike); err != nil {
 		log.Error("itemcf: load video_likes", zap.Error(err))
 		return 0, err

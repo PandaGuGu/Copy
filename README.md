@@ -11,13 +11,13 @@
   <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&style=flat-square" alt="Vue">
   <img src="https://img.shields.io/badge/uni--app-3.x-2C9C6F?style=flat-square" alt="uni-app">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/tables-88-orange?style=flat-square" alt="88 Tables">
+  <img src="https://img.shields.io/badge/tables-92-orange?style=flat-square" alt="92 Tables">
   <img src="https://img.shields.io/badge/admin_modules-23-blueviolet?style=flat-square" alt="23 Admin Modules">
 </p>
 
 仿 B 站核心链路的全栈视频社交平台（用户端品牌 **cakecake**），后端 Go 模块名 `minibili`。
 
-> 项目灵感来源于 [earthcake2233/cakecake](https://github.com/earthcake2233/cakecake)，在此基础上完成数据库重构与运营后台全面扩建（88 张表、23 个后台模块、23 种 RBAC 权限码）。维护仓库：[PandaGuGu/Copy](https://github.com/PandaGuGu/Copy)。
+> 项目灵感来源于 [earthcake2233/cakecake](https://github.com/earthcake2233/cakecake)，在此基础上完成数据库重构与运营后台全面扩建（92 张表、23 个后台模块、23 种 RBAC 权限码）。维护仓库：[PandaGuGu/Copy](https://github.com/PandaGuGu/Copy)。
 
 ---
 
@@ -32,7 +32,7 @@
 | 社交 | 关注/拉黑/分组 · 私信（WS 实时）· 通知聚合 · 硬币账本 |
 | 搜索/推荐 | ES 全文搜索（可选）· 协同过滤 + MMR 重排序 |
 | 直播 | Node-Media-Server（本地默认）RTMP 推流 → HTTP-FLV 播放 · SRS（Docker 正轨，可切换） · WS 聊天 + 礼物 |
-| 移动端 App | uni-app（Vue3 + TS + Pinia）· 19 页面 · 复用后端 180+ API（见 [docs/APP.md](./docs/APP.md)） |
+| 移动端 App | uni-app（Vue3 + TS + Pinia）· 20 页面（4 tab + 16 二级）· 复用后端 43 个端点（见 [docs/APP.md](./docs/APP.md)） |
 | 运营后台 | 23 模块全前后端对齐，RBAC 权限控制（见下） |
 
 架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)。
@@ -44,8 +44,8 @@
 | 层次 | 技术 |
 |------|------|
 | 前端 | Vue 3 + Vite + Element Plus + ECharts（SPA，路由懒加载） |
-| 后端 | Go 1.25 + Gin + GORM（200+ 源文件，分层 handler/service/model/data） |
-| 存储 | MySQL 8（88 表，GORM AutoMigrate 自动建表）· Redis 7（播放计数/冷却/黑名单） |
+| 后端 | Go 1.25 + Gin + GORM（193 个源文件 / 含测试 227，分层 handler/service/model/data） |
+| 存储 | MySQL 8（92 表，GORM AutoMigrate 自动建表）· Redis 7（播放计数/冷却/黑名单） |
 | 中间件 | RabbitMQ（转码队列）· WebSocket（gorilla，弹幕/私信/直播 3 通道） |
 | 直播/视频 | Node-Media-Server（本地，`scripts/rtmp-server.js`）· SRS 5（Docker）· FFmpeg 7（H.264 转码） |
 | 移动端 | uni-app + Vue3 + TS + Pinia（`cakecake-vue/cakecake-app/`，复用后端 API） |
@@ -93,7 +93,9 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 
 ## 运营后台（23 模块）
 
-数据概览、首页轮播、热搜运营、用户管理、视频审核、专栏审核、动态管理、评论管理、系统设置、举报处理、AI 角色、工单管理、风控管理、版权管理、数据报表、客服后台、运维监控、配置发布（Feature Flag 灰度）、权限审计（RBAC）、播放器高级、字幕管理、评论增强、Feed 推荐。
+数据概览、首页轮播、热搜运营、用户管理、视频审核、专栏审核、动态管理、评论管理、评论增强、系统设置、举报处理、AI 角色、工单管理、风控管理、版权管理、客服后台、运维监控（5 合 1）、配置发布（Feature Flag 灰度）、权限审计（RBAC）、播放器高级、字幕管理、专题活动、直播管理。
+
+> 上表 23 项与路由层 23 个权限子分组一一对应（见 [架构文档 §6.3](./bmad-output/architecture.md#63-运营后台核心-api)）。
 
 > 完整 API 文档（400+ 端点、权限码索引、WS 协议）见 [docs/API.md](./docs/API.md)。
 
@@ -101,12 +103,59 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 
 ## 数据库
 
-88 张表、15 个业务模块（视频/文章/动态/关注/私信/通知/直播/历史/风控/工单/版权/报表/客服/运维/配置），AutoMigrate 首次启动自动建表。
+92 张表、16 组业务归类（视频互动/文章互动/关注社交/消息通知/动态/直播/历史成长/运营基础/工单风控/版权/数据报表/客服/运维监控/配置权限/模块扩展/核心实体），`AutoMigrateAll` 首次启动自动建表（注册 92 个模型；`user_search_histories` 由 `migrateUserSearchHistory` 单独迁移），分组明细见 [架构文档 §5](./bmad-output/architecture.md#5-数据模型)。
 
-- [ER 图（完整版）](docs/images/er-diagram-full.png) · [交互版](docs/cakecake_er_figma-diagram.html)
-- [Bento 架构总览](docs/cakecake_er_bento.html) · [扩展模块 ER](docs/AdminER_Diagram.html)
+核心表关系（Mermaid，可直接渲染；完整 ER 见 [架构文档 §5 数据模型](./bmad-output/architecture.md#5-数据模型)）：
 
-核心表：`users`（23 字段）、`videos`（29 字段，转码状态机）、`articles`、`danmakus`、`comments`、`admins`。
+**用户端**
+
+```mermaid
+erDiagram
+    USERS ||--o{ VIDEOS : "投稿"
+    USERS ||--o{ ARTICLES : "撰写"
+    USERS ||--o{ DANMAKUS : "发送"
+    USERS ||--o{ COMMENTS : "评论"
+    USERS ||--o{ VIDEO_LIKES : "点赞"
+    USERS ||--o{ VIDEO_COINS : "投币"
+    USERS ||--o{ COIN_LEDGERS : "硬币账本"
+    USERS ||--o{ USER_DYNAMICS : "发布动态"
+    USERS ||--o{ LIVE_ROOMS : "开播"
+    USERS ||--o{ USER_FOLLOWS : "关注"
+    VIDEOS ||--o{ DANMAKUS : "承载"
+    VIDEOS ||--o{ COMMENTS : "承载"
+    VIDEOS ||--o{ VIDEO_LIKES : "被点赞"
+    VIDEOS ||--o{ VIDEO_COINS : "被投币"
+    FAVORITE_FOLDERS ||--o{ VIDEO_FAVORITES : "收纳"
+    VIDEOS ||--o{ VIDEO_FAVORITES : "被收藏"
+    COMMENTS ||--o{ COMMENTS : "父评论 / 回复"
+    DM_CONVERSATIONS ||--o{ DM_PARTICIPANTS : "会话成员"
+    USERS ||--o{ DM_PARTICIPANTS : "私信"
+    DM_CONVERSATIONS ||--o{ DM_MESSAGES : "消息"
+```
+
+**运营后台（RBAC + 审计）**
+
+```mermaid
+erDiagram
+    ADMINS ||--o{ ADMIN_ROLE_ASSIGNMENTS : "分配角色"
+    ADMIN_ROLES ||--o{ ADMIN_ROLE_ASSIGNMENTS : "被分配"
+    ADMIN_ROLES ||--o{ ROLE_PERMISSIONS : "拥有权限"
+    ADMIN_PERMISSIONS ||--o{ ROLE_PERMISSIONS : "被授予"
+    ADMINS ||--o{ AUDIT_LOGS : "写操作审计"
+
+    ADMIN_PERMISSIONS {
+        string code UK "resource:action，共 23 种"
+    }
+    AUDIT_LOGS {
+        uint64 admin_id FK
+        string action
+        string resource
+    }
+```
+
+- 交互式可视化：[Figma 风格](./docs/cakecake_er_figma-diagram.html) · [Bento 总览](./docs/cakecake_er_bento.html) · [后台扩展 ER](./docs/AdminER_Diagram.html)
+
+核心表：`users`（28 字段）、`videos`（27 字段，含转码状态）、`articles`（21 字段）、`danmakus`（10 字段）、`comments`（12 字段）、`admins`（8 字段）。
 
 ---
 
@@ -115,9 +164,9 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 ```
 ├── cmd/mini-bili/          # Go 入口
 ├── internal/
-│   ├── handler/            # 90 个 .go（含测试；非测试 83，其中 25 个 admin）
-│   ├── service/            # 业务逻辑层（21 文件）
-│   ├── model/              # 88 个 GORM 模型
+│   ├── handler/            # 99 个 .go（含测试；非测试 86，其中 27 个 admin）
+│   ├── service/            # 业务逻辑层（22 文件，非测试 19）
+│   ├── model/              # 92 个 GORM 模型
 │   ├── data/               # 数据层（AutoMigrate + seed）
 │   ├── worker/             # RabbitMQ 消费者 / 定时任务
 │   ├── ws/                 # WebSocket Hub（弹幕/私信/直播）
@@ -139,7 +188,7 @@ docker compose up -d          # 访问 http://localhost，管理员 admin / chan
 
 - 前缀 `/api/v1`，响应 `{ "code": number, "msg": string, "data": object|null }`
 - 认证 `Authorization: Bearer <access_token>`；WebSocket 连接带 `?token=`
-- 运营后台 `/api/admin/*`，独立 admin JWT + 23 权限码
+- 运营后台 `/api/v1/admin/*`，独立 admin JWT + 23 权限码
 
 ---
 

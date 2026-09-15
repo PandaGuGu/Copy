@@ -87,7 +87,7 @@ WebSocket ≤200ms、5s 冷却、敏感词过滤、Canvas 多轨道渲染、200 
 | 字幕管理 | subtitle.go | content/SubtitleManage.vue | ✅ |
 | 专题活动 | admin_special.go | content/SpecialManage.vue | ✅ |
 
-共 85 张数据表，180+ API 端点，23 种 RBAC 权限码（resource:action 格式）。
+共 92 张数据表，433 个 API 端点，23 种 RBAC 权限码（resource:action 格式）。
 
 #### F12：直播系统
 创建直播 → SRS 推流回调 → flv.js 播放 → WebSocket 实时聊天 + 礼物 → 观众追踪 → 直播历史记录 → 管理后台审核/警告/封禁

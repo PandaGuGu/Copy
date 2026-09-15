@@ -40,10 +40,10 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 **在范围内:**
 
 - **用户端:** 注册/登录（JWT 双 Token）、视频上传（≤500MB/≤30min→FFmpeg H.264 MP4→OSS）、弹幕 WebSocket（≤200ms, 5s 冷却+敏感词）、3 级评论（视频/文章/动态三套独立表）、点赞/投币/收藏（硬币经济）、关注/拉黑/私信（WebSocket 实时）、直播（nms 推流+HTTP-FLV/RTMP 播放 + WebSocket 聊天+礼物+弹幕飘屏）、Feed 推荐（MMR 多样性排序+协同过滤）、ES 全文搜索、历史追踪、每日任务
-- **运营后台 23 模块:** 数据概览、首页轮播、热搜运营、用户管理、视频审核、专栏审核、直播管理、动态管理、评论管理、系统设置、举报处理、AI 角色、工单管理、风控管理、版权管理、BI 报表、客服后台、运维监控 5 合 1、配置发布、权限审计、播放器高级、字幕管理、Feed 推荐
+- **运营后台 23 模块:** 数据概览、首页轮播、热搜运营、用户管理、视频审核、专栏审核、直播管理、动态管理、评论管理、评论增强、系统设置、举报处理、AI 角色、工单管理、风控管理、版权管理、客服后台、运维监控 5 合 1、配置发布、权限审计、播放器高级、字幕管理、专题活动
 - **社交体系:** 关注/取关、拉黑（双向互阻）、关注分组、多收藏夹、投币（coin\_ledgers）、图文动态发布、私信 WebSocket 实时推送
 - **搜索与发现:** ES 全文搜索、热搜运营（Redis 热词+管理干预）、搜索历史、Feed 推荐（规则/热度+MMR 重排序）、排行榜
-- **Service 层架构:** handler → service → DB 三层解耦，`internal/service/` 包（21 个 service 文件）
+- **Service 层架构:** handler → service → DB 三层解耦，`internal/service/` 包（22 个文件，非测试 19）
 - **基础设施:** MySQL 8.x + Redis 7.x + RabbitMQ 3.x + 阿里云 OSS + Elasticsearch 8.x（可选）+ Node-Media-Server
 
 **不在范围内:**
@@ -62,20 +62,20 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 4. **NFR-4（API）:** RESTful，JSON 信封统一响应格式，统一错误码
 5. **NFR-6（配置）:** .env 文件管理 + Feature Flag FNV-1a hash 灰度
 
-### 代码规模（实测数据 2026-06-30）
+### 代码规模（实测数据 2026-09-15）
 
 | 指标                  | 数值                                 |
 | ------------------- | ---------------------------------- |
-| Go 源文件              | **200+** 个（`internal/` 目录）         |
-| GORM AutoMigrate 模型 | **88** 个                           |
+| Go 源文件              | **193** 个（`internal/` 非测试；含测试 227）  |
+| GORM AutoMigrate 模型 | **92** 个                           |
 | RBAC 权限码            | **23** 种（`resource:action` 格式）     |
-| Admin API 端点        | **\~190** 个                        |
-| 用户端 API 端点          | **\~140** 个                        |
-| 公开只读端点              | **\~46** 个                         |
+| Admin API 端点        | **210** 个（`/api/v1/admin/*`）       |
+| 用户端 API 端点          | **164** 个（`/api/v1/*` 需登录）         |
+| 公开只读端点              | **45** 个（`pub` 组）                  |
 | WebSocket 通道        | **3** 套（弹幕/私信/直播聊天）                |
-| 总路由注册               | **\~380** 行                        |
-| Vue 3 前端页面          | **24+** 个 admin 页面 + 用户端全栈         |
-| 移动端 App 页面          | **19** 个（uni-app，2026-08 新增，见 §12） |
+| 总路由注册               | **433** 条                          |
+| Vue 3 前端页面          | **25** 个 admin 页面（+1 登录页）+ 用户端全栈    |
+| 移动端 App 页面          | **20** 个（uni-app，4 tab + 16 二级，见 §12） |
 
 ### 利益相关者与约束
 
@@ -86,15 +86,118 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 
 ### 数据流图（DFD）
 
-系统数据流从外部实体视角（上下文图）与主要处理过程视角（0 层图）两个层次描述，图片源文件位于 `docs/images/`。
+系统数据流从外部实体视角（上下文图）与主要处理过程视角（0 层图）两个层次描述。以下图均以 Mermaid 源码内嵌，可在 GitHub / VS Code / Typora 等支持 Mermaid 的渲染器中直接渲染，随文档版本化，无需维护图片文件。
 
-**图 1. 上下文图（Level-0 Context）** — 系统与外部实体（用户 / UP 主 / 运营管理员 / 内容审核 / 客服）之间的边界与数据交换。
+**图 1. 上下文图（Context Diagram）** — 系统与外部实体（普通用户 / UP 主 / 管理员 / AI 助手 / 外部 AI 服务）之间的边界与数据交换，以及 MySQL → Redis → RabbitMQ 的存储链路。
 
-![数据流-上下文图](../docs/images/dataflow-context.png)
+```mermaid
+flowchart LR
+    USER(["普通用户"])
+    UP(["UP 主 / 创作者"])
+    ADMIN(["管理员 Admin"])
+    AI(["AI 助手"])
+    DEEP["外部 AI 服务<br/>(DeepSeek API)"]
+    SYS["Cakecake 视频分享平台"]
+    OSS[("阿里云 OSS")]
+    ES[("Elasticsearch")]
+    MYSQL[("MySQL 8.0")]
+    REDIS[("Redis 7.x")]
+    MQ[("RabbitMQ")]
 
-**图 2. 一层数据流图（Level-0 DFD）** — 核心处理过程（认证、视频流水线、弹幕、评论、社交、直播、搜索推荐等）及过程间数据流动。
+    USER -->|"注册 / 登录 / 搜索"| SYS
+    UP <-->|"投稿 / 稿件状态 / 数据面板"| SYS
+    ADMIN <-->|"审核运营 / 预警监测"| SYS
+    AI <-->|"AI 对话 / 内容生成"| SYS
+    SYS <-->|"审核与摘要推理"| DEEP
+    SYS -->|"视频 / 封面 / 头像"| OSS
+    SYS <-->|"索引 / 全文检索"| ES
+    SYS <-->|"视频列表 / 播放页"| MYSQL
+    MYSQL -->|"缓存 / 会话"| REDIS
+    REDIS -->|"异步任务"| MQ
+```
 
-![数据流-0层图](../docs/images/dataflow-level0.png)
+**图 2. 一层数据流图（Level-0 DFD）— 过程与外部实体** — 8 个核心处理过程（认证、视频流水线、弹幕、内容、社交、直播、搜索推荐、运营后台）与 3 类外部实体之间的输入输出，以及过程间的审核与事件流转（虚线为内部信号）。
+
+```mermaid
+flowchart LR
+    RU["注册用户"]
+    UC["UP 主 / 创作者"]
+    AO["管理员"]
+
+    P1["P1 认证与用户管理<br/>注册 / 登录 / JWT / RBAC"]
+    P2["P2 视频上传与异步转码<br/>FFmpeg + RabbitMQ"]
+    P3["P3 弹幕引擎<br/>WebSocket 广播"]
+    P4["P4 内容系统<br/>评论 / 文章 / 动态 + 审核"]
+    P5["P5 社交系统<br/>关注 / 私信 / 通知 / 收藏"]
+    P6["P6 直播系统<br/>推流 / 聊天 / 礼物"]
+    P7["P7 搜索与推荐<br/>ES + Feed 重排"]
+    P8["P8 运营后台<br/>23 模块 + RBAC 审计"]
+
+    RU -->|"注册 / 登录 / 会话"| P1
+    P1 -->|"profile / session"| RU
+    RU -->|"弹幕列表与筛选"| P3
+    P3 -->|"弹幕协议 / 聊天"| RU
+    RU -->|"评论 / 回复"| P4
+    P4 -->|"评论展示 / 审核结论"| RU
+    RU -->|"关注 / 收藏 / 私信"| P5
+    P5 -->|"通知 / 未读计数"| RU
+    RU -->|"搜索 / 推荐流"| P7
+    P7 -->|"Feed / 搜索结果"| RU
+    UC -->|"视频上传 + 元数据"| P2
+    P2 -->|"转码进度 / 稿件状态"| UC
+    UC -->|"直播推流协议"| P6
+    AO -->|"运营操作"| P8
+    P8 -->|"审计结果 / 预警"| AO
+
+    P4 -->|"待审内容"| P8
+    P8 -->|"审核结论"| P4
+    P2 -.->|"转码完成事件"| P4
+    P5 -.->|"关注事件"| P7
+    P4 -.->|"互动事件"| P7
+```
+
+**图 3. 一层数据流图（Level-0 DFD）— 过程与数据存储** — 8 个处理过程对 5 个数据存储的读写关系，S 编号与图 1 一致。
+
+```mermaid
+flowchart LR
+    P1["P1 认证与用户管理"]
+    P2["P2 视频上传与异步转码"]
+    P3["P3 弹幕引擎"]
+    P4["P4 内容系统"]
+    P5["P5 社交系统"]
+    P6["P6 直播系统"]
+    P7["P7 搜索与推荐"]
+    P8["P8 运营后台"]
+
+    S1[("S1 MySQL<br/>关系数据")]
+    S2[("S2 Redis<br/>缓存 / KV")]
+    S3[("S3 RabbitMQ<br/>消息队列")]
+    S4[("S4 OSS<br/>对象存储")]
+    S5[("S5 Elasticsearch<br/>搜索索引")]
+
+    P1 -->|"用户 / 会话"| S1
+    P1 -->|"Token 黑名单"| S2
+    P3 -->|"弹幕 / 冷却"| S2
+    P4 -->|"评论 / 文章"| S1
+    P5 -->|"关注关系 / 消息"| S1
+    P5 -->|"在线状态 / 未读"| S2
+    P6 -->|"房间 / 观众集"| S2
+    P6 -->|"推流路由 / 回放"| S4
+    P7 -->|"索引写入 / 检索查询"| S5
+    P2 -->|"转码任务"| S3
+    P2 -->|"原片 / 封面"| S4
+    P8 -->|"配置 / 审计日志"| S1
+```
+
+**数据存储读写对照**
+
+| 存储 | 写入方 | 读取方 |
+| ---- | ---- | ---- |
+| S1 MySQL | P1 用户/会话 · P4 评论/文章 · P5 关注/消息 · P8 配置/审计 | P1 · P4 · P5 · P7 · P8 |
+| S2 Redis | P1 Token 黑名单 · P3 弹幕冷却 · P5 未读/在线 · P6 观众集 | P1 · P3 · P5 · P6 · P7 |
+| S3 RabbitMQ | P2 转码任务入队 | P2 转码 Worker |
+| S4 OSS | P2 原片/封面 · P6 推流路由/回放 | P2 · P6 · P7（播放页） |
+| S5 Elasticsearch | P7 索引写入（视频/文章/用户） | P7 全文检索 |
 
 ***
 
@@ -106,7 +209,7 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 
 - 1 人团队维护微服务的运维负担远超当前规模收益
 - 运营中心并发需求低（<50 管理员），用户端并发可控，单体足以支撑
-- 文件级模块拆分（每个功能一个 handler 文件，共 83 个 handler 文件）已为未来微服务拆分预留边界
+- 文件级模块拆分（每个功能一个 handler 文件，共 86 个 handler 文件）已为未来微服务拆分预留边界
 - BC-2 约束满足：handler 间不互相调用，通过共享 `API` 结构体的 `DB`/`Log`/`Svcs` 进行松耦合
 - 三层架构（handler → service → DB）确保业务逻辑隔离
 
@@ -119,12 +222,12 @@ Cakecake 是仿 B 站核心链路的全栈视频社交平台，后端 Go 模块�
 
 ```
 minibili（单进程）
-├── internal/handler/         ← 83 个 handler 文件，按模块拆分
-│   ├── admin_*.go            ← 25 个运营后台 handler
+├── internal/handler/         ← 86 个 handler 文件，按模块拆分
+│   ├── admin_*.go            ← 27 个运营后台 handler
 │   ├── auth.go, video.go, …  ← 用户端 handler
-│   ├── router.go             ← 路由注册（~380 条）
+│   ├── router.go             ← 路由注册（433 条）
 │   └── deps.go               ← API 结构体（DI 依赖注入容器）
-├── internal/service/         ← 业务逻辑层（21 个文件）
+├── internal/service/         ← 业务逻辑层（22 个文件，非测试 19）
 │   ├── services.go           ← Services 容器
 │   ├── video_service.go      ← 视频 CRUD + 状态管理
 │   ├── user_service.go       ← 用户管理 + 社交
@@ -132,7 +235,7 @@ minibili（单进程）
 │   ├── feed_service.go       ← Feed 推荐 + MMR 重排序
 │   └── ...
 ├── internal/middleware/      ← 横切关注点（认证/授权/追踪）
-├── internal/model/           ← 86 个 GORM 模型
+├── internal/model/           ← 92 个 GORM 模型
 ├── internal/data/            ← 数据层（DB + migrate + rbac_seed）
 ├── internal/worker/          ← RabbitMQ 消费者（转码 Worker）
 ├── internal/ws/              ← WebSocket Hub（弹幕/私信/直播）
@@ -171,6 +274,8 @@ internal/service/
 ├── hot_search_layout.go  ← 热搜布局
 ├── agent.go              ← AI Agent 对话
 ├── article_publish.go    ← 文章发布
+├── itemcf.go             ← ItemCF 离线相似度计算（商品/视频协同过滤）
+├── state_transition.go   ← 状态机守卫（TransitionGuard，包装 statemachine）
 └── danmaku_relay.go      ← 弹幕中继
 ```
 
@@ -190,7 +295,7 @@ internal/service/
 
 ### Feed 推荐架构（当前已实施）
 
-> 当前状态：ItemCF 协同过滤离线计算待上线，在线服务已实现 MMR 多样性重排序。
+> 当前状态：**ItemCF 协同过滤已全链路上线** —— 离线计算 `service/itemcf.go`（`ComputeItemCF`，6 张行为表加权）+ 每日调度 `worker/scheduler.go`（`scheduleItemCF`，每 24h，写入 `video_similarities`）+ 在线召回 `feed_service.itemCFRecall`（读取相似度表并入候选集）三者齐备；在线重排序为 MMR 多样性。剩余待补：冷启动提权。
 
 #### 召回层
 
@@ -280,7 +385,7 @@ ES 全文检索（ik 中文分词）
 | ADR-004 | RBAC resource:action 细粒度授权（23 种权限码）              | 已接受                    | NFR-3        | 2026-06-25                 |
 | ADR-005 | 模块化单体架构 (Gin)                                    | 已接受                    | NFR-1, BC-2  | 2026-06-25                 |
 | ADR-006 | 全写操作自动审计日志                                       | 已接受                    | NFR-3        | 2026-06-25                 |
-| ADR-007 | 统一错误码体系（errcode 包，20+ 错误码）                       | 已接受                    | NFR-4        | 2026-06-25                 |
+| ADR-007 | 统一错误码体系（errcode 包，38 个错误码）                       | 已接受                    | NFR-4        | 2026-06-25                 |
 | ADR-008 | Feature Flag FNV-1a 灰度策略                         | 已接受                    | NFR-6        | 2026-06-25                 |
 | ADR-009 | 审批流多级串行审核                                        | 已接受                    | NFR-3        | 2026-06-25                 |
 | ADR-015 | 流媒体选型：nms（本地默认）/ SRS（生产正轨）                       | **已实施**                | FR-050       | 2026-06-28（2026-08-22 补权衡） |
@@ -327,7 +432,7 @@ ES 全文检索（ik 中文分词）
 
 **Decision（决策）:**
 
-- **主存储:** MySQL 8.x + GORM v2 AutoMigrate，86 个模型自动建表
+- **主存储:** MySQL 8.x + GORM v2 AutoMigrate，92 个模型自动建表
 - **缓存:** Redis 7.x — 播放量 INCR（10s 落库）、弹幕冷却 SET NX EX（5s）、Token 黑名单、热搜 ZINCRBY、直播观众 SET
 - **消息队列:** RabbitMQ 3.x — 视频转码任务（`task_type=transcode`），预留 `subtitle_asr`
 - **文件存储:** 阿里云 OSS（`mini-bili` Bucket），目录前缀分区；本地文件系统兜底（Docker 卷 `uploads_data`）
@@ -397,13 +502,14 @@ ES 全文检索（ik 中文分词）
 - **模型:** `admin_roles` + `admin_permissions` + `role_permissions`(关联) + `admin_role_assignments` 四表
 - **权限格式:** `resource:action`（如 `video:approve`, `user:ban`, `risk:manage`）
 - **中间件:** `RequirePermission(db, resource, action) gin.HandlerFunc`
-- **23 种权限码:**
+- **23 种权限码（`rbac_seed.go` 实测清单）:**
   - 📊 数据: `dashboard:view`, `dashboard:export`
   - 📢 运营: `banner:manage`, `hotsearch:manage`, `special:manage`, `dynamic:manage`, `subtitle:manage`
-  - 🛡️ 审核: `video:approve`, `article:approve`, `comment:delete`, `ticket:handle`, `copyright:handle`, `risk:manage`
+  - 🛡️ 审核: `video:approve`, `article:approve`, `comment:delete`, `ticket:handle`, `report:handle`, `copyright:handle`, `risk:manage`
   - 👤 用户: `user:ban`, `cs:manage`
   - 🤖 AI: `agent:manage`, `llm:manage`
   - ⚙️ 系统: `setting:manage`, `config:manage`, `ops:manage`, `rbac:manage`, `live:manage`
+  - 注：`dashboard:view`、`llm:manage`、`report:handle` 已注册但当前无路由中间件直接引用（`report:handle` 的 Resource 字段实际写为 `ticket`，中间件按 `ticket:handle` 校验，见 `rbac_seed.go` 注释）
 - **角色:** `super_admin`（全部权限）, `content_review`（审核组+封禁+只读）, `cs_admin`（客服组+只读）
 - 前端侧边栏按 `GET /admin/rbac/me/permissions` 返回权限列表动态过滤
 
@@ -412,7 +518,7 @@ ES 全文检索（ik 中文分词）
 - 新增管理操作必须在 `rbac_seed.go` 注册权限码
 - 路由注册时通过 `admin.Group("", RequirePermission(...))` 分组保护
 - 所有写操作自动记录 `audit_logs`（ADR-006）
-- 变得容易: 自建 3 表 JOIN 即可满足，无额外依赖
+- 变得容易: 自建 4 表模型 + 3 表 JOIN 即可满足，无额外依赖
 
 **替代方案:**
 
@@ -438,9 +544,9 @@ ES 全文检索（ik 中文分词）
 
 **Decision（决策）:**
 
-- 所有 admin 写操作 handler 调用 `recordAudit(db, adminID, action, resourceType, resourceID, result, c)`
-- `audit_logs` 表: `id, admin_id, action, resource_type, resource_id, result, ip, created_at`
-- 索引: `(admin_id, created_at)`, `(resource_type, resource_id)`
+- 所有 admin 写操作 handler 调用 `a.recordAudit(c, adminID, action, resource, targetID, detail)`（定义在 `handler/admin_ops.go`，`*API` 的方法）
+- `audit_logs` 表: `id, admin_id, action, resource, target_id, detail(JSON text), ip_address, created_at`
+- 索引: 单列索引 `admin_id`、`created_at`、`resource`、`target_id`、`action`（非复合索引）
 
 **锁定规则:** 新增 admin 写操作必须调用 `recordAudit`；审计日志 append-only，不可删除。
 
@@ -452,7 +558,7 @@ ES 全文检索（ik 中文分词）
 
 **Decision（决策）:**
 
-- 20+ 错误码映射表（`internal/errcode/errcode.go`）
+- 38 个错误码映射表（`internal/errcode/errcode.go`）
 - 分类: 0=成功, 40001-40099 参数校验, 40100-40199 认证, 40300-40399 权限, 40400-40499 资源, 50000-50099 服务器
 - `errmsg.GetMsg(code)` 获取国际化消息
 
@@ -548,15 +654,18 @@ ES 全文检索（ik 中文分词）
 
 **Decision（决策）:**
 
-- 自研轻量状态机包 `internal/pkg/statemachine`（约 150 行，零第三方依赖）：`Machine{Name, Transitions}` + `Can(from,to)` + `Transition(from,to,actor)`（校验 + 可选 `OnChange` 审计钩子）+ `IllegalTransitionError`
-- 8 个域集中定义：Video / Article / Ticket / Report / Copyright / ApprovalFlow / ApprovalStep / User（见 `domains.go`）
-- 接入范围（2026-08-20）：
+- 自研轻量状态机包 `internal/pkg/statemachine`（`domains.go` 85 行 + `statemachine.go` 106 行，零第三方依赖）：`Machine{Name, Transitions}` + `Can(from,to)` + `Transition(from,to,actor)`（校验 + 可选 `OnChange` 审计钩子）+ `IllegalTransitionError`
+- 9 个域集中定义：Video / Article / Ticket / Report / Copyright / ApprovalFlow / ApprovalStep / User / Appeal（见 `domains.go` 的 `All()`）
+- 接入范围（7 个域已接线，共 8 个调用文件）：
   - `service/video_publish.go` `PublishVideo`：仅 processing/pending\_review → published
   - `service/video_service.go` `Publish/Reject`（原孤儿方法，补前置状态校验）
-  - `worker/transcode.go`：转码成功仅 processing → pending\_review/published；失败仅 processing → failed
+  - `worker/scheduler.go` `scheduleScheduledPublishes`：draft → processing 前置校验
+  - `worker/transcode.go`：转码成功/失败**内联** `cur.Status != "processing"` 守卫（未引入 statemachine 包，行为等价 processing → pending\_review / failed）
   - `handler/admin_ticket.go` `AdminUpdateTicketStatus`：以转移表替代白名单（收紧 open 不得直跳 resolved/closed）
   - `handler/admin_copyright.go` `AdminTakedownContent`/`AdminRestoreContent`：takedown/restore 前置校验
   - `handler/admin_article.go` 审核、`handler/admin_rbac.go` 审批流：以状态机检查替代散落 if
+  - `handler/appeal.go`：申诉裁决（Appeal 域，`Transition`）+ 到期解封（User 域，`Can("banned","active")`）
+- 已定义未接线域：`Report`、`ApprovalStep`（`All()` 已注册，仓库内暂无 `statemachine.Report` / `statemachine.ApprovalStep` 调用点）
 - 时间驱动执行器（`worker/scheduler.go`，每 1min）：
   - `scheduleScheduledPublishes`：**补齐定时发布消费者**（PublishAt 到期 → draft → processing，原无消费者）
   - `scheduleSLAEscalation`：按 `sla_deadline` 驱动升级 urgent（替代 main.go 按 updated\_at 的旧逻辑；不再自动关单，人工审核优先）
@@ -586,8 +695,9 @@ ES 全文检索（ik 中文分词）
                      ┌──────────────────────────────────┐
                      │   Vue 3 SPA (cakecake-vue)        │
                      │   ┌────────────┐ ┌─────────────┐ │
-                     │   │ AdminLayout│ │ UserLayout  │ │
-                     │   │ /admin/*   │ │ /* (用户端)  │ │
+                     │   │ AdminLayout│ │ App.vue     │ │
+                     │   │ /admin/*   │ │ +app-header │ │
+                     │   │            │ │ /* (用户端)  │ │
                      │   └─────┬──────┘ └──────┬──────┘ │
                      └─────────┼───────────────┼────────┘
                                │ HTTP REST + JWT│
@@ -607,7 +717,7 @@ ES 全文检索（ik 中文分词）
                       │              │
          ┌────────────▼──┐  ┌───────▼──────────┐
          │ Admin Handlers│  │  User Handlers   │
-         │ (25 files)    │  │  (58 files)      │
+         │ (27 files)    │  │  (59 files)      │
          │  ┌──────────┐ │  │  auth/video/      │
          │  │Service   │ │  │  comment/social/  │
          │  │ Layer DI │ │  │  live/search/dm   │
@@ -621,7 +731,7 @@ ES 全文检索（ik 中文分词）
              │                  │
      ┌───────▼──────┬───────────▼───────┬──────────┐
      │    MySQL 8.x │     Redis 7.x     │ RabbitMQ │
-     │ (86 模型,GORM)│   (Cache/冷却/    │ (转码)   │
+     │ (92 模型,GORM)│   (Cache/冷却/    │ (转码)   │
      │              │    Token黑名单)   │          │
      └───────┬──────┴───────────────────┴──────────┘
              │
@@ -653,7 +763,7 @@ ES 全文检索（ik 中文分词）
 
 **职责:** 基于 resource:action 的权限拦截 + 角色/权限/管理员管理
 **实现:** `middleware/rbac_permission.go`, `handler/admin_rbac.go`, `data/rbac_seed.go`
-**提供的接口:** `RequirePermission(db, resource, action) gin.HandlerFunc`, `/admin/rbac/*`（19 个端点）
+**提供的接口:** `RequirePermission(db, resource, action) gin.HandlerFunc`, `/admin/rbac/*`（20 个端点，含 `/admin/rbac/me/permissions`）
 **需要的接口:** `gorm.DB`, JWT 中间件
 **拥有的数据:** `AdminRole`, `AdminPermission`, `RolePermission`, `AdminRoleAssignment`, `AdminLoginLog`
 **约束它的 ADR:** ADR-004, ADR-006, ADR-009
@@ -692,8 +802,8 @@ ES 全文检索（ik 中文分词）
 #### 组件: Social System
 
 **职责:** 关注/拉黑/私信/动态/收藏/投币
-**实现:** `handler/user_follow.go`, `handler/dm.go`, `handler/user_dynamic.go`, `handler/favorite_folder.go`, `handler/coin_ledger.go`
-**提供的接口:** 50+ 端点覆盖全部社交操作
+**实现:** `handler/user_follow.go`, `handler/follow_group.go`, `handler/user_block.go`, `handler/dm.go`, `handler/dm_ws.go`, `handler/user_me.go`（通知/资料）, `handler/user_dynamic.go`, `handler/follow_feed.go`, `handler/favorite_folder.go`, `handler/coin_ledger.go`, `handler/video_engagement.go`, `handler/article_engagement.go`
+**提供的接口:** 100+ 端点覆盖全部社交操作
 **拥有的数据:** `UserFollow`, `UserBlock`, `FavoriteFolder`, `VideoFavorite`, `VideoCoin`, `CoinLedger`, `UserDynamic`, `DmConversation`, `DmMessage`
 **约束它的 ADR:** ADR-002, ADR-003
 
@@ -711,7 +821,7 @@ ES 全文检索（ik 中文分词）
 
 **职责:** 多层级风控规则匹配（关键词/正则/频率限制）+ 黑白名单
 **实现:** `handler/admin_risk.go`, `handler/sensitive_ugc.go`
-**提供的接口:** `/admin/risk/*`（10 个端点）
+**提供的接口:** `/admin/risk/*`（11 个端点）+ `/admin/appeals*`、`/admin/users/:id/capabilities`、`/admin/usercap/templates*`（同属 risk:manage 权限组，共 20 个端点）
 **拥有的数据:** `RiskRule`, `BlackWhiteList`, `RiskHitLog`, `RiskRateCounter`
 **约束它的 ADR:** ADR-004, ADR-006
 
@@ -719,7 +829,7 @@ ES 全文检索（ik 中文分词）
 
 **职责:** 数据仪表盘 + 多维度统计 + CSV 导出
 **实现:** `handler/admin_bi.go`, `handler/admin_dashboard.go`
-**提供的接口:** `/admin/bi/*`（10 个端点）, `/admin/dashboard`
+**提供的接口:** `/admin/bi/*`（11 个端点）, `/admin/dashboard`
 **拥有的数据:** `SavedReport`, `VideoDailyStat`
 **约束它的 ADR:** ADR-004
 
@@ -727,7 +837,7 @@ ES 全文检索（ik 中文分词）
 
 **职责:** 任务队列/告警/链路追踪/健康检查/CDN 刷新/OSS 生命周期
 **实现:** `handler/admin_ops.go`, `middleware/trace.go`
-**提供的接口:** `/admin/ops/*`（20+ 端点）
+**提供的接口:** `/admin/ops/*`（21 个端点）
 **拥有的数据:** `TaskLog`, `AlertRule`, `AlertRecord`, `TraceRecord`, `CDNRefreshTask`, `OSSLifecycleRule`
 **约束它的 ADR:** ADR-004
 
@@ -735,7 +845,7 @@ ES 全文检索（ik 中文分词）
 
 **职责:** Feature Flag 灰度发布 + 模块注册 + 版本发布/快照/回滚
 **实现:** `handler/admin_config.go`
-**提供的接口:** `/admin/config/*`（11 个端点）
+**提供的接口:** `/admin/config/*`（12 个端点）
 **拥有的数据:** `FeatureFlag`, `ReleaseRecord`
 **约束它的 ADR:** ADR-008
 
@@ -744,15 +854,17 @@ ES 全文检索（ik 中文分词）
 ```
 src/
 ├── components/admin/
-│   ├── AdminDataTable.vue    ← 统一搜索+表格+分页（已接入 9 个 admin 页面）
-│   └── AdminFormDialog.vue   ← 统一新增/编辑弹窗
+│   ├── AdminDataTable.vue    ← 统一搜索+表格+分页（已接入 8 个 admin 页面）
+│   ├── AdminFormDialog.vue   ← 统一新增/编辑弹窗
+│   └── BiCard.vue / BiChart.vue ← BI 卡片与图表
 ├── utils/
-│   └── admin-helpers.js      ← 共享 formatTime() 等工具函数
-└── api/admin/                ← 17 模块模块化 API
-    ├── auth.js, banner.js, video.js, comment.js,
-    ├── user.js, rbac.js, cs.js, ticket.js, copyright.js,
-    ├── risk.js, bi.js, ops.js, config.js, special.js,
-    ├── subtitle.js, dashboard.js, dynamic.js, article.js
+│   ├── admin-helpers.js      ← 共享 formatTime() 等工具函数
+│   └── adminAuth.js / adminHttp.js ← admin 登录态与请求封装
+└── api/admin/                ← 18 模块模块化 API
+    ├── agent.js, appeal.js, article.js, auth.js, banner.js,
+    ├── comment.js, copyright.js, cs.js, dashboard.js, dynamic.js,
+    ├── hot-search.js, rbac.js, report.js, settings.js,
+    ├── special.js, ticket.js, user.js, video.js
 ```
 
 **锁定规则:** 所有新增 admin 页面通过 `@/api/admin` barrel 导入 API；列表页优先使用 `AdminDataTable`；表单弹窗优先使用 `AdminFormDialog`。
@@ -761,62 +873,163 @@ src/
 
 ## 5. 数据模型
 
-> 受 ADR-002 约束。86 个 GORM 模型，15 个业务模块。
+> 受 ADR-002 约束。92 个 GORM 模型 / 92 张表（`AutoMigrateAll` 注册 92 个；`user_search_histories` 经 `migrateUserSearchHistory` 单独迁移），按 16 组归类，各组表名互不重复、合计 92。
 
 ### 核心实体（6 张）
 
 | 实体        | 表名         | 字段数 | 关键属性                                                                                                                                                                     |
 | --------- | ---------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `User`    | `users`    | 23+ | id, username, password(bcrypt), nickname, avatar\_url, bio, status, coin\_balance\_tenths, level, cake\_id, first\_published\_at                                         |
-| `Video`   | `videos`   | 29+ | id, user\_id, title, description, cover\_url, duration, status(processing/published/failed/pending\_review/rejected), play\_count, zone\_id, deleted\_at(gorm.DeletedAt) |
-| `Article` | `articles` | 20+ | id, user\_id, title, content(markdown), cover\_url, category, view\_count, status, tags JSON, comments\_closed, comments\_curated                                        |
-| `Danmaku` | `danmakus` | 10+ | id, user\_id, video\_id, content, position\_sec, color, type, mode, font\_size, like\_count                                                                              |
-| `Comment` | `comments` | 12+ | id, user\_id, video\_id, content, parent\_id, root\_id, level, like\_count, is\_pinned, is\_featured, approved, curated\_ignored                                         |
-| `Admin`   | `admins`   | 8   | id, username, password\_hash(bcrypt), display\_name, status(active/disabled)                                                                                             |
+| `User`    | `users`    | 28  | id, username, password\_hash(bcrypt), avatar\_url, cake\_id, nickname, sign, space\_announcement, gender, birthday, \(5 个\) privacy\_public\_\*, experience, coin\_balance\_tenths, view\_history\_paused, status, banned\_reason/banned\_at/ban\_expires\_at, first\_published\_at, deletion\_requested\_at, deletion\_effective\_at, anonymized\_at, created/updated\_at |
+| `Video`   | `videos`   | 27  | id, user\_id, title, description, duration\_sec, status(processing/published/failed/pending\_review/rejected), fail\_reason, video\_url, cover\_url, play/danmaku/comment/like/fav/coin\_count, comments\_closed, comments\_curated, danmaku\_closed, tags\_json, zone, draft\_raw\_path, draft\_cover\_path, reviewed\_at, reviewed\_by\_admin\_id, created/updated\_at, deleted\_at |
+| `Article` | `articles` | 21  | id, user\_id, title, cover\_url, body\_md(markdown), status, tags\_json, category, view/comment/coin/fav/forward\_count, comments\_closed, comments\_curated, fail\_reason, published\_at, reviewed\_at, reviewed\_by\_admin\_id, created/updated\_at |
+| `Danmaku` | `danmakus` | 10  | id, user\_id, video\_id, content, color, type, font\_size(sm/md/lg), video\_time, like\_count, created\_at                                                    |
+| `Comment` | `comments` | 12  | id, video\_id, user\_id, parent\_id, level, content, like\_count, pinned, approved, curated\_ignored, ip\_location, created\_at                                      |
+| `Admin`   | `admins`   | 8   | id, username, password\_hash(bcrypt), display\_name, status(active/disabled), last\_login\_at, created/updated\_at                                                              |
 
-### 视频互动（10 张）
+> 字段数为 GORM `schema.Parse`（`NamingStrategy{}`）对 `internal/model/` 各结构体逐一解析的实测值，含主键、时间戳与软删除列；复现方式：临时 Go 程序导入 `internal/model` 并解析 `migrate.go` 的 AutoMigrate 列表。
 
-`danmakus`, `comments`, `comment_likes`, `comment_dislikes`, `video_likes`, `video_coins`, `video_favorites`, `favorite_folders`, `watch_laters`, `danmaku_likes`
+### 核心实体 ER 图（Mermaid）
 
-### 文章互动（6 张）
+> 替代 `docs/images/er-diagram-full.png` 中的核心实体部分。字段取自 `internal/model/`，关系取自唯一索引与软删除定义。
 
-`articles`, `article_comments`, `article_favorites`, `article_coins`, `a_comment_likes`, `a_comment_dislikes`
+```mermaid
+erDiagram
+    USERS {
+        uint64 id PK
+        string username UK "登录名，全局唯一"
+        string password_hash "bcrypt 哈希"
+        string cake_id "对外不可变公开 ID（cake_XXXX）"
+        string nickname
+        string avatar_url
+        string sign
+        string gender "male/female/secret"
+        uint64 experience "等级经验，Lv1~Lv6 阈值"
+        int64 coin_balance_tenths "硬币余额，0.1 枚为单位"
+        string status "active/banned/disabled"
+        time first_published_at "成为 UP 主的锚点，只写一次"
+        time deletion_requested_at "注销冷静期起点"
+        time anonymized_at "注销生效后匿名化"
+    }
+
+    VIDEOS {
+        uint64 id PK
+        uint64 user_id FK "投稿人"
+        string title
+        string description
+        float duration_sec
+        string status "processing/published/failed/pending_review/rejected"
+        string video_url
+        string cover_url
+        uint64 play_count
+        uint64 danmaku_count
+        uint64 comment_count
+        bool comments_closed "UP 关闭评论区"
+        bool comments_curated "评论精选模式"
+        bool danmaku_closed "UP 关闭弹幕"
+        string tags_json
+        string zone "分区，如 生活-日常"
+        time deleted_at "软删除"
+    }
+
+    ARTICLES {
+        uint64 id PK
+        uint64 user_id FK "作者"
+        string title
+        string body_md "Markdown 正文"
+        string status "draft/published/pending_review/rejected"
+        string category
+        uint64 view_count
+        uint64 comment_count
+        bool comments_curated "评论精选模式"
+        time published_at
+    }
+
+    DANMAKUS {
+        uint64 id PK
+        uint64 video_id FK
+        uint64 user_id FK
+        string content
+        string color
+        string type "滚动/顶部/底部"
+        string font_size "sm/md/lg"
+        float video_time "出现秒数"
+        uint64 like_count
+    }
+
+    COMMENTS {
+        uint64 id PK
+        uint64 video_id FK
+        uint64 user_id FK
+        uint64 parent_id "父评论，0=根评论"
+        int level "1~3 级嵌套"
+        string content
+        uint64 like_count
+        bool pinned "UP 置顶"
+        bool approved "精选模式下待审"
+        string ip_location
+    }
+
+    ADMINS {
+        uint64 id PK
+        string username UK
+        string password_hash "bcrypt 哈希"
+        string display_name
+        string status "active/disabled"
+        time last_login_at
+    }
+
+    USERS ||--o{ VIDEOS : "投稿"
+    USERS ||--o{ ARTICLES : "撰写"
+    USERS ||--o{ DANMAKUS : "发送"
+    USERS ||--o{ COMMENTS : "评论"
+    VIDEOS ||--o{ DANMAKUS : "承载"
+    VIDEOS ||--o{ COMMENTS : "承载"
+    COMMENTS ||--o{ COMMENTS : "父评论 / 回复"
+```
+
+### 视频互动（8 张）
+
+`danmaku_likes`, `comment_likes`, `comment_dislikes`, `video_likes`, `video_coins`, `video_favorites`, `favorite_folders`, `watch_laters`
+
+### 文章互动（5 张）
+
+`article_comments`, `article_comment_likes`, `article_comment_dislikes`, `article_favorites`, `article_coins`
 
 ### 关注社交（4 张）
 
-`user_follows`, `user_blocks`, `user_follow_groups`, `u_follow_group_members`
+`user_follows`, `user_blocks`, `user_follow_groups`, `user_follow_group_members`
 
 ### 消息通知（5 张）
 
-`dm_conversations`, `dm_messages`, `dm_participants`, `notifications`, `like_notif_mutes`
+`dm_conversations`, `dm_participants`, `dm_messages`, `notifications`, `like_notif_mutes`
 
 ### 动态系统（5 张）
 
-`user_dynamics`, `user_dynamic_likes`, `dynamic_comments`, `d_comment_likes`, `d_comment_dislikes`
+`user_dynamics`, `user_dynamic_likes`, `dynamic_comments`, `dynamic_comment_likes`, `dynamic_comment_dislikes`
 
-### 直播系统（2 张）
+### 直播系统（3 张）
 
-`live_rooms`, `live_warn_templates`
+`live_rooms`, `live_featured_rooms`, `live_warn_templates`
 
-### 历史记录（6 张）
+### 历史与成长（6 张）
 
 `video_view_histories`, `article_view_histories`, `live_view_histories`, `user_search_histories`, `user_daily_tasks`, `coin_ledgers`
 
-### 运营基础（8 张）
+### 运营基础（9 张）
 
-`agent_profiles`, `agent_settings`, `home_banners`, `hot_search_ops`, `hot_search_display_layout`, `llm_configs`, `llm_providers`, `reports`
+`agent_profiles`, `agent_settings`, `home_banners`, `hot_search_ops`, `hot_search_display_layouts`, `llm_configs`, `llm_providers`, `reports`, `appeals`
 
-### 工单风控（7 张）
+### 工单风控（9 张）
 
-`tickets`, `ticket_messages`, `ticket_satisfactions`, `risk_rules`, `risk_hit_logs`, `black_white_lists`, `risk_rate_counters`
+`tickets`, `ticket_messages`, `ticket_satisfactions`, `risk_rules`, `risk_hit_logs`, `risk_rate_counters`, `black_white_lists`, `user_capability_restrictions`, `usercap_reason_templates`
 
 ### 版权管理（2 张）
 
 `copyright_complaints`, `counter_notices`
 
-### 数据报表（2 张）
+### 数据报表（3 张）
 
-`saved_reports`, `video_daily_stats`
+`saved_reports`, `video_daily_stats`, `video_similarities`（ItemCF 离线输出）
 
 ### 客服后台（3 张）
 
@@ -833,6 +1046,275 @@ src/
 ### 模块扩展（6 张）
 
 `video_chapters`, `video_bitrates`, `subtitles`, `comment_images`, `scheduled_publishes`, `notification_records`
+
+### 互动关系 ER 图（Mermaid）
+
+> 替代 `docs/images/er-diagram-full.png` 中的互动关系部分。`fk` 列为实际存储外键，唯一索引见「关键索引设计」。
+
+```mermaid
+erDiagram
+    USERS ||--o{ VIDEO_LIKES : "点赞"
+    VIDEOS ||--o{ VIDEO_LIKES : "被点赞"
+    USERS ||--o{ VIDEO_COINS : "投币（1 或 2 枚）"
+    VIDEOS ||--o{ VIDEO_COINS : "被投币"
+    USERS ||--o{ FAVORITE_FOLDERS : "创建收藏夹"
+    FAVORITE_FOLDERS ||--o{ VIDEO_FAVORITES : "收纳"
+    VIDEOS ||--o{ VIDEO_FAVORITES : "被收藏（可入多夹）"
+    USERS ||--o{ WATCH_LATERS : "加入稍后再看"
+    VIDEOS ||--o{ WATCH_LATERS : "被暂存"
+    DANMAKUS ||--o{ DANMAKU_LIKES : "被点赞"
+    USERS ||--o{ DANMAKU_LIKES : "点赞弹幕"
+    COMMENTS ||--o{ COMMENT_LIKES : "被点赞"
+    COMMENTS ||--o{ COMMENT_DISLIKES : "被点踩"
+    USERS ||--o{ COMMENT_LIKES : "点赞评论"
+    USERS ||--o{ COMMENT_DISLIKES : "点踩评论"
+    USERS ||--o{ COIN_LEDGERS : "硬币账本"
+    VIDEOS ||--o{ COIN_LEDGERS : "消耗来源"
+
+    ARTICLES ||--o{ ARTICLE_COMMENTS : "承载"
+    USERS ||--o{ ARTICLE_COMMENTS : "评论"
+    ARTICLE_COMMENTS ||--o{ ARTICLE_COMMENT_LIKES : "被点赞"
+    ARTICLE_COMMENTS ||--o{ ARTICLE_COMMENT_DISLIKES : "被点踩"
+    ARTICLES ||--o{ ARTICLE_FAVORITES : "被收藏"
+    ARTICLES ||--o{ ARTICLE_COINS : "被投币"
+
+    VIDEOS ||--o{ VIDEO_CHAPTERS : "章节"
+    VIDEOS ||--o{ VIDEO_BITRATES : "多码率"
+    VIDEOS ||--o{ SUBTITLES : "字幕"
+    VIDEOS ||--o{ SCHEDULED_PUBLISHES : "定时发布"
+    COMMENTS ||--o{ COMMENT_IMAGES : "评论配图"
+    VIDEOS ||--o{ VIDEO_SIMILARITIES : "ItemCF 相似召回"
+
+    VIDEO_LIKES {
+        uint64 id PK
+        uint64 user_id FK
+        uint64 video_id FK
+    }
+    VIDEO_COINS {
+        uint64 id PK
+        uint64 user_id FK
+        uint64 video_id FK
+        int amount "1 或 2"
+    }
+    VIDEO_FAVORITES {
+        uint64 id PK
+        uint64 user_id FK
+        uint64 video_id FK
+        uint64 folder_id FK "唯一键含 folder_id"
+    }
+    FAVORITE_FOLDERS {
+        uint64 id PK
+        uint64 user_id FK
+        string title
+        bool is_public
+        bool is_default
+    }
+    VIDEO_SIMILARITIES {
+        uint64 id PK
+        uint64 video_id FK
+        uint64 similar_id FK
+        float score
+    }
+```
+
+### 社交、私信与动态 ER 图（Mermaid）
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_FOLLOWS : "关注（follower → followee）"
+    USERS ||--o{ USER_BLOCKS : "拉黑（blocker → blocked，双向互阻）"
+    USERS ||--o{ USER_FOLLOW_GROUPS : "关注分组"
+    USER_FOLLOW_GROUPS ||--o{ USER_FOLLOW_GROUP_MEMBERS : "分组成员"
+
+    USERS ||--o{ DM_PARTICIPANTS : "参与会话"
+    DM_CONVERSATIONS ||--o{ DM_PARTICIPANTS : "会话成员（含未读/置顶/免打扰）"
+    DM_CONVERSATIONS ||--o{ DM_MESSAGES : "消息（human / agent）"
+    AGENT_PROFILES ||--o{ DM_CONVERSATIONS : "AI 助手人格"
+
+    USERS ||--o{ USER_DYNAMICS : "发布图文动态"
+    USER_DYNAMICS ||--o{ USER_DYNAMIC_LIKES : "被点赞"
+    USER_DYNAMICS ||--o{ DYNAMIC_COMMENTS : "承载"
+    DYNAMIC_COMMENTS ||--o{ DYNAMIC_COMMENT_LIKES : "被点赞"
+    DYNAMIC_COMMENTS ||--o{ DYNAMIC_COMMENT_DISLIKES : "被点踩"
+    DYNAMIC_COMMENTS ||--o{ DYNAMIC_COMMENTS : "父评论 / 回复"
+
+    USERS ||--o{ NOTIFICATIONS : "接收聚合通知"
+    USERS ||--o{ NOTIFICATION_RECORDS : "通知投递记录"
+    USERS ||--o{ LIKE_NOTIF_MUTES : "点赞通知免打扰"
+
+    USERS ||--o{ VIDEO_VIEW_HISTORIES : "视频观看历史"
+    USERS ||--o{ ARTICLE_VIEW_HISTORIES : "专栏阅读历史"
+    USERS ||--o{ LIVE_VIEW_HISTORIES : "直播观看历史"
+    USERS ||--o{ USER_SEARCH_HISTORIES : "搜索历史"
+    USERS ||--o{ USER_DAILY_TASKS : "每日任务进度"
+
+    DM_CONVERSATIONS {
+        uint64 id PK
+        uint64 user_low FK "唯一键（user_low, user_high）"
+        uint64 user_high FK
+        string kind "human / agent"
+        uint64 agent_profile_id FK
+        time last_message_at
+    }
+    DM_PARTICIPANTS {
+        uint64 id PK
+        uint64 conversation_id FK
+        uint64 user_id FK
+        uint32 unread_count
+        bool pinned
+        bool muted
+    }
+    USER_FOLLOWS {
+        uint64 id PK
+        uint64 follower_id FK
+        uint64 followee_id FK
+    }
+    USER_BLOCKS {
+        uint64 id PK
+        uint64 blocker_id FK
+        uint64 blocked_id FK
+    }
+    USER_DYNAMICS {
+        uint64 id PK
+        uint64 user_id FK
+        string type "image / text / video"
+        string content
+        string images_json
+        uint64 like_count
+        uint64 comment_count
+        bool comments_curated
+    }
+```
+
+### 运营后台与风控 ER 图（Mermaid）
+
+> 替代 `docs/images/er-diagram-admin-ext.png`。
+
+```mermaid
+erDiagram
+    ADMINS ||--o{ ADMIN_ROLE_ASSIGNMENTS : "分配角色"
+    ADMIN_ROLES ||--o{ ADMIN_ROLE_ASSIGNMENTS : "被分配"
+    ADMIN_ROLES ||--o{ ROLE_PERMISSIONS : "拥有权限"
+    ADMIN_PERMISSIONS ||--o{ ROLE_PERMISSIONS : "被授予"
+    ADMINS ||--o{ ADMIN_LOGIN_LOGS : "登录日志"
+    ADMINS ||--o{ AUDIT_LOGS : "全写操作审计"
+
+    USERS ||--o{ TICKETS : "提交工单"
+    ADMINS ||--o{ TICKETS : "受理（assignee）"
+    TICKETS ||--o{ TICKET_MESSAGES : "沟通记录"
+    TICKETS ||--o{ TICKET_SATISFACTIONS : "满意度评价"
+    TICKETS |o--o{ CS_CONVERSATIONS : "可选关联工单"
+
+    USERS ||--o{ REPORTS : "举报内容"
+    REPORTS |o--o{ APPEALS : "触发申诉"
+    USERS ||--o{ APPEALS : "提交申诉"
+
+    RISK_RULES ||--o{ RISK_HIT_LOGS : "命中记录"
+    RISK_RULES ||--o{ RISK_RATE_COUNTERS : "频次计数"
+    USERS ||--o{ RISK_RATE_COUNTERS : "按用户限频"
+    USERS ||--o{ USER_CAPABILITY_RESTRICTIONS : "能力限制"
+
+    USERS ||--o{ COPYRIGHT_COMPLAINTS : "版权投诉人"
+    COPYRIGHT_COMPLAINTS ||--o{ COUNTER_NOTICES : "反通知"
+
+    USERS ||--o{ CS_CONVERSATIONS : "发起客服会话"
+    CS_CONVERSATIONS ||--o{ CS_MESSAGES : "客服消息"
+    ADMINS ||--o{ CS_CONVERSATIONS : "客服坐席"
+
+    ADMINS ||--o{ SAVED_REPORTS : "报表配置（creator_id）"
+    USERS ||--o{ LIVE_ROOMS : "开播"
+    LIVE_ROOMS ||--o{ LIVE_FEATURED_ROOMS : "被精选推荐"
+
+    ALERT_RULES ||--o{ ALERT_RECORDS : "触发告警"
+    APPROVAL_FLOWS ||--o{ APPROVAL_STEPS : "审批流转"
+
+    RISK_RULES {
+        uint64 id PK
+        string category "keyword/rate_limit/device_fingerprint/behavior"
+        string rule_type "keyword/regex/threshold/rate_limit"
+        string pattern
+        string action "reject/quarantine/notify_admin/auto_ban"
+        int duration_sec "0 = 永久"
+        bool enabled
+    }
+    AUDIT_LOGS {
+        uint64 id PK
+        uint64 admin_id FK
+        string action
+        string resource
+        uint64 target_id
+        string detail "变更内容 JSON"
+        string ip_address
+    }
+    ADMIN_PERMISSIONS {
+        uint64 id PK
+        string code UK "resource:action，共 23 种"
+        string resource
+        string action
+    }
+    FEATURE_FLAGS {
+        uint64 id PK
+        string key UK
+        bool enabled
+        int rollout_pct "0-100 灰度比例"
+        string whitelist "白名单 user_id JSON"
+    }
+```
+
+### 数据模块归属图（Mermaid）
+
+> 替代 `docs/images/db-arch-bento-top.png` 与 `db-arch-bento-bottom.png` 的分组卡片视图。分区与表数量与上方 §5 各模块列表一致，节点内只列代表表名，完整表名见表列。
+
+```mermaid
+flowchart TB
+    subgraph UCD["用户端业务域 · 48 表"]
+        CORE["核心实体 · 6 表<br/>users · videos · articles<br/>danmakus · comments · admins"]
+        VID["视频互动 · 8 表<br/>video_likes / coins / favorites<br/>favorite_folders · watch_laters<br/>danmaku_likes · comment_likes / dislikes"]
+        ART["文章互动 · 5 表<br/>article_comments · article_favorites<br/>article_coins · article_comment_likes / dislikes"]
+        SOC["关注社交 · 4 表<br/>user_follows · user_blocks<br/>user_follow_groups · _members"]
+        DMN["消息通知 · 5 表<br/>dm_conversations / participants / messages<br/>notifications · like_notif_mutes"]
+        DYN["动态系统 · 5 表<br/>user_dynamics · user_dynamic_likes<br/>dynamic_comments · dynamic_comment_likes / dislikes"]
+        LIV["直播系统 · 3 表<br/>live_rooms · live_featured_rooms<br/>live_warn_templates"]
+        HIS["历史与成长 · 6 表<br/>video / article / live_view_histories<br/>user_search_histories<br/>user_daily_tasks · coin_ledgers"]
+        MEXT["模块扩展 · 6 表<br/>video_chapters · video_bitrates · subtitles<br/>comment_images · scheduled_publishes<br/>notification_records"]
+    end
+
+    subgraph OPSD["运营端业务域 · 44 表"]
+        BASE["运营基础 · 9 表<br/>agent_profiles · agent_settings<br/>home_banners · hot_search_ops / display_layouts<br/>llm_configs · llm_providers<br/>reports · appeals"]
+        WF["工单风控 · 9 表<br/>tickets · ticket_messages · ticket_satisfactions<br/>risk_rules / hits / rate_counters<br/>black_white_lists<br/>user_capability_restrictions · usercap_reason_templates"]
+        CPY["版权管理 · 2 表<br/>copyright_complaints · counter_notices"]
+        BI["数据报表 · 3 表<br/>saved_reports · video_daily_stats<br/>video_similarities"]
+        CSX["客服后台 · 3 表<br/>cs_templates · cs_conversations · cs_messages"]
+        MON["运维监控 · 6 表<br/>task_logs · alert_rules · alert_records<br/>trace_records · cdn_refresh_tasks<br/>oss_lifecycle_rules"]
+        CFG["配置权限 · 12 表<br/>feature_flags · release_records<br/>admin_roles / permissions / role_permissions<br/>admin_role_assignments · admin_login_logs · audit_logs<br/>approval_flows / steps · special_pages · campaigns"]
+    end
+
+    CORE ==> VID
+    CORE ==> ART
+    CORE ==> SOC
+    CORE ==> DMN
+    CORE ==> DYN
+    CORE ==> LIV
+    CORE ==> HIS
+    CORE ==> MEXT
+
+    VID -.-> WF
+    VID -.-> CPY
+    DMN -.-> CSX
+    CORE -.-> BI
+    CFG -.-> WF
+    CFG -.-> CPY
+    CFG -.-> MON
+    CFG -.-> BASE
+    CORE -.-> MON
+
+    classDef core fill:#1f6feb22,stroke:#1f6feb,color:#c9d1d9
+    classDef ops fill:#f0883e22,stroke:#f0883e,color:#c9d1d9
+    class CORE core
+    class CFG ops
+```
+
+> 分区与上方 §5 各模块列表逐项对应，两域合计 48 + 44 = 92 张表。节点内只列代表表名，完整表名见上方表列。
 
 ### 存储策略
 
@@ -851,9 +1333,12 @@ src/
 | `video_likes`      | UNIQUE | `(user_id, video_id)`                                    | 每用户每视频限赞一次  |
 | `video_coins`      | UNIQUE | `(user_id, video_id)`                                    | 每用户每视频限投币一次 |
 | `video_favorites`  | UNIQUE | `(user_id, video_id, folder_id)`                         | 同视频可放多收藏夹   |
+| `watch_laters`     | UNIQUE | `(user_id, video_id)`                                    | 稍后再看不重复     |
 | `user_follows`     | UNIQUE | `(follower_id, followee_id)`                             | 防重复关注       |
+| `user_blocks`      | UNIQUE | `(blocker_id, blocked_id)`                               | 防重复拉黑       |
 | `dm_conversations` | UNIQUE | `(user_low, user_high)`                                  | 两人对话唯一      |
-| `audit_logs`       | INDEX  | `(admin_id, created_at)`, `(resource_type, resource_id)` | 审计追溯        |
+| `comment_likes`    | UNIQUE | `(user_id, comment_id)`                                  | 评论限赞一次      |
+| `audit_logs`       | INDEX  | `admin_id`, `created_at`, `resource`, `target_id`, `action` | 审计追溯（单列索引，非复合） |
 
 ***
 
@@ -864,7 +1349,7 @@ src/
 **协议:** REST over HTTP
 **认证:** Bearer JWT（用户端 + 管理端双体系）
 **版本化:** URL 路径 `/api/v1/`
-**端点总计:** \~380 条路由（admin \~190 + 用户端 \~140 + 公开 \~46 + WS 3 + 回调 2）
+**端点总计:** **433** 条路由（admin 210 + 用户端 164 + 公开 45 + WS 3 + 直播回调 2 + 基础 2 + 内部桥接 7），按 `internal/handler/router.go` 的分组变量逐条统计（无循环注册）。
 
 ### 6.1 认证端点
 
@@ -907,28 +1392,31 @@ POST   /api/v1/live/room/create          ← 创建直播间
 | 路由组    | 权限                 | 端点示例                                                                    |  数量 |
 | ------ | ------------------ | ----------------------------------------------------------------------- | :-: |
 | 管理员认证  | 无                  | `POST /admin/auth/login`, `POST /admin/auth/refresh`, `GET /admin/me`   |  3  |
-| 数据概览   | 只读                 | `GET /admin/dashboard`, `GET /admin/bi/summary`, `GET /admin/bi/*`      |  10 |
-| 用户管理   | `user.ban`         | `GET /admin/users`, `POST /admin/users/:id/ban\|unban\|delete`          |  6  |
-| 视频审核   | `video.approve`    | `GET /admin/videos`, `POST /admin/videos/:id/approve\|reject\|delete`   |  7  |
-| 专栏审核   | `article.approve`  | `GET /admin/articles`, `POST /admin/articles/:id/approve\|reject`       |  6  |
-| 直播管理   | `live.manage`      | `GET /admin/live/rooms`, `POST /admin/live/room/:id/ban\|warn`          |  9  |
-| 动态管理   | `dynamic.manage`   | `GET /admin/dynamics`, `GET /admin/dynamics/unified`(三表UNION)           |  4  |
-| 评论管理   | `comment.delete`   | `GET /admin/comments`, `POST /admin/comments/:id/delete`                |  4  |
-| 举报处理   | `ticket.handle`    | `GET /admin/reports`, `POST /admin/reports/:id/handle`                  |  5  |
-| 工单管理   | `ticket.handle`    | `GET /admin/tickets`, `POST /admin/tickets/:id/assign\|close`           |  10 |
-| 风控管理   | `risk.manage`      | `GET /admin/risk/rules`, `POST /admin/risk/rules`, CRUD + toggle        |  10 |
-| 版权管理   | `copyright.handle` | `GET /admin/copyright/complaints`, accept/reject/takedown               |  6  |
-| 客服后台   | `cs.manage`        | `GET /admin/cs/conversations`, assign/message/close + templates         |  9  |
-| 运维监控   | `ops.manage`       | `GET /admin/ops/tasks\|health\|traces`, CRUD + evaluate/sync            |  20 |
-| 配置发布   | `config.manage`    | `GET /admin/config/feature-flags`, releases CRUD + deploy/rollback      |  11 |
-| 权限审计   | `rbac.manage`      | `GET /admin/rbac/*`, roles/permissions/admins/audit-logs/approval-flows |  19 |
-| Banner | `banner.manage`    | `GET /admin/home-banners`, CRUD + upload-image                          |  5  |
-| 热搜运营   | `hotsearch.manage` | `GET /admin/hot-search/ops`, CRUD + reorder/boost                       |  10 |
-| AI 角色  | `agent.manage`     | `GET /admin/agent-profiles`, CRUD + avatar + settings                   |  9  |
-| 系统设置   | `setting.manage`   | `GET /admin/settings`, PUT + LLM config/providers CRUD                  |  12 |
-| 字幕管理   | `subtitle.manage`  | `GET /admin/subtitles`, CRUD                                            |  4  |
-| 专题活动   | `special.manage`   | `GET /admin/specials\|campaigns`, CRUD                                  |  8  |
-| 播放器高级  | `video.approve`    | `GET /admin/videos/:id/chapters\|bitrates`, CRUD                        |  6  |
+| 数据概览   | 只读 + `dashboard:export` | `GET /admin/dashboard`, `GET /admin/bi/*`（8 只读 + 3 导出）              |  12 |
+| 用户管理   | `user:ban`         | `GET /admin/users`, `POST /admin/users/:id/ban\|unban\|delete`          |  6  |
+| 视频审核   | `video:approve`    | `GET /admin/videos`, `POST /admin/videos/:id/approve\|reject\|delete`   |  7  |
+| 专栏审核   | `article:approve`  | `GET /admin/articles`, `POST /admin/articles/:id/approve\|reject`       |  6  |
+| 直播管理   | `live:manage`      | `GET /admin/live/rooms`, `POST /admin/live/room/:id/ban\|warn`          |  12 |
+| 动态管理   | `dynamic:manage`   | `GET /admin/dynamics`, `GET /admin/dynamics/unified`(三表UNION)           |  5  |
+| 评论管理   | `comment:delete`   | `GET /admin/comments`, `POST /admin/comments/:id/delete`                |  6  |
+| 举报处理   | `ticket:handle`    | `GET /admin/reports`, `POST /admin/reports/:id/handle`                  |  4  |
+| 工单管理   | `ticket:handle`    | `GET /admin/tickets`, `POST /admin/tickets/:id/assign\|close`           |  10 |
+| 风控管理   | `risk:manage`      | `GET /admin/risk/rules`, CRUD + toggle；`/admin/appeals*`、`/admin/usercap/*` |  20 |
+| 版权管理   | `copyright:handle` | `GET /admin/copyright/complaints`, accept/reject/takedown               |  6  |
+| 客服后台   | `cs:manage`        | `GET /admin/cs/conversations`, assign/message/close + templates         |  9  |
+| 运维监控   | `ops:manage`       | `GET /admin/ops/tasks\|health\|traces`, CRUD + evaluate/sync            |  21 |
+| 配置发布   | `config:manage`    | `GET /admin/config/feature-flags`, releases CRUD + deploy/rollback      |  12 |
+| 权限审计   | `rbac:manage`      | `GET /admin/rbac/*`, roles/permissions/admins/audit-logs/approval-flows |  20 |
+| 首页轮播   | `banner:manage`    | `GET /admin/home-banners`, CRUD + upload-image                          |  6  |
+| 热搜运营   | `hotsearch:manage` | `GET /admin/hot-search/ops`, CRUD + reorder/boost                       |  11 |
+| AI 角色  | `agent:manage`     | `GET /admin/agent-profiles`, CRUD + avatar + settings                   |  8  |
+| 系统设置   | `setting:manage`   | `GET /admin/settings`, PUT + LLM config/providers CRUD                  |  9  |
+| 字幕管理   | `subtitle:manage`  | `GET /admin/subtitles`, CRUD                                            |  4  |
+| 专题活动   | `special:manage`   | `GET /admin/specials\|campaigns`, CRUD                                   |  9  |
+| 播放器高级  | `video:approve`    | `GET /admin/videos/:id/chapters\|bitrates`, CRUD                         |  6  |
+| **合计** | —                  | 上述 23 组                                                     | **212** |
+
+> 计数口径：`admin` 组直挂只读路由（`/admin/dashboard`、`/admin/bi/*` 等）+ 该组权限子分组，逐条统计 `/api/v1/admin/*` 注册；含 2 个公开的管理员认证端点（`/admin/auth/login|refresh`）。
 
 ### 6.4 错误响应约定
 
@@ -937,6 +1425,8 @@ POST   /api/v1/live/room/create          ← 创建直播间
 ```
 
 HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 / 404 不存在 / 500 服务器错误。
+
+> **注意（代码实测）:** `40300` 存在两条不同文案路径——`errcode.CodeForbidden` 输出 `"无权限执行此操作"`，而 `middleware/rbac_permission.go` 输出 `"无操作权限: " + resource + "." + action`（用**点号**拼接）。而权限码本身在 `rbac_seed.go` 中以**冒号**存储（`user:ban`）。上例取自中间件路径。
 
 ***
 
@@ -1012,7 +1502,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | NFR-LIVE-1  | 性能   | 直播延迟 ≤3s（HTTP-FLV/RTMP）             | Live Streaming        | ADR-015         | 已处理 |
 | NFR-LIVE-2  | 性能   | 单直播间 WebSocket 多观众并发                | Live WS               | ADR-015         | 已处理 |
 | NFR-REC-1   | 性能   | 推荐接口延迟 ≤50ms（Redis缓存）               | Feed Engine           | ADR-016         | 已处理 |
-| NFR-REC-2   | 离线   | ItemCF 离线相似度计算                      | Feed Engine           | ADR-016         | 待处理 |
+| NFR-REC-2   | 离线   | ItemCF 离线相似度计算                      | Feed Engine           | ADR-016         | 部分 |
 
 ### 覆盖缺口
 
@@ -1034,27 +1524,27 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 | 层级       | 选择                           | 版本         | 理由（→ 驱动因素）                                       | ADR     |
 | -------- | ---------------------------- | ---------- | ------------------------------------------------ | ------- |
-| 前端框架     | Vue 3 + Vite                 | 3.5+ / 5.x | SPEC NF-5 约束；纯 SPA 无需 SSR；中文社区成熟                 | —       |
+| 前端框架     | Vue 3 + Vite                 | 3.5 / 6.x  | SPEC NF-5 约束；纯 SPA 无需 SSR；中文社区成熟                 | —       |
 | 前端状态     | Vuex                         | 4.x        | 管理后台状态集中管理；配合 `vue-router` 路由守卫                  | —       |
 | 前端 UI    | Element Plus                 | 2.x        | 中文社区成熟，管理后台组件库丰富                                 | —       |
-| 前端图表     | ECharts                      | 5.x        | BI 报表柱状/饼图/折线面积/多系列图                             | —       |
-| 后端语言     | Go                           | 1.24+      | SPEC 约束；高性能并发；标准项目布局                             | —       |
+| 前端图表     | ECharts                      | 6.x        | BI 报表柱状/饼图/折线面积/多系列图                             | —       |
+| 后端语言     | Go                           | 1.25       | SPEC 约束；高性能并发；标准项目布局                             | —       |
 | 后端框架     | Gin                          | 1.10+      | 高性能 HTTP 路由；中间件链式组合；社区成熟                         | ADR-005 |
 | ORM      | GORM v2                      | 2.x        | AutoMigrate 消除 SQL 管理；预加载处理关联查询                  | ADR-002 |
-| 数据库      | MySQL                        | 8.x        | 关系型数据（86 模型多表关联）；阿里云 RDS 集成                      | ADR-002 |
+| 数据库      | MySQL                        | 8.0        | 关系型数据（92 模型多表关联）；阿里云 RDS 集成                      | ADR-002 |
 | 缓存       | Redis                        | 7.x        | 播放量 INCR；弹幕冷却；Token 黑名单；热搜 ZSET                  | ADR-002 |
-| 消息队列     | RabbitMQ                     | 3.x        | 视频转码异步解耦；死信队列                                    | ADR-002 |
+| 消息队列     | RabbitMQ                     | 3.12       | 视频转码异步解耦；死信队列                                    | ADR-002 |
 | 文件存储     | 阿里云 OSS + 本地                 | —          | SPEC 约束；本地文件 Docker 卷兜底                          | ADR-002 |
 | 认证       | JWT (golang-jwt)             | 5.x        | 无状态认证；双 Token 轮换；独立管理员体系                         | ADR-003 |
 | 密码哈希     | bcrypt                       | —          | SPEC 约束（R-AUTH-2）；cost=12                        | —       |
 | 日志       | Zap                          | 1.x        | 结构化高性能日志；JSON 格式                                 | —       |
 | 实时通信     | gorilla/websocket            | 1.5+       | 三套独立 WS 通道                                       | —       |
 | 直播流媒体    | Node-Media-Server            | 2.x（npm）   | RTMP 推流→HTTP-FLV（PC flv.js）/ RTMP 原生（App nvue）播放 | ADR-015 |
-| 视频处理     | FFmpeg                       | 7.0+       | H.264 MP4 转码 + 封面截帧                              | —       |
+| 视频处理     | FFmpeg                       | 外部依赖       | H.264 MP4 转码 + 封面截帧（路径由 `FFMPEG_PATH` 指定）             | —       |
 | 搜索引擎     | Elasticsearch                | 8.x（可选）    | ik 中文分词全文搜索                                      | —       |
 | Markdown | bluemonday + goldmark        | —          | 文章安全渲染                                           | —       |
 | IP 定位    | ip2region                    | —          | IP 归属地查询                                         | —       |
-| 移动端框架    | uni-app + Vue 3 + TS + Pinia | 3.x        | 复用现有 180+ 端点；主色 #FB7299；2026-08 立项               | —       |
+| 移动端框架    | uni-app + Vue 3 + TS + Pinia | 3.x        | 复用后端 209 个用户端/公开端点，其中调用 43 个；主色 #FB7299；2026-08 立项    | —       |
 
 **考虑的替代方案:**
 
@@ -1156,7 +1646,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 ### 扩展路径
 
 ```
-当前容量: ~50 并发管理员，单实例，单码率，86 模型
+当前容量: ~50 并发管理员，单实例，单码率，92 模型
   │
   ├── P0（当前）: 播放器增强 + 多码率 + 字幕完善 + 合集 + 创作者数据中心
   │   → 播放体验对标 B站"能看"
@@ -1195,7 +1685,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ## 12. 移动端架构（2026-08 新增）
 
-> 2026-08-16 立项，2026-08-20 云打包发布 v0.1.0。位于 `cakecake-vue/cakecake-app/`，独立 npm 工程，复用现有 Go 后端 180+ 端点（约 90% 移动端需求已覆盖）。
+> 2026-08-16 立项，2026-08-20 云打包发布 v0.1.0。位于 `cakecake-vue/cakecake-app/`，独立 npm 工程，复用后端用户端/公开端点（`authd` 164 + `pub` 45 = 209 个），实际调用 43 个路径。
 
 ### 12.1 技术栈与结构
 
@@ -1204,8 +1694,8 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 框架    | uni-app + Vue 3 + TypeScript + Vite      | CLI 工程（非 HBuilderX 向导工程）                              |
 | 状态    | Pinia                                    | 与 PC 端 Vuex 4 并存，互不干扰                                 |
 | UI    | uni-ui + 自定义组件                           | 主色 #FB7299（B 站粉）                                      |
-| 页面    | 4 个 tab + 19 个二级页面                       | tab：首页/关注/会员购/我的，中间 midButton 发布器                     |
-| API 层 | `src/api/` 19 个模块                        | axios + JWT 401 自动刷新 + `{code,msg,data}` 信封           |
+| 页面    | 4 个 tab + 16 个二级页面（`pages.json` 共 20 页）    | tab：首页/关注/会员购/我的，中间 midButton 发布器                     |
+| API 层 | `src/api/` 15 个模块                        | axios + JWT 401 自动刷新 + `{code,msg,data}` 信封           |
 | 构建    | `npm run build:h5` / `npm run build:app` | H5 → `dist/build/h5/`；App → `dist/build/app/`（www 资源） |
 
 ### 12.2 后端地址机制
@@ -1218,7 +1708,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 | ID         | 决策                                                                                 | 理由                                                                        |
 | ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| MD-ADR-001 | 复用 Go API，不自建 BFF                                                                  | 180+ 端点覆盖 90% 需求；1 人团队维护 BFF 是净负担                                         |
+| MD-ADR-001 | 复用 Go API，不自建 BFF                                                                  | 后端 209 个用户端/公开端点已覆盖移动端需求；1 人团队维护 BFF 是净负担                                        |
 | MD-ADR-002 | 图标优先纯 CSS 绘制，其次静态 PNG，emoji/svg 不可靠                                                | HBuilder 基座 WebView 对 emoji/svg/彩色 img 渲染不可靠（8/20 信封图标排查实证）               |
 | MD-ADR-003 | 安全区适配：`App.vue` onLaunch 注入 `--status-bar-height` + 全局 `.safe-area-top !important` | uni-app App-vue 页面不自动提供该变量；scoped `padding` 简写权重 (0,2,0) 会静默覆盖全局类 (0,1,0) |
 
@@ -1254,12 +1744,15 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 
 ### 参考代码（从代码逆向提取，非推测）
 
-- **Go 源文件:** 193 个（`internal/` 目录）
-- **GORM 模型:** 86 个（`internal/data/migrate.go` AutoMigrate 列表）
+- **Go 源文件:** 193 个（`internal/` 目录，非测试；含测试 227）
+- **GORM 模型:** 92 个（`internal/data/migrate.go` AutoMigrate 列表 + `search_history_migrate.go` 的 `UserSearchHistory`）
+- **数据表:** 92 张（GORM `schema.Parse` 逐模型推导，无重名）
 - **RBAC 权限码:** 23 种（`internal/data/rbac_seed.go`）
-- **路由注册:** \~380 条（`internal/handler/router.go`）
-- **Service 文件:** 19 个（`internal/service/`）
-- **Handler 文件:** 83 个（`internal/handler/`，含 25 个 admin handler + 58 个用户端）
+- **路由注册:** 433 条（`internal/handler/router.go`，逐条统计）
+- **Service 文件:** 19 个（`internal/service/`，非测试；含测试 22）
+- **Handler 文件:** 86 个（`internal/handler/`，非测试；含测试 99；其中 27 个 admin + 59 个用户端/公共）
+- **前端 admin 页面:** 25 个（`src/pages/admin/`，另 AdminLogin 为登录页）+ 5 个共享组件（AdminLayout / AdminDataTable / AdminFormDialog / BiCard / BiChart）
+- **移动端页面:** 20 个（`src/pages.json`：4 tab + 16 二级；19 个 `.vue` + 1 个 `.nvue`）
 
 ### 参考资料
 
@@ -1282,6 +1775,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 | 4.1 | 2026-08-20 | Winston | 缺口修复落地：ADR-016 状态更新（ItemCF 离线计算 itemcf.go + scheduler + 在线召回）；§7 覆盖缺口复核（NFR-SEC-4 限流与 FR-035 创作者中心标记已完成）；新增 `migrations/` 版本化迁移（DB\_MIGRATE\_TOOL 开关，零依赖，文件兼容 golang-migrate）；新增 `scripts/backup.sh` 冷备 |
 | 4.2 | 2026-08-20 | Winston | 新增 ADR-018 轻量状态机治理：statemachine 包（8 域）+ 6 域接入（视频/文章/工单/版权/审批）+ 3 时间驱动执行器（定时发布消费者补齐/SLA 按 sla\_deadline/自动解封走状态机）；main.go 旧 SLA/unban 逻辑收敛入 scheduler                                                    |
 | 4.3 | 2026-08-22 | Winston | ADR-015 补全：直播流媒体选型澄清为 nms（本地默认）/ SRS（生产正轨）双轨并存，新增完整详情段（Context/Decision/Consequences/权衡矩阵/替代方案/重审条件）；同步 §1 范围/基础设施、§2 组件图、§4 Live Streaming 组件、§7 FR-009/NFR-LIVE-1、§8 技术栈、§10 部署环境与拓扑                  |
+| 4.4 | 2026-09-15 | Winston | **全量代码核对修复**（GORM `schema.Parse` 实测 + 路由解析 + 前端清单）：模型/表数 86→92、Admin 端点 ~190→210、用户端 ~140→164、总路由 ~380→433、Handler 83→86（27 admin+59 用户端）、Service 21→22；§5 修正 6 处表名（`a_comment_*`→`article_comment_*`、`u_follow_group_members`→`user_follow_group_members`、`d_comment_*`→`dynamic_comment_*`、`hot_search_display_layout`→`..._layouts`）并补录 `appeals`/`live_featured_rooms`/`video_similarities`/`user_capability_restrictions`/`usercap_reason_templates` 5 张漏表，核心实体字段数改为实测值（users 28 / videos 27 / articles 21）；§5 分组改为 16 组不重不漏、合计 92；ADR-006 更正 `recordAudit` 签名与 `audit_logs` 列名/索引；ADR-018 状态机 8→9 域、接入范围按代码逐点核实；ADR-007 错误码 20+→38；ADR-004 补 `report:handle`；§8 版本对齐（Go 1.25 / Vite 6 / ECharts 6 / MySQL 8.0 / RabbitMQ 3.12）；§12 端点与页面数修正；§4 前端 `api/admin` 模块清单更正为 18 个、共享组件接入页数 9→8；删除 ER 图中 3 条无外键支撑的虚构关系（`black_white_lists→risk_hit_logs`、`cs_templates→cs_messages`、`feature_flags→release_records`）；ItemCF 状态由"待上线"更正为"离线+在线召回已上线" |
 
 ***
 
