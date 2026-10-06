@@ -8,7 +8,7 @@
 
 本项目（[PandaGuGu/Copy](https://github.com/PandaGuGu/Copy)）在 earthcake2233 原有项目基础上进行了大幅改造与扩展，主要变更包括但不限于：
 
-- 数据库从 43 张表扩展至 **84 张表**，共 15 个业务模块
+- 数据库从 43 张表扩展至 **92 张表**，共 16 组业务归类
 - 运营后台从基础管理扩展至 **23 个模块**（工单/风控/版权/BI/运维/配置发布/RBAC审计等）
 - **直播系统**：SRS RTMP 推流 → flv.js HTTP-FLV 播放 → WebSocket 实时聊天+6种礼物+弹幕飘屏 → 观众追踪 → 管理员警告/封禁
 - 视频转码管线重构（FFmpeg + RabbitMQ + 阿里云 OSS）
