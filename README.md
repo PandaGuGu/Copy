@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&style=flat-square" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&style=flat-square" alt="Vue">
   <img src="https://img.shields.io/badge/uni--app-3.x-2C9C6F?style=flat-square" alt="uni-app">
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/license-Non--Commercial-red?style=flat-square" alt="License: Non-Commercial">
   <img src="https://img.shields.io/badge/tables-92-orange?style=flat-square" alt="92 Tables">
   <img src="https://img.shields.io/badge/admin_modules-23-blueviolet?style=flat-square" alt="23 Admin Modules">
 </p>
@@ -225,7 +225,7 @@ go test ./... -count=1       # 单元测试：SQLite 内存库 + miniredis，无
 go test -cover ./... -count=1 # 覆盖率
 ```
 
-单元测试覆盖 `internal/{handler,service,ws,model,pkg}/...` 等核心模块（当前 `internal/handler` 部分用例依赖测试库初始化，需要 `trace_records` 等表已建，否则 trace 中间件会空指针 panic 而失败）。
+单元测试覆盖 `internal/{handler,service,ws,model,pkg}/...` 等核心模块，基于 SQLite 内存库（测试 setup 内 `SetMaxOpenConns(1)` 保证所有操作走同一内存库，避免 `:memory:` 多连接导致的 `no such table` 问题）+ miniredis，无需外部依赖。
 
 ### 前端（Vitest / Vue）
 
@@ -271,4 +271,4 @@ k6 run scripts/k6/load.js -e BASE_URL=http://127.0.0.1:8080   # k6 压测
 
 - 勿提交 `.env`、密钥与数据库密码；`.gitignore` 只拦截未跟踪文件，提交前 `git status` 确认。
 - 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
-- 后端基于 [earthcake2233/cakecake](https://github.com/earthcake2233) 二次开发，遵循开源协议。
+- 后端基于 [earthcake2233/cakecake](https://github.com/earthcake2233) 二次开发，遵循 [LICENSE](./LICENSE) 中的**非商业许可**（严禁任何商业用途，详见 LICENSE）。
