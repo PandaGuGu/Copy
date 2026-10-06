@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,11 +40,34 @@ func TestHubFanoutCrossInstance(t *testing.T) {
 	defer conn.Close()
 	<-joinDone // ensure server-side joined before publishing
 
-	// Fan out via the relay (Redis) — a second/hmi API pod would receive the same.
-	api.hubFanout(context.Background(), 7, gin.H{"type": "message", "username": "alice", "content": "hi"})
+	// Fan out via the relay (Redis Pub/Sub) — a second/API pod would receive
+	// the same. Publishing is fire-and-forget while the subscriber goroutine
+	// (started in newTestAPI) may not have completed SUBSCRIBE yet, so keep
+	// re-publishing until the client receives. This absorbs the unavoidable
+	// subscribe/publish race instead of flaking on it under parallel test load.
+	payload := gin.H{"type": "message", "username": "alice", "content": "hi"}
+	stop := make(chan struct{})
+	var stopOnce sync.Once
+	stopPublish := func() { stopOnce.Do(func() { close(stop) }) }
+	defer stopPublish()
 
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	go func() {
+		api.hubFanout(context.Background(), 7, payload)
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				api.hubFanout(context.Background(), 7, payload)
+			}
+		}
+	}()
+
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_, data, err := conn.ReadMessage()
+	stopPublish()
 	require.NoError(t, err)
 
 	var got map[string]interface{}
