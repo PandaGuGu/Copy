@@ -12,7 +12,7 @@
 #   - ADMIN_SEED_PASSWORD（默认 change-me-admin）
 #   请在 .env 中覆盖上述变量。
 #
-# 包含: MySQL / Redis / RabbitMQ / SRS(直播) / Go后端 / Nginx
+# 包含: MySQL / Redis / RabbitMQ / Elasticsearch(搜索) / SRS(直播) / Go后端 / Nginx
 # 文件存储在本地卷 uploads_data，无需任何云服务。
 # ============================================================
 
@@ -82,11 +82,47 @@ services:
     networks:
       - cake-net
 
+  # ── 搜索引擎 ──
+  # 注意：ES 需要 vm.max_map_count >= 262144，Windows/WSL2 下默认偏低，
+  # 首次启动前请运行桌面上的启动脚本（它会自动设置），否则容器会反复退出。
+  elasticsearch:
+    # 用 Elastic 官方仓库镜像：Docker Hub 上的 library/elasticsearch 在国内镜像站
+    # 能解析 manifest 但 blob 拉不动，会一直卡住。
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: cake-es
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.ml.enabled=false
+      # 16G 内存的机器，堆锁死在 512m，别让它自己涨
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
+    networks:
+      - cake-net
+
   # ── 直播推流服务器 ──
   srs:
     image: ossrs/srs:5
     container_name: cake-srs
     restart: unless-stopped
+    # 镜像默认 CMD 是 `./objs/srs -c conf/docker.conf`，不覆盖的话挂载进来的
+    # deploy/srs-docker.conf 完全不会生效（http_hooks 不触发 → 后端永远收不到开播通知）。
+    command: ["./objs/srs", "-c", "conf/srs.conf"]
     volumes:
       - ./deploy/srs-docker.conf:/usr/local/srs/conf/srs.conf:ro
     ports:
@@ -94,7 +130,8 @@ services:
       - "${SRS_FLV_PORT:-8000}:8080"       # HTTP-FLV 播放
       - "${SRS_API_PORT:-1985}:1985"       # HTTP API
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:1985/api/v1/versions || exit 1"]
+      # SRS 镜像里没有 curl 也没有 wget，只能用 bash 的 /dev/tcp 探端口
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1985' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -122,8 +159,10 @@ services:
       - TEMP_UPLOAD_DIR=/app/data/tmp
       - FFPROBE_PATH=ffprobe
       - FFMPEG_PATH=ffmpeg
-      # 搜索（可选，留空则搜索页不可用）
-      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-}
+      # 搜索：默认连 compose 内的 elasticsearch 容器
+      # （.env 里的 ELASTICSEARCH_URL 是给原生运行用的，容器内不生效；
+      #   要接外部 ES/OpenSearch/Bonsai 请改这里的 ES_URL）
+      - ELASTICSEARCH_URL=${ES_URL:-http://elasticsearch:9200}
       - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME:-}
       - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
       # 本地文件存储（无需任何 OSS/MinIO 配置）
@@ -152,6 +191,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     networks:
       - cake-net
 
@@ -163,11 +204,13 @@ services:
     volumes:
       - ./cakecake-vue/bilibili-vue/dist:/usr/share/nginx/html:ro
       - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
-      - uploads_data:/usr/share/nginx/html/uploads:ro
+      - uploads_data:/var/www/uploads:ro
     ports:
       - "${FRONTEND_PORT:-80}:80"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      # 用 127.0.0.1 而不是 localhost：busybox wget 会先试 ::1，
+      # 而 nginx 只监听 IPv4（default.conf 是只读挂载，不会自动补 IPv6）
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -181,6 +224,7 @@ volumes:
   mysql_data:
   redis_data:
   rabbitmq_data:
+  es_data:
   uploads_data:
   backend_tmp:
 

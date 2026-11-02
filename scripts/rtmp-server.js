@@ -5,14 +5,15 @@ const path = require("path");
 // Auto-detect project root from this script's location (two levels up from scripts/)
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const HLS_DIR = path.join(PROJECT_ROOT, "data", "live");
-const GO_API = "http://127.0.0.1:18080/api/v1/live/callback";
+const GO_API = process.env.GO_API || "http://127.0.0.1:8080/api/v1/live/callback";
 
 // Try to find ffmpeg from common locations, fall back to PATH
 const { execSync } = require("child_process");
-let ffmpegPath = "ffmpeg";
+let ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg";
 try {
   const out = execSync("ffmpeg -version 2>&1", { encoding: "utf8", timeout: 5000 });
-  if (out) ffmpegPath = "ffmpeg";
+  // 已显式指定 FFMPEG_PATH 时优先使用，避免 Windows 下 spawn("ffmpeg") 解析不到 .exe
+  if (out && !process.env.FFMPEG_PATH) ffmpegPath = "ffmpeg";
 } catch (e) {
   // ffmpeg not on PATH — try Windows common locations
   const cmn = require("os").platform() === "win32" ? [
@@ -41,7 +42,8 @@ const config = {
   },
   http: {
     port: 8000,
-    mediaroot: HLS_DIR,
+    // 使用相对路径：ffmpeg tee muxer 会把 "C:" 的冒号当作选项分隔符，导致切片写不出来
+    mediaroot: path.relative(PROJECT_ROOT, HLS_DIR).split(path.sep).join("/"),
     allow_origin: "*",
     api: true // 暴露 /api/streams 供服务端/App 查询活跃直播流
   },
@@ -70,6 +72,11 @@ function getStreamKey(args) {
         return p[p.length - 1];
       }
       if (arg.streamName) return arg.streamName;
+    }
+    // nms v2 事件签名 (sessionId, StreamPath, args) —— StreamPath 为字符串
+    if (typeof arg === 'string' && arg.startsWith('/')) {
+      const p = arg.replace(/^\//, '').split('/');
+      return p[p.length - 1];
     }
   }
   return 'unknown';

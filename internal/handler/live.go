@@ -345,21 +345,45 @@ func (a *API) EndLiveRoom(c *gin.Context) {
 // SRS Callbacks (verify stream_key on publish)
 // ──────────────────────────────────────────────
 
+// srsHookStreamKey extracts the stream name from an SRS http_hooks request.
+//
+// SRS 5 posts a JSON body (Content-Type: application/json):
+//
+//	{"action":"on_publish","client_id":"...","vhost":"__defaultVhost__",
+//	 "app":"live","stream":"<stream_key>","param":"", ...}
+//
+// Older node-media-server style configs use query/form fields instead, so all
+// three shapes (query / form / JSON) are accepted.
+func srsHookStreamKey(c *gin.Context) string {
+	keys := []string{"stream", "name", "stream_key"}
+	for _, k := range keys {
+		if v := strings.TrimSpace(c.Query(k)); v != "" {
+			return v
+		}
+	}
+	for _, k := range keys {
+		if v := strings.TrimSpace(c.PostForm(k)); v != "" {
+			return v
+		}
+	}
+	var body struct {
+		StreamKey string `json:"stream_key"`
+		Stream    string `json:"stream"`
+		Name      string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&body); err == nil {
+		for _, v := range []string{body.Stream, body.Name, body.StreamKey} {
+			if s := strings.TrimSpace(v); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
 // SRSOnPublish POST /api/v1/live/callback/on_publish — node-media-server calls this when stream starts
 func (a *API) SRSOnPublish(c *gin.Context) {
-	streamKey := strings.TrimSpace(c.Query("stream") + c.PostForm("stream"))
-	if streamKey == "" {
-		streamKey = strings.TrimSpace(c.Query("name") + c.PostForm("name"))
-	}
-	// Also try JSON body
-	if streamKey == "" {
-		var body struct {
-			StreamKey string `json:"stream_key"`
-		}
-		if err := c.ShouldBindJSON(&body); err == nil && body.StreamKey != "" {
-			streamKey = body.StreamKey
-		}
-	}
+	streamKey := srsHookStreamKey(c)
 	if streamKey == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
@@ -386,18 +410,7 @@ func (a *API) SRSOnPublish(c *gin.Context) {
 
 // SRSOnDone POST /api/v1/live/callback/on_done — node-media-server calls when stream ends
 func (a *API) SRSOnDone(c *gin.Context) {
-	streamKey := strings.TrimSpace(c.Query("stream") + c.PostForm("stream"))
-	if streamKey == "" {
-		streamKey = strings.TrimSpace(c.Query("name") + c.PostForm("name"))
-	}
-	if streamKey == "" {
-		var body struct {
-			StreamKey string `json:"stream_key"`
-		}
-		if err := c.ShouldBindJSON(&body); err == nil && body.StreamKey != "" {
-			streamKey = body.StreamKey
-		}
-	}
+	streamKey := srsHookStreamKey(c)
 	if streamKey == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return

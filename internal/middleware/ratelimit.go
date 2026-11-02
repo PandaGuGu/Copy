@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
 	"minibili/internal/errcode"
+	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/resp"
 )
 
@@ -40,9 +42,10 @@ func DefaultRateLimitConfig() RateLimitConfig {
 			"/api/v1/health": true,
 		},
 		SkipPrefixes: []string{
-			"/api/v1/ws/",       // WebSocket upgrade
-			"/live-hls/",        // HLS streaming
-			"/uploads/",         // static files
+			"/api/v1/ws/",              // WebSocket upgrade
+			"/api/v1/live/callback/",   // media-server callbacks (authenticated by stream key)
+			"/live-hls/",               // HLS streaming
+			"/uploads/",                // static files
 		},
 	}
 }
@@ -56,7 +59,7 @@ func DefaultRateLimitConfig() RateLimitConfig {
 //   - admin:   identified by admin_id from JWT context
 //
 // Each tier has its own window and max. Exceeded requests receive 429.
-func RateLimiter(rdb *redis.Client, cfg RateLimitConfig, reg *MetricsRegistry) gin.HandlerFunc {
+func RateLimiter(rdb *redis.Client, cfg RateLimitConfig, reg *MetricsRegistry, jwtm *jwttoken.Manager) gin.HandlerFunc {
 	if !cfg.Enabled {
 		return func(c *gin.Context) { c.Next() }
 	}
@@ -94,7 +97,28 @@ func RateLimiter(rdb *redis.Client, cfg RateLimitConfig, reg *MetricsRegistry) g
 				window, max = cfg.UserWindow, cfg.UserMax
 				id = fmt.Sprintf("user:%d", uid)
 			}
-		} else {
+		}
+
+		// The limiter runs globally, before per-group auth middlewares, so the
+		// context is usually still empty here. Identify the caller from the
+		// bearer token directly; otherwise every authenticated request would be
+		// charged to the guest/IP bucket and real users would hit 429 instantly.
+		if id == "" && jwtm != nil {
+			if h := c.GetHeader("Authorization"); strings.HasPrefix(h, "Bearer ") {
+				tok := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+				if tok != "" {
+					if aid, _, err := jwtm.ParseAdminAccess(tok); err == nil {
+						window, max = cfg.AdminWindow, cfg.AdminMax
+						id = fmt.Sprintf("admin:%d", aid)
+					} else if uid2, _, err2 := jwtm.ParseAccess(tok); err2 == nil {
+						window, max = cfg.UserWindow, cfg.UserMax
+						id = fmt.Sprintf("user:%d", uid2)
+					}
+				}
+			}
+		}
+
+		if id == "" {
 			// Guest — use client IP.
 			window, max = cfg.GuestWindow, cfg.GuestMax
 			id = "ip:" + c.ClientIP()

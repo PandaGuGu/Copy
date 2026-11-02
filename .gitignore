@@ -97,3 +97,12 @@ cakecake-vue/cakecake-app/unpackage/
 
 # ── 本地调试日志/模拟器截图（勿提交）──
 /logs/
+
+# ── Rust 客户端（cakecake-rs）构建产物 ──
+/cakecake-rs/target/
+/spikes/**/target/
+**/*.rlib
+**/*.rmeta
+
+# ── 本地运行时目录（MySQL/Redis/RabbitMQ 原生进程、模拟器、临时截图，勿提交）──
+/_runtime/

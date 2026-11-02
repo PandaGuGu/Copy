@@ -66,6 +66,15 @@ export default defineConfig(({ mode }) => {
               if (ip) proxyReq.setHeader("X-Forwarded-For", ip);
             });
           }
+        },
+        /** 本地存储（OSS 未配置时）与 HLS 直播切片由后端 :8080 直接提供，dev 下需代理 */
+        "/uploads": {
+          target: backend,
+          changeOrigin: true
+        },
+        "/live-hls": {
+          target: backend,
+          changeOrigin: true
         }
       }
     : {

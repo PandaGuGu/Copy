@@ -1,0 +1,10 @@
+[package]
+name = "egui-danmaku-spike"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.37"
+
+[profile.release]
+opt-level = 3

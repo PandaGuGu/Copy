@@ -1,33 +1,38 @@
-# Ignore everything by default
+# 先排除一切，再按需放行。
+# 注意：放行目录必须写成 `dir/**`，只写 `dir/` 的话目录里的文件仍然被排除
+# （这是 Docker 的匹配规则，踩过一次构建上下文只有 800KB）。
 **/*
-
-# Allow Go source
 !go.mod
 !go.sum
 !go.work
-!cmd/
-!internal/
-!vendor/
-!configs/
+!cmd/**
+!internal/**
+!vendor/**
+!configs/**
 
-# Exclude unnecessary files
-**/.git
+# 放行之后再做精细排除，后面的规则优先级更高
 **/*_test.go
+**/.git
 **/node_modules
 **/.env
+**/*.env.*
 **/*.exe
 **/*.bak
-**/logs/
-**/data/
-**/docs/
-**/deploy/
-**/bmad-output/
-**/.workbuddy/
-**/cakecake-vue/
-**/scripts/
 **/nul
 **/snapshot.txt
 **/compiled-index.txt
 **/erl_crash.dump
-**/*.env.*
-!configs/sensitive_words.txt
+
+# 只排除根目录下的这些，别用 **/data/ 这种写法，会把 internal/data 这个 Go 包一起干掉
+/data/
+/logs/
+/docs/
+/deploy/
+/bmad-output/
+/.workbuddy/
+/cakecake-vue/
+/scripts/
+/spikes/
+/cakecake-rs/
+/_runtime/
+/bin/

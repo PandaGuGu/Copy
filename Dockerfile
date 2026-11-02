@@ -1,5 +1,7 @@
 # ─── Stage 1: Build Go binary ───
-FROM golang:1.22-alpine AS builder
+# 与 go.mod 的 `go 1.25.0` 对齐：低于 1.25 会直接报
+# "go.mod requires go >= 1.25.0"
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -29,7 +31,10 @@ COPY --from=builder /build/mini-bili .
 COPY configs/ ./configs/
 
 # Create writable directories & set ownership
-RUN mkdir -p /app/data/tmp /app/logs && chown -R appuser:appgroup /app
+# NOTE: /app/data/uploads must exist here, otherwise Docker creates the empty
+# named-volume mountpoint as root:root and every upload fails with
+# "mkdir ... permission denied" (container runs as uid 1000).
+RUN mkdir -p /app/data/tmp /app/data/uploads /app/logs && chown -R appuser:appgroup /app
 
 USER appuser
 

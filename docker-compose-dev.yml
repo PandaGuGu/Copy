@@ -119,11 +119,11 @@ services:
     volumes:
       - ./cakecake-vue/bilibili-vue/dist:/usr/share/nginx/html:ro
       - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
-      - uploads_data:/usr/share/nginx/html/uploads:ro
+      - uploads_data:/var/www/uploads:ro
     ports:
       - "${FRONTEND_PORT:-80}:80"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

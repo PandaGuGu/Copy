@@ -23,7 +23,10 @@ export default defineConfig(({ mode }) => {
           target: apiBase,
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/api/, '/api')
-        }
+        },
+        // 本地磁盘存储与 HLS 切片（后端 :8080 直供）
+        '/uploads': { target: apiBase, changeOrigin: true },
+        '/live-hls': { target: apiBase, changeOrigin: true }
       }
     },
     build: {

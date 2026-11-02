@@ -34,7 +34,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		rlCfg.AdminWindow = a.Cfg.RateLimitAdminWindow
 	}
 	rlCfg.SkipPaths["/api/v1/metrics"] = true
-	r.Use(middleware.RateLimiter(a.Redis, rlCfg, metricsReg))
+	r.Use(middleware.RateLimiter(a.Redis, rlCfg, metricsReg, jwtm))
 
 	// Circuit breaker (governance): global breaker protects API group.
 	brCfg := middleware.DefaultBreakerConfig()
