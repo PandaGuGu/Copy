@@ -18,6 +18,7 @@ pub enum Phase {
     Idle,
     Connecting,
     Playing,
+    Paused,
     Failed,
 }
 
@@ -54,7 +55,76 @@ impl Player {
         }
         st.url = Some(url.to_owned());
         st.phase = Phase::Connecting;
-        st.message = "正在连接直播流…".to_owned();
+        st.message = String::new();
+    }
+
+    /// 播放进度（毫秒）；桌面端恒为 0
+    pub fn position_ms(&self) -> i64 {
+        #[cfg(target_os = "android")]
+        {
+            let Ok(st) = self.inner.lock() else { return 0 };
+            if let Some(mp) = st.native.session.as_ref().and_then(|s| s.mp.as_ref()) {
+                return android::mp_position(mp);
+            }
+            0
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            0
+        }
+    }
+
+    /// 总时长（毫秒）；未 prepare 完成为 0
+    pub fn duration_ms(&self) -> i64 {
+        #[cfg(target_os = "android")]
+        {
+            let Ok(st) = self.inner.lock() else { return 0 };
+            if let Some(mp) = st.native.session.as_ref().and_then(|s| s.mp.as_ref()) {
+                return android::mp_duration(mp);
+            }
+            0
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            0
+        }
+    }
+
+    /// 暂停 / 继续
+    pub fn toggle_pause(&mut self) {
+        let Ok(mut st) = self.inner.lock() else { return };
+        match st.phase {
+            Phase::Playing => {
+                st.phase = Phase::Paused;
+                #[cfg(target_os = "android")]
+                if let Some(mp) = st.native.session.as_ref().and_then(|s| s.mp.as_ref()) {
+                    android::mp_pause(mp);
+                }
+            }
+            Phase::Paused => {
+                st.phase = Phase::Playing;
+                #[cfg(target_os = "android")]
+                if let Some(mp) = st.native.session.as_ref().and_then(|s| s.mp.as_ref()) {
+                    android::mp_resume(mp);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// 拖动进度
+    pub fn seek_to(&self, ms: i64) {
+        #[cfg(target_os = "android")]
+        {
+            let Ok(st) = self.inner.lock() else { return };
+            if let Some(mp) = st.native.session.as_ref().and_then(|s| s.mp.as_ref()) {
+                android::mp_seek(mp, ms);
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = ms;
+        }
     }
 
     /// 停止并释放解码器
@@ -85,6 +155,12 @@ impl Player {
     /// 在页面上占一块区域逐帧绘制视频
     pub fn ui(&self, ui: &mut egui::Ui, size: egui::Vec2) -> egui::Response {
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        self.ui_in(ui, rect);
+        resp
+    }
+
+    /// 把视频帧画进一块已经分配好的矩形（详情页要自己叠弹幕/控件）
+    pub fn ui_in(&self, ui: &mut egui::Ui, rect: egui::Rect) {
         ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
 
         #[cfg(target_os = "android")]
@@ -98,16 +174,15 @@ impl Player {
                 callback: Arc::new(cb),
             });
         }
+        #[cfg(not(target_os = "android"))]
+        let _ = rect;
 
         // 状态文案盖在视频上
-        let (phase, msg) = {
-            match self.inner.lock() {
-                Ok(s) => (s.phase, s.message.clone()),
-                Err(_) => (Phase::Idle, String::new()),
-            }
-        };
+        let Ok(st) = self.inner.lock() else { return };
+        let (phase, msg) = (st.phase, st.message.clone());
+        drop(st);
         match phase {
-            Phase::Playing | Phase::Idle => {}
+            Phase::Playing | Phase::Paused | Phase::Idle => {}
             Phase::Failed => {
                 ui.painter().text(
                     rect.center(),
@@ -127,7 +202,6 @@ impl Player {
                 );
             }
         }
-        resp
     }
 }
 
@@ -169,9 +243,33 @@ pub fn status_bar_points(pixels_per_point: f32) -> f32 {
 pub fn status_bar_points(_pixels_per_point: f32) -> f32 {
     0.0
 }
-
 #[cfg(not(target_os = "android"))]
 pub fn nav_bar_points(_pixels_per_point: f32) -> f32 {
+    0.0
+}
+
+/// 根页面按返回键：安卓退到后台，桌面忽略
+#[cfg(target_os = "android")]
+pub fn move_task_to_back() {
+    android::move_task_to_back();
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn move_task_to_back() {}
+
+/// 软键盘占用的高度（逻辑点）。非 Android / 键盘收起时恒为 0。
+#[cfg(target_os = "android")]
+pub fn ime_points(pixels_per_point: f32) -> f32 {
+    let px = android::ime_px() as f32;
+    if pixels_per_point > 0.0 {
+        px / pixels_per_point
+    } else {
+        0.0
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn ime_points(_pixels_per_point: f32) -> f32 {
     0.0
 }
 
@@ -409,6 +507,87 @@ mod android {
         }
     }
 
+    /// 屏幕被软键盘占掉的高度（px）。API 30 以下拿不到，返回 0。
+    ///
+    /// Android 15 强制 edge-to-edge 后 `adjustResize` 不再缩窗口，
+    /// 键盘是盖在画布上的，所以只能自己查 IME inset 再把内容顶上去。
+    pub fn ime_px() -> i32 {
+        let (Some(vm), Some(act)) = (VM.get(), ACTIVITY.get()) else {
+            return 0;
+        };
+        let Ok(mut env) = vm.attach_current_thread() else {
+            return 0;
+        };
+        let r = (|| -> Result<i32, jni::errors::Error> {
+            let sdk = env
+                .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
+                .i()?;
+            if sdk < 30 {
+                return Ok(0);
+            }
+            let window = env
+                .call_method(act.as_obj(), "getWindow", "()Landroid/view/Window;", &[])?
+                .l()?;
+            let decor = env
+                .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
+                .l()?;
+            let insets = env
+                .call_method(
+                    &decor,
+                    "getRootWindowInsets",
+                    "()Landroid/view/WindowInsets;",
+                    &[],
+                )?
+                .l()?;
+            if insets.is_null() {
+                return Ok(0);
+            }
+            let ty = env
+                .call_static_method("android/view/WindowInsets$Type", "ime", "()I", &[])?
+                .i()?;
+            let gi = env
+                .call_method(
+                    &insets,
+                    "getInsets",
+                    "(I)Landroid/graphics/Insets;",
+                    &[JValue::Int(ty)],
+                )?
+                .l()?;
+            if gi.is_null() {
+                return Ok(0);
+            }
+            env.get_field(&gi, "bottom", "I")?.i()
+        })();
+        match r {
+            Ok(v) => v,
+            Err(_) => {
+                let _ = env.exception_clear();
+                0
+            }
+        }
+    }
+
+    /// 把 App 退到后台（根页面按返回键用）。
+    ///
+    /// 不能用 ViewportCommand::Close：那会 finish 掉 Activity，但进程还活着，
+    /// 下次点图标会在同一进程里重建 Activity → winit 报
+    /// "EventLoop can't be recreated"，App 直接起不来。moveTaskToBack 只切后台。
+    pub fn move_task_to_back() {
+        if let Some(vm) = vm() {
+            if let Some(act) = ACTIVITY.get() {
+                if let Ok(mut env) = vm.attach_current_thread() {
+                    let _ = env.call_method(
+                        act.as_obj(),
+                        "moveTaskToBack",
+                        "(Z)Z",
+                        &[JValue::Bool(1)],
+                    );
+                    let _ = env.exception_clear();
+                }
+            }
+        }
+    }
+
     pub fn release_surface(surface: &GlobalRef, st: &GlobalRef) {
         if let Some(vm) = vm() {
             if let Ok(mut env) = vm.attach_current_thread() {
@@ -418,6 +597,48 @@ mod android {
                 let _ = env.exception_clear();
             }
         }
+    }
+
+    /// 下面几个都是 MediaPlayer 的轻量调用：失败就返回 0 / 空操作，
+    /// 播放器状态自己会通过回调走 Failed 分支。
+    pub fn mp_position(mp: &GlobalRef) -> i64 {
+        call_mp_i(mp, "getCurrentPosition").unwrap_or(0) as i64
+    }
+
+    pub fn mp_duration(mp: &GlobalRef) -> i64 {
+        call_mp_i(mp, "getDuration").unwrap_or(0) as i64
+    }
+
+    fn call_mp_i(mp: &GlobalRef, method: &str) -> Option<i32> {
+        let vm = vm()?;
+        let mut env = vm.attach_current_thread().ok()?;
+        let r = env.call_method(mp.as_obj(), method, "()I", &[]).ok()?.i().ok();
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_clear();
+            return None;
+        }
+        r
+    }
+
+    fn call_mp_v(mp: &GlobalRef, method: &str, sig: &str, args: &[jni::objects::JValue]) {
+        if let Some(vm) = vm() {
+            if let Ok(mut env) = vm.attach_current_thread() {
+                let _ = env.call_method(mp.as_obj(), method, sig, args);
+                let _ = env.exception_clear();
+            }
+        }
+    }
+
+    pub fn mp_pause(mp: &GlobalRef) {
+        call_mp_v(mp, "pause", "()V", &[]);
+    }
+
+    pub fn mp_resume(mp: &GlobalRef) {
+        call_mp_v(mp, "start", "()V", &[]);
+    }
+
+    pub fn mp_seek(mp: &GlobalRef, ms: i64) {
+        call_mp_v(mp, "seekTo", "(I)V", &[jni::objects::JValue::Int(ms as i32)]);
     }
 }
 
@@ -566,11 +787,13 @@ fn start_session(shared: &Arc<Mutex<Inner>>, url: &str) -> Result<(), String> {
                     }
                     st.phase = Phase::Playing;
                     st.message.clear();
+                    eprintln!("[video] playing {want}");
                 } else {
                     android::release_mp(&mp);
                 }
             }
             Err(e) => {
+                eprintln!("[video] failed: {e} ({want})");
                 st.phase = Phase::Failed;
                 st.message = e;
             }

@@ -5,10 +5,12 @@
 pub mod api;
 pub mod app;
 pub mod images;
+pub mod livechat;
 pub mod pages;
 pub mod theme;
 pub mod video;
 pub mod widgets;
+pub mod zones;
 
 use eframe::egui;
 
@@ -49,7 +51,38 @@ pub fn run(android_app: Option<AndroidAppHandle>) -> eframe::Result<()> {
 pub fn android_main(app: android_activity::AndroidApp) {
     android_logger::init_once(android_logger::Config::default());
     video::init_android(&app);
+
+    // 同一进程里第二次进来（系统多开了一个 Activity 实例，或者上一轮没退干净）：
+    // winit 的 EventLoop 只能建一次，这里与其报 "EventLoop can't be recreated"
+    // 留个黑屏，不如把多出来的这个实例关掉，用户看到的还是原来那个界面。
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        eprintln!("[app] duplicate activity, finishing it");
+        finish_activity(&app);
+        return;
+    }
+
     if let Err(e) = run(Some(app)) {
         eprintln!("android_main failed: {e}");
+    }
+}
+
+/// 调 Activity.finish()，只用于关掉重复实例
+#[cfg(target_os = "android")]
+fn finish_activity(app: &android_activity::AndroidApp) {
+    use jni::objects::JObject;
+    use jni::JavaVM;
+    unsafe {
+        let Ok(vm) = JavaVM::from_raw(app.vm_as_ptr().cast()) else {
+            return;
+        };
+        // attach_current_thread 的 guard 借用 JavaVM，而这里是一次性调用，
+        // 直接把它泄漏成 'static 最省事（进程级单例，本来也不该释放）
+        let vm: &'static JavaVM = Box::leak(Box::new(vm));
+        if let Ok(mut env) = vm.attach_current_thread() {
+            let act = JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+            let _ = env.call_method(&act, "finish", "()V", &[]);
+            let _ = env.exception_clear();
+        }
     }
 }

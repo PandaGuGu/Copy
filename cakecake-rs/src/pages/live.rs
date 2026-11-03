@@ -167,6 +167,18 @@ pub fn room(ui: &mut egui::Ui, app: &mut App, id: u64) {
         app.back();
     }
 
+    // 底部聊天面板先占位，剩下的空间再画播放器
+    egui::Panel::bottom("live-room-chat")
+        .exact_size(232.0)
+        .resizable(false)
+        .frame(
+            egui::Frame::NONE
+                .fill(theme::BG)
+                .stroke(Stroke::new(1.0, theme::LINE))
+                .inner_margin(egui::Margin::same(0)),
+        )
+        .show_inside(ui, |ui| chat_panel(ui, app));
+
     match app.room_state.clone() {
         LoadState::Idle | LoadState::Loading => {
             ui.vertical_centered(|ui| {
@@ -295,4 +307,112 @@ pub fn room(ui: &mut egui::Ui, app: &mut App, id: u64) {
                 });
         }
     }
+}
+
+// ───────────────────────── 直播间聊天 ─────────────────────────
+
+fn chat_panel(ui: &mut egui::Ui, app: &mut App) {
+    let w = ui.available_width();
+    let (head, _) = ui.allocate_exact_size(Vec2::new(w, 30.0), Sense::hover());
+    let p = ui.painter();
+    p.text(
+        Pos2::new(head.left() + 14.0, head.center().y),
+        Align2::LEFT_CENTER,
+        "聊天",
+        FontId::proportional(13.0),
+        theme::TEXT,
+    );
+    let meta = match &app.chat.state {
+        LoadState::Loading => "连接中…".to_owned(),
+        LoadState::Err(e) => format!("连接失败：{e}"),
+        _ if app.chat.online > 0 => format!("{} 人在看", app.chat.online),
+        _ => "已连接".to_owned(),
+    };
+    p.text(
+        Pos2::new(head.right() - 14.0, head.center().y),
+        Align2::RIGHT_CENTER,
+        meta,
+        FontId::proportional(10.0),
+        if matches!(app.chat.state, LoadState::Err(_)) {
+            theme::UP_TAG
+        } else {
+            theme::TEXT3
+        },
+    );
+
+    let input_h = 42.0;
+    let list_h = (ui.available_height() - input_h).max(40.0);
+    egui::ScrollArea::vertical()
+        .max_height(list_h)
+        .auto_shrink([false; 2])
+        .stick_to_bottom(true)
+        .id_salt("live-chat-list")
+        .show(ui, |ui| {
+            if app.chat.msgs.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    ui.label(
+                        egui::RichText::new("还没有人说话，来打个招呼")
+                            .color(theme::TEXT3)
+                            .size(11.0),
+                    );
+                });
+                return;
+            }
+            for m in &app.chat.msgs {
+                if m.system {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new(&m.content)
+                                .color(theme::TEXT3)
+                                .size(11.0),
+                        );
+                    });
+                } else {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new(format!("{}：", m.user))
+                                .color(theme::PINK)
+                                .size(12.0),
+                        );
+                        ui.label(
+                            egui::RichText::new(&m.content)
+                                .color(theme::TEXT)
+                                .size(12.0),
+                        );
+                    });
+                }
+            }
+        });
+
+    // 输入行
+    ui.add_space(2.0);
+    ui.horizontal(|ui| {
+        ui.add_space(10.0);
+        let total = ui.available_width();
+        let field = ui.add_sized(
+            Vec2::new((total - 84.0).max(80.0), 30.0),
+            egui::TextEdit::singleline(&mut app.chat.input)
+                .hint_text("和大家聊聊…")
+                .margin(egui::Margin::symmetric(8, 6)),
+        );
+        let focused = field.has_focus();
+        if app.ime_on != focused {
+            app.ime_on = focused;
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::IMEAllowed(focused));
+        }
+        if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            app.chat_send();
+        }
+        let btn = egui::Button::new(egui::RichText::new("发送").color(Color32::WHITE).size(12.0))
+            .fill(theme::PINK)
+            .corner_radius(15.0);
+        if ui.add_sized(Vec2::new(68.0, 30.0), btn).clicked() {
+            app.chat_send();
+        }
+    });
+    ui.add_space(6.0);
 }

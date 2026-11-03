@@ -12,6 +12,8 @@ pub enum NavIcon {
     Home,
     Bag,
     Person,
+    /// 动态（五角星）
+    Star,
 }
 
 /// 中文字宽与拉丁字宽（用于精确换行）
@@ -199,6 +201,152 @@ pub fn avatar(p: &Painter, center: Pos2, r: f32, name: &str, seed: u64) {
     );
 }
 
+/// 未登录头像：灰底小人，别让用户以为自己头像加载失败了
+pub fn avatar_anon(p: &Painter, center: Pos2, r: f32) {
+    p.circle_filled(center, r, Color32::from_rgb(0xEE, 0xEF, 0xF1));
+    let ink = Color32::from_rgb(0x9A, 0x9F, 0xA6);
+    let stroke = Stroke::new(1.4, ink);
+    p.circle_stroke(Pos2::new(center.x, center.y - r * 0.22), r * 0.30, stroke);
+    p.add(egui::Shape::line(
+        vec![
+            Pos2::new(center.x - r * 0.52, center.y + r * 0.62),
+            Pos2::new(center.x - r * 0.34, center.y + r * 0.16),
+            Pos2::new(center.x + r * 0.34, center.y + r * 0.16),
+            Pos2::new(center.x + r * 0.52, center.y + r * 0.62),
+        ],
+        stroke,
+    ));
+}
+
+/// 头像：有真实头像 URL 且已解码就贴图，否则退回首字占位
+pub fn avatar_tex(
+    ui: &mut egui::Ui,
+    center: Pos2,
+    r: f32,
+    name: &str,
+    url: &str,
+    covers: &Covers,
+    seed: u64,
+) {
+    let side = r * 2.0;
+    let rect = Rect::from_center_size(center, Vec2::splat(side));
+    if let Some(tex) = covers.get(url) {
+        let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), rect.size()))
+            .corner_radius(r)
+            .fit_to_exact_size(rect.size());
+        ui.put(rect, img);
+        return;
+    }
+    avatar(ui.painter(), center, r, name, seed);
+}
+
+/// 横排视频卡：左封面 + 右标题/UP主/数据（相关推荐、搜索结果共用）
+pub fn video_row(ui: &mut egui::Ui, v: &Video, covers: &Covers) -> Response {
+    let w = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 82.0), Sense::click());
+    let cover = Rect::from_min_size(
+        Pos2::new(rect.left() + 12.0, rect.top() + 4.0),
+        Vec2::new(120.0, 68.0),
+    );
+    draw_cover(ui, cover, &v.cover_url, covers, 4.0);
+    let p = ui.painter();
+    if v.duration > 0 {
+        chip(
+            p,
+            Pos2::new(cover.right() - 5.0, cover.bottom() - 5.0),
+            Align2::RIGHT_BOTTOM,
+            &theme::clock(v.duration),
+            10.0,
+        );
+    }
+    let text_x = cover.right() + 12.0;
+    let text_w = (rect.right() - text_x - 10.0).max(40.0);
+    let lines = wrap_lines(p, &v.title, 14.0, text_w, 2);
+    let mut y = cover.top() + 2.0;
+    for l in lines {
+        p.text(
+            Pos2::new(text_x, y),
+            Align2::LEFT_TOP,
+            l,
+            FontId::proportional(14.0),
+            theme::TEXT,
+        );
+        y += 20.0;
+    }
+    p.text(
+        Pos2::new(text_x, cover.bottom() - 15.0),
+        Align2::LEFT_TOP,
+        format!(
+            "{}播放 · {}弹幕",
+            theme::human(v.play_count),
+            theme::human(v.danmaku_count)
+        ),
+        FontId::proportional(11.0),
+        theme::TEXT3,
+    );
+    ui.allocate_rect(rect, Sense::hover());
+    resp
+}
+
+/// 通用返回栏：左上角「‹ 返回」+ 可选标题，命中返回 true
+pub fn back_bar(ui: &mut egui::Ui, title: &str, id: &str) -> bool {
+    let w = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 44.0), Sense::hover());
+    let p = ui.painter();
+    let c = Pos2::new(rect.left() + 20.0, rect.center().y);
+    p.add(egui::Shape::line(
+        vec![
+            Pos2::new(c.x + 4.0, c.y - 6.0),
+            Pos2::new(c.x - 3.0, c.y),
+            Pos2::new(c.x + 4.0, c.y + 6.0),
+        ],
+        Stroke::new(1.8, theme::TEXT),
+    ));
+    p.text(
+        Pos2::new(rect.left() + 38.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        "返回",
+        FontId::proportional(13.0),
+        theme::TEXT2,
+    );
+    if !title.is_empty() {
+        p.text(
+            Pos2::new(rect.center().x, rect.center().y),
+            Align2::CENTER_CENTER,
+            title,
+            FontId::proportional(15.0),
+            theme::TEXT,
+        );
+    }
+    let hit = Rect::from_min_size(rect.min, Vec2::new(84.0, rect.height()));
+    ui.interact(hit, egui::Id::new(id), Sense::click()).clicked()
+}
+
+/// 搜索胶囊：放大镜 + 占位文案，命中返回 true
+pub fn search_pill(ui: &mut egui::Ui, rect: Rect, hint: &str, id: &str) -> bool {
+    {
+        let p = ui.painter();
+        p.rect_filled(rect, rect.height() / 2.0, theme::SURFACE);
+        let ic = Pos2::new(rect.left() + 15.0, rect.center().y - 1.0);
+        p.circle_stroke(ic, 4.6, Stroke::new(1.4, theme::TEXT3));
+        p.line_segment(
+            [
+                Pos2::new(ic.x + 3.4, ic.y + 3.4),
+                Pos2::new(ic.x + 6.4, ic.y + 6.4),
+            ],
+            Stroke::new(1.4, theme::TEXT3),
+        );
+        p.text(
+            Pos2::new(rect.left() + 27.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            hint,
+            FontId::proportional(12.0),
+            theme::TEXT3,
+        );
+    }
+    ui.interact(rect, egui::Id::new(id), Sense::click()).clicked()
+}
+
 pub fn nav_icon(p: &Painter, c: Pos2, kind: NavIcon, color: Color32) {
     let stroke = Stroke::new(1.5, color);
     match kind {
@@ -253,6 +401,17 @@ pub fn nav_icon(p: &Painter, c: Pos2, kind: NavIcon, color: Color32) {
                 ],
                 stroke,
             ));
+        }
+        NavIcon::Star => {
+            let mut pts = Vec::with_capacity(11);
+            for i in 0..10 {
+                let r = if i % 2 == 0 { 8.6 } else { 3.8 };
+                let a = -std::f32::consts::FRAC_PI_2
+                    + i as f32 * std::f32::consts::PI / 5.0;
+                pts.push(Pos2::new(c.x + r * a.cos(), c.y - 1.0 + r * a.sin()));
+            }
+            pts.push(pts[0]);
+            p.add(egui::Shape::line(pts, stroke));
         }
     }
 }
