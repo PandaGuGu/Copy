@@ -1,6 +1,6 @@
 [package]
 name = "cakecake-rs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "cakecake 移动客户端的纯 Rust 实现（egui 壳 + 自绘内容层）"
 
