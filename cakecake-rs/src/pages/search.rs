@@ -17,6 +17,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut App) {
     }
     input_row(ui, app);
     ui.add_space(2.0);
+    suggest_rows(ui, app);
 
     match app.search_state.clone() {
         LoadState::Idle => hot_words(ui, app),
@@ -56,11 +57,7 @@ fn input_row(ui: &mut egui::Ui, app: &mut App) {
 
         // 安卓上软键盘要靠 InputMethodManager 显式拉起，只在焦点变化时下发
         let focused = resp.has_focus();
-        if app.ime_on != focused {
-            app.ime_on = focused;
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::IMEAllowed(focused));
-        }
+        app.note_focus(focused);
         if app.search_autofocus {
             resp.request_focus();
             app.search_autofocus = false;
@@ -68,6 +65,10 @@ fn input_row(ui: &mut egui::Ui, app: &mut App) {
         // 键盘回车或输入法「搜索」键触发
         if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             app.do_search();
+        }
+        // 边打边联想：内容一变就请求 /search/suggest（同一个词不会重复发）
+        if resp.changed() {
+            app.request_suggest();
         }
 
         let btn = egui::Button::new(egui::RichText::new("搜索").color(Color32::WHITE).size(13.0))
@@ -77,6 +78,65 @@ fn input_row(ui: &mut egui::Ui, app: &mut App) {
             app.do_search();
         }
     });
+}
+
+/// 联想词列表（GET /search/suggest）
+///
+/// 直接铺在输入框下面，不做浮层：手机上浮层容易被软键盘顶出屏幕，
+/// 下拉列表跟着页面滚动反而更好点。
+fn suggest_rows(ui: &mut egui::Ui, app: &mut App) {
+    if app.suggest.is_empty() {
+        return;
+    }
+    let items: Vec<String> = app
+        .suggest
+        .iter()
+        .map(|t| t.term())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if items.is_empty() {
+        return;
+    }
+    let mut picked: Option<String> = None;
+    for (i, kw) in items.iter().enumerate() {
+        let w = ui.available_width();
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 34.0), Sense::click());
+        let p = ui.painter();
+        // 小放大镜
+        let ic = Pos2::new(rect.left() + 22.0, rect.center().y);
+        p.circle_stroke(ic, 4.0, egui::Stroke::new(1.2, theme::TEXT3));
+        p.line_segment(
+            [
+                Pos2::new(ic.x + 3.0, ic.y + 3.0),
+                Pos2::new(ic.x + 6.0, ic.y + 6.0),
+            ],
+            egui::Stroke::new(1.2, theme::TEXT3),
+        );
+        p.text(
+            Pos2::new(rect.left() + 36.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            kw,
+            FontId::proportional(12.0),
+            theme::TEXT,
+        );
+        if i + 1 < items.len() {
+            p.line_segment(
+                [
+                    Pos2::new(rect.left() + 36.0, rect.bottom()),
+                    Pos2::new(rect.right() - 12.0, rect.bottom()),
+                ],
+                egui::Stroke::new(1.0, theme::LINE),
+            );
+        }
+        if resp.clicked() {
+            picked = Some(kw.clone());
+        }
+    }
+    ui.add_space(4.0);
+    if let Some(kw) = picked {
+        app.search_kw = kw;
+        app.do_search();
+    }
 }
 
 fn hot_words(ui: &mut egui::Ui, app: &mut App) {

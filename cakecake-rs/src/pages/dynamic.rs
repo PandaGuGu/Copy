@@ -23,7 +23,7 @@ enum Entry<'a> {
 pub fn show(ui: &mut egui::Ui, app: &mut App) {
     header(ui, app);
 
-    if app.token.is_none() {
+    if !app.client.logged_in() {
         need_login(ui, app);
         return;
     }
@@ -237,6 +237,8 @@ fn feed(ui: &mut egui::Ui, app: &mut App) {
     }
 
     let mut open_video = None;
+
+    let mut open_dyn: Option<u64> = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .id_salt("dyn-feed")
@@ -248,7 +250,11 @@ fn feed(ui: &mut egui::Ui, app: &mut App) {
                             open_video = Some(v.id);
                         }
                     }
-                    Entry::Dyn(d) => dyn_card(ui, d, time, &app.covers),
+                    Entry::Dyn(d) => {
+                        if dyn_card(ui, d, time, &app.covers).clicked() {
+                            open_dyn = Some(d.id);
+                        }
+                    }
                 }
             }
             ui.add_space(14.0);
@@ -362,7 +368,12 @@ fn video_card(
 }
 
 /// 文字/图文动态卡
-fn dyn_card(ui: &mut egui::Ui, d: &DynItem, time: &str, covers: &crate::images::Covers) {
+fn dyn_card(
+    ui: &mut egui::Ui,
+    d: &DynItem,
+    time: &str,
+    covers: &crate::images::Covers,
+) -> egui::Response {
     let w = ui.available_width();
     let body_lines = widgets::wrap_lines(ui.painter(), &d.content, 13.0, w - 68.0, 4);
     let imgs = d.images.len().min(3);
@@ -440,7 +451,7 @@ fn dyn_card(ui: &mut egui::Ui, d: &DynItem, time: &str, covers: &crate::images::
         Stroke::new(1.0, theme::LINE),
     );
     ui.allocate_rect(rect, Sense::hover());
-    let _ = resp;
+    resp
 }
 
 /// "2026-10-31 23:25:10" / "2026-10-31T23:25:10+08:00" → "10-31 23:25"

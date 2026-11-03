@@ -167,9 +167,12 @@ pub fn room(ui: &mut egui::Ui, app: &mut App, id: u64) {
         app.back();
     }
 
-    // 底部聊天面板先占位，剩下的空间再画播放器
+    // 底部聊天面板先占位，剩下的空间再画播放器。
+    // 高度随可用空间自适应：键盘弹出时窗口被压缩，固定 232 会把输入行挤出裁剪区，
+    // 表现就是「输入框失焦 → 键盘收起 → 再展开」的抽搐。
+    let chat_h = (ui.available_height() - 60.0).clamp(132.0, 232.0);
     egui::Panel::bottom("live-room-chat")
-        .exact_size(232.0)
+        .exact_size(chat_h)
         .resizable(false)
         .frame(
             egui::Frame::NONE
@@ -395,15 +398,12 @@ fn chat_panel(ui: &mut egui::Ui, app: &mut App) {
         let field = ui.add_sized(
             Vec2::new((total - 84.0).max(80.0), 30.0),
             egui::TextEdit::singleline(&mut app.chat.input)
+            .id(egui::Id::new("live-chat-input"))
                 .hint_text("和大家聊聊…")
                 .margin(egui::Margin::symmetric(8, 6)),
         );
-        let focused = field.has_focus();
-        if app.ime_on != focused {
-            app.ime_on = focused;
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::IMEAllowed(focused));
-        }
+        // 软键盘统一由 App 每帧汇总下发，页面只上报焦点
+        app.note_focus(field.has_focus());
         if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             app.chat_send();
         }

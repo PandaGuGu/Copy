@@ -19,7 +19,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Str
 
 pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
     if widgets::back_bar(ui, "", "detail-back") {
-        app.video.stop();
+        // back() 会先把当前进度上报再 stop，这里不能再提前 stop
         app.back();
         return;
     }
@@ -49,16 +49,36 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
         }
         LoadState::Ready => {
             let Some(data) = app.detail.take() else { return };
+            // 评论 tab 下把输入栏做成悬浮层，钉在「键盘/导航栏之上」。
+            // Panel::bottom 在页面高度不够时会被键盘挤出可视区（整条被裁掉），
+            // 所以改用 Area 按屏幕坐标定位。
+            if app.detail_tab == DetailTab::Comments {
+                let bar_h = if app.reply_to.is_some() { 78.0 } else { 54.0 };
+                let screen = ui.ctx().viewport_rect();
+                let top = (screen.bottom() - app.bottom_inset - bar_h).max(0.0);
+                egui::Area::new(egui::Id::new("detail-composer"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::Pos2::new(0.0, top))
+                    .show(ui.ctx(), |ui| {
+                        ui.set_width(screen.width());
+                        ui.set_height(bar_h);
+                        egui::Frame::NONE
+                            .fill(theme::BG)
+                            .stroke(egui::Stroke::new(1.0, theme::LINE))
+                            .inner_margin(egui::Margin::same(0))
+                            .show(ui, |ui| {
+                                crate::pages::comment_ui::composer(ui, app, data.video.id);
+                            });
+                    });
+            }
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .id_salt("detail-scroll")
                 .show(ui, |ui| {
-                    player(ui, app, &data.video, &data.danmakus);
+                    player(ui, app, &data);
                     controls(ui, app);
+                    options_bar(ui, app, &data);
                     tabs(ui, app, &data);
-                    uploader_row(ui, app, &data.video);
-                    title_block(ui, &data.video);
-                    action_bar(ui, app, &data.video);
                     if let Some(msg) = app.action_msg.clone() {
                         ui.horizontal(|ui| {
                             ui.add_space(14.0);
@@ -67,23 +87,38 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
                     }
                     ui.add_space(4.0);
                     match app.detail_tab {
-                        DetailTab::Intro => intro(ui, app, &data),
-                        DetailTab::Comments => comments(ui, &data.comments),
+                        // 简介：UP 主区 + 标题 + 操作栏 + 简介正文
+                        DetailTab::Intro => {
+                            uploader_row(ui, app, &data.video);
+                            title_block(ui, &data.video);
+                            action_bar(ui, app, &data.video);
+                            ui.add_space(4.0);
+                            intro(ui, app, &data)
+                        }
+                        // 评论：只留评论，别把 UP 主卡片和标题重复一遍
+                        DetailTab::Comments => {
+                            crate::pages::comment_list::show(ui, app, data.video.id, &data.comments)
+                        }
                     }
                     ui.add_space(10.0);
                 });
             app.detail = Some(data);
         }
     }
+
+    // 收藏夹选择弹窗（覆盖在详情页上）
+    crate::pages::favorites::picker(ui, app);
 }
 
 // ───────────────────────── 播放器 ─────────────────────────
 
-fn player(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail, danmakus: &[Danmaku]) {
+fn player(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
+    let v = &data.video;
+    let danmakus = &data.danmakus;
     let w = ui.available_width();
     let h = (w * 0.5625).round();
-    let url = app.client.abs(&v.video_url);
-    let has_src = !url.is_empty();
+    let url = play_url(app, data);
+    let has_src = !url.is_empty() && data.source_ready;
     let phase = app.video.phase();
     // 失败后不要每帧重试，等用户点一下再重连
     if has_src && phase != Phase::Failed {
@@ -107,6 +142,14 @@ fn player(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail, danmakus: &[Danmaku
         let pos = app.video.position_ms();
         if pos > 0 {
             draw_danmaku(ui, rect, danmakus, pos);
+        }
+    }
+
+    // 字幕：当前时刻对应的那句，压在画面底部（GET /videos/:id/subtitles）
+    if has_src && matches!(phase, Phase::Playing | Phase::Paused) && !app.cues.is_empty() {
+        let sec = app.video.position_ms().max(0) as f64 / 1000.0;
+        if let Some(text) = crate::subtitle::at(&app.cues, sec) {
+            draw_subtitle(ui, rect, text);
         }
     }
 
@@ -161,7 +204,11 @@ fn player(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail, danmakus: &[Danmaku
         ui.painter().text(
             rect.center() + Vec2::new(0.0, 34.0),
             Align2::CENTER_CENTER,
-            "这条视频没有可播放文件",
+            if data.source_ready {
+                "这条视频没有可播放文件"
+            } else {
+                "源文件还没准备好（可能未上传或还在转码）"
+            },
             FontId::proportional(11.0),
             Color32::from_gray(225),
         );
@@ -258,6 +305,115 @@ fn controls(ui: &mut egui::Ui, app: &mut App) {
         .clicked()
     {
         app.video.toggle_pause();
+    }
+}
+
+/// 清晰度 / 字幕切换条（两个列表都为空时整块不出现）
+fn options_bar(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
+    if data.bitrates.is_empty() && data.subtitles.is_empty() {
+        return;
+    }
+    if !data.bitrates.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(12.0);
+            ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+            ui.label(egui::RichText::new("清晰度").color(theme::TEXT3).size(10.0));
+            // 后端已按 kbps 升序返回，这里显式再排一次，免得换实现后顺序变
+            let mut list: Vec<&crate::api::VideoBitrate> = data.bitrates.iter().collect();
+            list.sort_by_key(|b| b.kbps);
+            for b in list {
+                let label = if !b.label.is_empty() {
+                    b.label.clone()
+                } else if b.height > 0 {
+                    format!("{}P", b.height)
+                } else {
+                    format!("{}kbps", b.kbps)
+                };
+                let on = app.quality == Some(b.id);
+                if chip(ui, &label, on) && !on {
+                    let video_id = data.video.id;
+                    app.select_quality(video_id, b);
+                }
+            }
+        });
+    }
+    if !data.subtitles.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(12.0);
+            ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+            ui.label(egui::RichText::new("字幕").color(theme::TEXT3).size(10.0));
+            let off = app.subtitle_id.is_none();
+            if chip(ui, "关", off) && !off {
+                app.select_subtitle(&data.subtitles, None);
+            }
+            for s in &data.subtitles {
+                let label = if s.title.is_empty() {
+                    s.lang.clone()
+                } else {
+                    s.title.clone()
+                };
+                let on = app.subtitle_id == Some(s.id);
+                if chip(ui, &label, on) && !on {
+                    app.select_subtitle(&data.subtitles, Some(s.id));
+                }
+            }
+        });
+    }
+    ui.add_space(2.0);
+}
+
+fn chip(ui: &mut egui::Ui, label: &str, on: bool) -> bool {
+    let btn = egui::Button::new(
+        egui::RichText::new(label)
+            .color(if on { Color32::WHITE } else { theme::TEXT2 })
+            .size(11.0),
+    )
+    .fill(if on { theme::PINK } else { theme::SURFACE })
+    .corner_radius(11.0)
+    .min_size(Vec2::new(0.0, 24.0));
+    ui.add(btn).clicked()
+}
+
+/// 当前实际播放地址：选了清晰度就用那条，否则回原画
+fn play_url(app: &App, data: &crate::app::DetailData) -> String {
+    if let Some(q) = app.quality {
+        if let Some(b) = data.bitrates.iter().find(|b| b.id == q) {
+            let url = app.client.abs(&b.url);
+            if !url.is_empty() {
+                return url;
+            }
+        }
+    }
+    // 原画地址经常指向还没上传/还没转码完成的文件，优先用多清晰度里的产物
+    if let Some(b) = data.bitrates.iter().max_by_key(|b| b.kbps) {
+        let url = app.client.abs(&b.url);
+        if !url.is_empty() {
+            return url;
+        }
+    }
+    app.client.abs(&data.video.video_url)
+}
+
+/// 字幕：白字 + 黑描边，居中压在画面底部，多行自动往上叠
+fn draw_subtitle(ui: &mut egui::Ui, rect: Rect, text: &str) {
+    let p = ui.painter().with_clip_rect(rect);
+    let lines: Vec<&str> = text.lines().collect();
+    let n = lines.len() as f32;
+    for (i, line) in lines.iter().enumerate() {
+        let galley = p.layout_no_wrap(line.to_string(), FontId::proportional(13.0), Color32::WHITE);
+        let pos = Pos2::new(
+            rect.center().x - galley.size().x / 2.0,
+            rect.bottom() - 22.0 - (n - 1.0 - i as f32) * 18.0,
+        );
+        // 描边：往四周各偏 1px 画一遍黑字，保证在亮画面上也读得清
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+            p.galley(
+                pos + Vec2::new(dx, dy),
+                galley.clone(),
+                Color32::from_black_alpha(190),
+            );
+        }
+        p.galley(pos, galley, Color32::WHITE);
     }
 }
 
@@ -395,11 +551,7 @@ fn tabs(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
                 .font(FontId::proportional(11.0)),
         );
         let focused = field.has_focus();
-        if app.ime_on != focused {
-            app.ime_on = focused;
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::IMEAllowed(focused));
-        }
+        app.note_focus(focused);
         if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             app.send_danmaku(data.video.id);
         }
@@ -478,6 +630,19 @@ fn uploader_row(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail) {
     {
         app.act(v.id, Action::Follow);
     }
+
+    // 点头像 / 昵称这一片进 UP 主主页（右侧关注按钮已经单独占了热区）
+    let hit = Rect::from_min_max(
+        Pos2::new(rect.left(), rect.top()),
+        Pos2::new(btn.left() - 8.0, rect.bottom()),
+    );
+    if ui
+        .interact(hit, egui::Id::new("detail-up-space"), Sense::click())
+        .clicked()
+        && v.user_id > 0
+    {
+        app.open_space(v.user_id);
+    }
 }
 
 fn title_block(ui: &mut egui::Ui, v: &VideoDetail) {
@@ -528,19 +693,25 @@ fn action_bar(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail) {
         Stroke::new(1.0, theme::LINE),
     );
 
-    let items: [(&str, u64, bool, Action); 3] = [
-        ("点赞", v.like_count, v.liked_by_me, Action::Like),
-        ("投币", v.coin_count, v.coined_by_me, Action::Coin),
-        ("收藏", v.fav_count, v.favorited_by_me, Action::Favorite),
+    let items: [(&str, String, bool, Action); 4] = [
+        ("点赞", theme::human(v.like_count), v.liked_by_me, Action::Like),
+        ("投币", theme::human(v.coin_count), v.coined_by_me, Action::Coin),
+        ("收藏", theme::human(v.fav_count), v.favorited_by_me, Action::Favorite),
+        (
+            "稍后再看",
+            if v.in_watch_later { "已加" } else { "＋" }.to_owned(),
+            v.in_watch_later,
+            Action::WatchLater,
+        ),
     ];
-    let slot = w / 3.0;
+    let slot = w / 4.0;
     for (i, (label, count, on, act)) in items.iter().enumerate() {
         let cx = rect.left() + slot * (i as f32 + 0.5);
         let color = if *on { theme::PINK } else { theme::TEXT2 };
         p.text(
             Pos2::new(cx, rect.top() + 14.0),
             Align2::CENTER_TOP,
-            theme::human(*count),
+            count,
             FontId::proportional(14.0),
             color,
         );
@@ -559,13 +730,64 @@ fn action_bar(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail) {
             .interact(hit, egui::Id::new(("detail-act", i)), Sense::click())
             .clicked()
         {
-            app.act(v.id, *act);
+            // 收藏要先选收藏夹（可以同时放进多个夹），其余操作直接发请求
+            if *act == Action::Favorite {
+                app.open_favorite_picker(v.id);
+            } else {
+                app.act(v.id, *act);
+            }
         }
     }
 }
 
 fn intro(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
     let v = &data.video;
+
+    // 章节：点一下跳到对应时间（GET /videos/:id/chapters）
+    if !data.chapters.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            ui.label(
+                egui::RichText::new("章节")
+                    .color(theme::TEXT)
+                    .size(14.0)
+                    .strong(),
+            );
+        });
+        ui.add_space(2.0);
+        let mut seek: Option<f64> = None;
+        for c in &data.chapters {
+            let w = ui.available_width();
+            let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
+            let p = ui.painter();
+            p.circle_filled(Pos2::new(rect.left() + 22.0, rect.center().y), 3.0, theme::PINK);
+            p.text(
+                Pos2::new(rect.left() + 32.0, rect.center().y),
+                Align2::LEFT_CENTER,
+                theme::clock(c.time_sec.max(0.0) as u64),
+                FontId::proportional(11.0),
+                theme::TEXT3,
+            );
+            let lines = widgets::wrap_lines(p, &c.title, 12.0, w - 110.0, 1);
+            if let Some(l) = lines.first() {
+                p.text(
+                    Pos2::new(rect.left() + 88.0, rect.center().y),
+                    Align2::LEFT_CENTER,
+                    l,
+                    FontId::proportional(12.0),
+                    theme::TEXT,
+                );
+            }
+            if resp.clicked() {
+                seek = Some(c.time_sec);
+            }
+        }
+        if let Some(t) = seek {
+            app.video.seek_to((t * 1000.0) as i64);
+        }
+        ui.add_space(8.0);
+    }
+
     if !v.tags.is_empty() {
         ui.horizontal_wrapped(|ui| {
             ui.add_space(14.0);
@@ -627,87 +849,5 @@ fn intro(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
     }
     if let Some(next) = clicked {
         app.open_detail(next);
-    }
-}
-
-fn comments(ui: &mut egui::Ui, list: &[crate::api::Comment]) {
-    if list.is_empty() {
-        ui.horizontal(|ui| {
-            ui.add_space(14.0);
-            ui.label(
-                egui::RichText::new("还没有评论，来抢个沙发")
-                    .color(theme::TEXT3)
-                    .size(11.0),
-            );
-        });
-        return;
-    }
-    for c in list {
-        let w = ui.available_width();
-        let h = if c.content.chars().count() > 26 { 86.0 } else { 70.0 };
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(w, h), Sense::hover());
-        let p = ui.painter();
-        let name = if c.username.is_empty() {
-            "匿名".to_owned()
-        } else {
-            c.username.clone()
-        };
-        widgets::avatar(
-            p,
-            Pos2::new(rect.left() + 24.0, rect.top() + 20.0),
-            12.0,
-            &name,
-            7,
-        );
-        p.text(
-            Pos2::new(rect.left() + 44.0, rect.top() + 12.0),
-            Align2::LEFT_TOP,
-            &name,
-            FontId::proportional(12.0),
-            theme::TEXT2,
-        );
-        if c.is_by_uploader {
-            let tag = Rect::from_min_size(
-                Pos2::new(
-                    rect.left() + 46.0 + name.chars().count() as f32 * 13.0,
-                    rect.top() + 13.0,
-                ),
-                Vec2::new(20.0, 12.0),
-            );
-            p.rect_filled(tag, 2.0, theme::UP_TAG);
-            p.text(
-                tag.center(),
-                Align2::CENTER_CENTER,
-                "UP",
-                FontId::proportional(8.0),
-                Color32::WHITE,
-            );
-        }
-        p.text(
-            Pos2::new(rect.right() - 14.0, rect.top() + 12.0),
-            Align2::RIGHT_TOP,
-            format!("赞 {}", theme::human(c.like_count)),
-            FontId::proportional(10.0),
-            theme::TEXT3,
-        );
-        let lines = widgets::wrap_lines(p, &c.content, 12.0, w - 70.0, 3);
-        let mut y = rect.top() + 32.0;
-        for l in lines {
-            p.text(
-                Pos2::new(rect.left() + 44.0, y),
-                Align2::LEFT_TOP,
-                l,
-                FontId::proportional(12.0),
-                theme::TEXT,
-            );
-            y += 17.0;
-        }
-        p.line_segment(
-            [
-                Pos2::new(rect.left() + 20.0, rect.bottom()),
-                Pos2::new(rect.right() - 14.0, rect.bottom()),
-            ],
-            Stroke::new(1.0, theme::LINE),
-        );
     }
 }

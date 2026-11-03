@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, ColorImage, TextureHandle};
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 /// 后端返回 /uploads/xxx.jpg，桌面端映射到仓库 data 目录；
 /// 安卓端没有该目录（文件不存在），返回 None，由调用方画占位。
@@ -23,16 +23,20 @@ pub struct Covers {
     base: String,
     tex: HashMap<String, TextureHandle>,
     requested: HashSet<String>,
-    rx: Option<Receiver<(String, ColorImage)>>,
+    /// 常驻通道：多次 request 共用，避免后一批把前一批的回包丢掉
+    tx: Sender<(String, ColorImage)>,
+    rx: Receiver<(String, ColorImage)>,
 }
 
 impl Covers {
     pub fn new(base: String) -> Self {
+        let (tx, rx) = channel();
         Self {
             base,
             tex: HashMap::new(),
             requested: HashSet::new(),
-            rx: None,
+            tx,
+            rx,
         }
     }
 
@@ -62,8 +66,7 @@ impl Covers {
         if targets.is_empty() {
             return;
         }
-        let (tx, rx) = channel();
-        self.rx = Some(rx);
+        let tx = self.tx.clone();
         std::thread::spawn(move || {
             for p in targets {
                 let bytes = if p.starts_with("http") {
@@ -95,9 +98,8 @@ impl Covers {
     }
 
     pub fn poll(&mut self, ctx: &egui::Context) {
-        let Some(rx) = &self.rx else { return };
         loop {
-            match rx.try_recv() {
+            match self.rx.try_recv() {
                 Ok((path, img)) => {
                     let h = ctx.load_texture(path.clone(), img, egui::TextureOptions::LINEAR);
                     self.tex.insert(path, h);

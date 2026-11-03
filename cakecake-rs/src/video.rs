@@ -511,6 +511,55 @@ mod android {
     ///
     /// Android 15 强制 edge-to-edge 后 `adjustResize` 不再缩窗口，
     /// 键盘是盖在画布上的，所以只能自己查 IME inset 再把内容顶上去。
+    /// 直接调系统输入法（eframe 的 ViewportCommand::IMEAllowed 在本机不生效）
+    pub fn set_soft_input(show: bool) {
+        let (Some(vm), Some(act)) = (VM.get(), ACTIVITY.get()) else {
+            return;
+        };
+        let Ok(mut env) = vm.attach_current_thread() else {
+            return;
+        };
+        let r = (|| -> Result<(), jni::errors::Error> {
+            let name = env.new_string("input_method")?;
+            let imm = env
+                .call_method(
+                    act.as_obj(),
+                    "getSystemService",
+                    "(Ljava/lang/String;)Ljava/lang/Object;",
+                    &[JValue::Object(&JObject::from(name))],
+                )?
+                .l()?;
+            if imm.is_null() {
+                return Ok(());
+            }
+            let window = env
+                .call_method(act.as_obj(), "getWindow", "()Landroid/view/Window;", &[])?
+                .l()?;
+            let decor = env
+                .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
+                .l()?;
+            if show {
+                // NativeActivity 的 decor 不是编辑器视图，showSoftInput 在部分 ROM 上无效，
+                // 用 toggleSoftInput(SHOW_FORCED, 0) 直接把输入法拉起来
+                env.call_method(&imm, "toggleSoftInput", "(II)V", &[JValue::Int(1), JValue::Int(0)])?;
+            } else {
+                let token = env
+                    .call_method(&decor, "getWindowToken", "()Landroid/os/IBinder;", &[])?
+                    .l()?;
+                env.call_method(
+                    &imm,
+                    "hideSoftInputFromWindow",
+                    "(Landroid/os/IBinder;I)Z",
+                    &[JValue::Object(&token), JValue::Int(0)],
+                )?;
+            }
+            Ok(())
+        })();
+        if r.is_err() {
+            let _ = env.exception_clear();
+        }
+    }
+
     pub fn ime_px() -> i32 {
         let (Some(vm), Some(act)) = (VM.get(), ACTIVITY.get()) else {
             return 0;
@@ -519,44 +568,42 @@ mod android {
             return 0;
         };
         let r = (|| -> Result<i32, jni::errors::Error> {
-            let sdk = env
-                .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
-                .i()?;
-            if sdk < 30 {
-                return Ok(0);
-            }
             let window = env
                 .call_method(act.as_obj(), "getWindow", "()Landroid/view/Window;", &[])?
                 .l()?;
             let decor = env
                 .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
                 .l()?;
-            let insets = env
-                .call_method(
-                    &decor,
-                    "getRootWindowInsets",
-                    "()Landroid/view/WindowInsets;",
-                    &[],
-                )?
+
+            // 真实屏幕高度
+            let res = env
+                .call_method(act.as_obj(), "getResources", "()Landroid/content/res/Resources;", &[])?
                 .l()?;
-            if insets.is_null() {
-                return Ok(0);
-            }
-            let ty = env
-                .call_static_method("android/view/WindowInsets$Type", "ime", "()I", &[])?
+            let dm = env
+                .call_method(&res, "getDisplayMetrics", "()Landroid/util/DisplayMetrics;", &[])?
+                .l()?;
+            let screen_h = env.get_field(&dm, "heightPixels", "I")?.i()?;
+            let decor_h = env
+                .call_method(&decor, "getHeight", "()I", &[])?
                 .i()?;
-            let gi = env
-                .call_method(
-                    &insets,
-                    "getInsets",
-                    "(I)Landroid/graphics/Insets;",
-                    &[JValue::Int(ty)],
-                )?
-                .l()?;
-            if gi.is_null() {
+
+            // 窗口自己已经被系统缩小（adjustResize）时，页面天然让位，不要再减一次，
+            // 否则会凭空多出一大块空白
+            if decor_h < screen_h - 100 {
                 return Ok(0);
             }
-            env.get_field(&gi, "bottom", "I")?.i()
+
+            // 可见区域底边 = 键盘上沿；差值就是键盘高度。
+            // 注意要用窗口(decor)的实际高度而不是 DisplayMetrics：国产 ROM 上
+            // DisplayMetrics.heightPixels 会扣掉状态栏/导航栏（本机 1600 → 1470），
+            // 直接相减会少算一截，悬浮输入栏就正好被键盘盖住。
+            let rect_cls = env.find_class("android/graphics/Rect")?;
+            let m_init = env.get_method_id(&rect_cls, "<init>", "()V")?;
+            let rect = unsafe { env.new_object_unchecked(&rect_cls, m_init, &[]) }?;
+            env.call_method(&decor, "getWindowVisibleDisplayFrame", "(Landroid/graphics/Rect;)V", &[JValue::Object(&rect)])?;
+            let bottom = env.get_field(&rect, "bottom", "I")?.i()?;
+            let ime = decor_h - bottom;
+            Ok(if ime > 0 { ime } else { 0 })
         })();
         match r {
             Ok(v) => v,
@@ -567,7 +614,32 @@ mod android {
         }
     }
 
-    /// 把 App 退到后台（根页面按返回键用）。
+    /// Java 壳 MainBack.onBackPressed 打过来的标记
+#[cfg(target_os = "android")]
+static BACK_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// JNI 入口：Java 的 nativeBack() 落到这里
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cakecake_rust_MainBack_nativeBack(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+) {
+    BACK_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// 取一次「按了返回键」标记（取完就清）
+#[cfg(target_os = "android")]
+pub fn take_back_request() -> bool {
+    BACK_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn take_back_request() -> bool {
+    false
+}
+
+/// 把 App 退到后台（根页面按返回键用）。
     ///
     /// 不能用 ViewportCommand::Close：那会 finish 掉 Activity，但进程还活着，
     /// 下次点图标会在同一进程里重建 Activity → winit 报
@@ -896,3 +968,16 @@ fn draw(shared: &Arc<Mutex<Inner>>, info: &egui::PaintCallbackInfo, gl: &glow::C
         gl.viewport(0, 0, sw as i32, sh as i32);
     }
 }
+
+/// 顶层导出：安卓走 JNI 标记，桌面恒为 false
+#[cfg(target_os = "android")]
+pub use android::take_back_request;
+#[cfg(not(target_os = "android"))]
+pub fn take_back_request() -> bool {
+    false
+}
+
+#[cfg(target_os = "android")]
+pub use android::set_soft_input;
+#[cfg(not(target_os = "android"))]
+pub fn set_soft_input(_show: bool) {}

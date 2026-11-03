@@ -7,6 +7,7 @@ pub mod app;
 pub mod images;
 pub mod livechat;
 pub mod pages;
+pub mod subtitle;
 pub mod theme;
 pub mod video;
 pub mod widgets;
