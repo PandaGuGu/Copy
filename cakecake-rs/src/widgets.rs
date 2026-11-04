@@ -179,6 +179,87 @@ pub fn small_card(ui: &mut egui::Ui, v: &Video, covers: &Covers, width: f32) -> 
     resp
 }
 
+// ───────────────────────── 播放器蒙层（详情页 / 直播间共用） ─────────────────────────
+
+/// 播放 / 暂停图标
+pub fn play_icon(p: &Painter, c: Pos2, playing: bool, color: Color32) {
+    if playing {
+        p.rect_filled(
+            Rect::from_center_size(Pos2::new(c.x - 4.0, c.y), Vec2::new(3.5, 13.0)),
+            1.0,
+            color,
+        );
+        p.rect_filled(
+            Rect::from_center_size(Pos2::new(c.x + 4.0, c.y), Vec2::new(3.5, 13.0)),
+            1.0,
+            color,
+        );
+    } else {
+        p.add(egui::Shape::convex_polygon(
+            vec![
+                Pos2::new(c.x - 5.0, c.y - 7.0),
+                Pos2::new(c.x - 5.0, c.y + 7.0),
+                Pos2::new(c.x + 7.0, c.y),
+            ],
+            color,
+            Stroke::NONE,
+        ));
+    }
+}
+
+/// 四角括号图标：`exit=false` 是全屏（角朝内），`exit=true` 是退出全屏（角朝外）
+pub fn fullscreen_icon(p: &Painter, c: Pos2, color: Color32, exit: bool) {
+    let r = Rect::from_center_size(c, Vec2::new(14.0, 14.0));
+    let st = Stroke::new(1.2, color);
+    let d = 4.0;
+    for (corner, sx, sy) in [
+        (r.left_top(), 1.0, 1.0),
+        (r.right_top(), -1.0, 1.0),
+        (r.left_bottom(), 1.0, -1.0),
+        (r.right_bottom(), -1.0, -1.0),
+    ] {
+        let (dx, dy) = if exit { (-sx * d, -sy * d) } else { (sx * d, sy * d) };
+        p.line_segment([corner, Pos2::new(corner.x + dx, corner.y)], st);
+        p.line_segment([corner, Pos2::new(corner.x, corner.y + dy)], st);
+    }
+}
+
+/// 上下渐变压暗，保证白字控件在亮画面上也看得清
+pub fn scrim(p: &Painter, rect: Rect) {
+    let top_h = 64.0;
+    for i in 0..6 {
+        let y0 = rect.top() + top_h * i as f32 / 6.0;
+        let y1 = rect.top() + top_h * (i as f32 + 1.0) / 6.0;
+        p.rect_filled(
+            Rect::from_min_max(Pos2::new(rect.left(), y0), Pos2::new(rect.right(), y1)),
+            0.0,
+            Color32::from_black_alpha(26 + i * 7),
+        );
+    }
+    let bottom_h = 118.0;
+    for i in 0..6 {
+        let y0 = rect.bottom() - bottom_h + bottom_h * i as f32 / 6.0;
+        let y1 = rect.bottom() - bottom_h + bottom_h * (i as f32 + 1.0) / 6.0;
+        p.rect_filled(
+            Rect::from_min_max(Pos2::new(rect.left(), y0), Pos2::new(rect.right(), y1)),
+            0.0,
+            Color32::from_black_alpha(45 + i * 9),
+        );
+    }
+}
+
+/// 在矩形里居中适配 16:9，保持画面比例（多余部分留黑边，不拉伸）
+pub fn fit16x9(rect: Rect) -> Rect {
+    let ar = 16.0 / 9.0;
+    let mut w = rect.width();
+    let mut h = w / ar;
+    if h > rect.height() {
+        h = rect.height();
+        w = h * ar;
+    }
+    Rect::from_center_size(rect.center(), Vec2::new(w, h))
+}
+
 /// 圆形头像占位：取名字首字
 pub fn avatar(p: &Painter, center: Pos2, r: f32, name: &str, seed: u64) {
     const BG: [Color32; 6] = [
@@ -414,4 +495,65 @@ pub fn nav_icon(p: &Painter, c: Pos2, kind: NavIcon, color: Color32) {
             p.add(egui::Shape::line(pts, stroke));
         }
     }
+}
+
+/// 原生输入框代理（安卓）：NativeActivity 里 egui 的输入框收不到中文
+/// （软键盘只吐数字），所以所有输入框都自己画、内容交给隐藏的 EditText。
+/// 返回 true = 点在了框里，调用方负责设焦点并拉起键盘。
+pub fn native_field(
+    ui: &mut egui::Ui,
+    text: &str,
+    hint: &str,
+    multi: bool,
+    height: f32,
+    focused: bool,
+) -> bool {
+    let w = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, height), Sense::click());
+    let p = ui.painter();
+    p.rect_filled(rect, 8.0, theme::SURFACE);
+    if focused {
+        // 正在输入的这个框描个边，用户才知道字会进哪一格
+        p.rect_stroke(rect, 8.0, Stroke::new(1.2, theme::PINK), StrokeKind::Inside);
+    }
+    let inner = rect.shrink2(Vec2::new(10.0, 8.0));
+    let cp = p.with_clip_rect(inner);
+    if text.trim().is_empty() {
+        cp.text(
+            Pos2::new(inner.left(), inner.top()),
+            Align2::LEFT_TOP,
+            hint,
+            FontId::proportional(13.0),
+            theme::TEXT3,
+        );
+    } else if multi {
+        // 多行：贴底显示最后几行（光标在末尾）
+        let lines = wrap_lines(&cp, text, 13.0, inner.width(), 200);
+        let per = (inner.height() / 19.0).floor().max(1.0) as usize;
+        let start = lines.len().saturating_sub(per);
+        let mut y = inner.top();
+        for l in &lines[start..] {
+            cp.text(
+                Pos2::new(inner.left(), y),
+                Align2::LEFT_TOP,
+                l,
+                FontId::proportional(13.0),
+                theme::TEXT,
+            );
+            y += 19.0;
+        }
+    } else {
+        let g = cp.layout_no_wrap(text.to_owned(), FontId::proportional(13.0), theme::TEXT);
+        let x = if g.size().x > inner.width() {
+            inner.right() - g.size().x
+        } else {
+            inner.left()
+        };
+        cp.galley(
+            Pos2::new(x, inner.center().y - g.size().y / 2.0),
+            g,
+            theme::TEXT,
+        );
+    }
+    resp.clicked()
 }

@@ -13,6 +13,42 @@ use eframe::egui::{
 };
 use std::collections::HashMap;
 
+/// 评论配图尺寸（一条评论最多铺 3 张）
+pub const IMG_SIDE: f32 = 72.0;
+
+/// 配图占用的高度（含与正文之间的间距）；没有配图返回 0
+pub fn images_h(c: &Comment) -> f32 {
+    if c.images.is_empty() {
+        0.0
+    } else {
+        IMG_SIDE + 8.0
+    }
+}
+
+/// 画一条评论的配图（最多 3 张一排，超出宽度就截断）。点任意一张放大查看。
+pub fn draw_images(ui: &mut egui::Ui, app: &mut App, c: &Comment, left: f32, top: f32, max_w: f32) {
+    if c.images.is_empty() {
+        return;
+    }
+    let gap = 6.0;
+    let mut x = left;
+    for (i, url) in c.images.iter().take(3).enumerate() {
+        if x + IMG_SIDE > left + max_w + 0.5 {
+            break;
+        }
+        let rect = Rect::from_min_size(Pos2::new(x, top), Vec2::splat(IMG_SIDE));
+        widgets::draw_cover(ui, rect, url, &app.covers, 6.0);
+        // 缩略图本身不占布局（父级已经 allocate 过整块），这里只补一个点击热区
+        if ui
+            .interact(rect, egui::Id::new(("comment-img", c.id, i)), Sense::click())
+            .clicked()
+        {
+            app.image_view = Some(url.clone());
+        }
+        x += IMG_SIDE + gap;
+    }
+}
+
 /// 昵称兜底
 pub fn name_of(c: &Comment) -> String {
     if c.username.is_empty() {
@@ -276,11 +312,88 @@ pub fn composer(ui: &mut egui::Ui, app: &mut App, video_id: u64) {
         });
     }
 
+    // 系统相册选图结果（安卓）：选好了就用，取消则收起配图行
+    #[cfg(target_os = "android")]
+    if let Some(path) = crate::video::picked_image() {
+        if path.is_empty() {
+            if app.comment_image_path.is_empty() {
+                app.comment_image_open = false;
+            }
+        } else {
+            app.comment_image_path = path;
+            app.comment_image_open = true;
+        }
+    }
+
+    // 评论配图：展开时在输入栏上方加一行，高度由调用方同步预留
+    if app.comment_image_open {
+        #[cfg(not(target_os = "android"))]
+        if app.image_files.is_empty() {
+            app.scan_images();
+        }
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            ui.label(
+                egui::RichText::new("配图")
+                    .color(theme::TEXT3)
+                    .size(10.0),
+            );
+            if app.comment_image_path.is_empty() {
+                ui.label(
+                    egui::RichText::new("未选择")
+                        .color(theme::TEXT3)
+                        .size(10.0),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new(
+                        std::path::Path::new(&app.comment_image_path)
+                            .file_name()
+                            .map(|x| x.to_string_lossy().to_string())
+                            .unwrap_or_default(),
+                    )
+                    .color(theme::PINK)
+                    .size(10.0),
+                );
+            }
+            #[cfg(not(target_os = "android"))]
+            if ui.button("刷新").clicked() {
+                app.scan_images();
+            }
+            if !app.comment_image_path.is_empty() && ui.button("移除").clicked() {
+                app.comment_image_path.clear();
+            }
+        });
+        // 桌面端保留本地目录选择；安卓走系统相册，不需要再列文件
+        #[cfg(not(target_os = "android"))]
+        egui::ScrollArea::horizontal()
+            .max_height(24.0)
+            .id_salt("comment-img-picker")
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for path in app.image_files.clone() {
+                        let name = std::path::Path::new(&path)
+                            .file_name()
+                            .map(|x| x.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let on = app.comment_image_path == path;
+                        if ui.selectable_label(on, name).clicked() {
+                            app.comment_image_path = path;
+                        }
+                    }
+                });
+            });
+    }
+
     let w = ui.available_width();
     let (rect, bar_resp) = ui.allocate_exact_size(Vec2::new(w, 46.0), Sense::click());
     let pill = Rect::from_min_max(
         Pos2::new(rect.left() + 12.0, rect.center().y - 18.0),
-        Pos2::new(rect.right() - 58.0, rect.center().y + 18.0),
+        Pos2::new(rect.right() - 88.0, rect.center().y + 18.0),
+    );
+    let img_btn = Rect::from_center_size(
+        Pos2::new(rect.right() - 64.0, rect.center().y),
+        Vec2::splat(28.0),
     );
     let send_btn = Rect::from_center_size(
         Pos2::new(rect.right() - 30.0, rect.center().y),
@@ -307,39 +420,105 @@ pub fn composer(ui: &mut egui::Ui, app: &mut App, video_id: u64) {
             ink,
             Stroke::NONE,
         ));
+        // 配图按钮：有配图时高亮
+        let has_img = !app.comment_image_path.is_empty();
+        p.text(
+            img_btn.center(),
+            Align2::CENTER_CENTER,
+            "图",
+            FontId::proportional(12.0),
+            if has_img { theme::PINK } else { theme::TEXT3 },
+        );
     }
 
     let hint = match &target {
         Some((_, name)) => format!("回复 @{name}"),
         None => "进来和UP唠会嗑呗".to_owned(),
     };
-    let field = ui.put(
-        pill.shrink2(Vec2::new(14.0, 7.0)),
-        egui::TextEdit::singleline(&mut app.comment_text)
-            .id(egui::Id::new("comment-input"))
-            .frame(egui::Frame::NONE)
-            .hint_text(hint)
-            .font(FontId::proportional(12.0)),
-    );
-    // 安卓软键盘：聚焦时允许 IME 弹出
-    let focused = field.has_focus();
-    app.note_focus(focused);
-    if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-        send = true;
+
+    // 原生输入框同步：NativeActivity 的窗口没有输入连接，软键盘只会吐数字，
+    // 所以打字交给隐藏的 EditText，这里每帧把内容镜像回来自己画。
+    if app.comment_ime {
+        if let Some(t) = crate::video::ime_text() {
+            if t != app.comment_text {
+                app.comment_text = t;
+            }
+        }
     }
-    // 发送键：整条输入栏是一个点击区，按坐标判断是否点在圆钮上
+    {
+        let p = ui.painter();
+        let text_rect = pill.shrink2(Vec2::new(14.0, 7.0));
+        if app.comment_text.is_empty() {
+            p.text(
+                Pos2::new(text_rect.left(), text_rect.center().y),
+                Align2::LEFT_CENTER,
+                &hint,
+                FontId::proportional(12.0),
+                theme::TEXT3,
+            );
+        } else {
+            let clipped = p.with_clip_rect(text_rect);
+            let g = clipped.layout_no_wrap(
+                app.comment_text.clone(),
+                FontId::proportional(12.0),
+                theme::TEXT,
+            );
+            // 太长时让光标停在末尾，前面被裁掉
+            let x = if g.size().x > text_rect.width() {
+                text_rect.right() - g.size().x
+            } else {
+                text_rect.left()
+            };
+            let y = text_rect.center().y - g.size().y / 2.0;
+            clipped.galley(Pos2::new(x, y), g.clone(), theme::TEXT);
+            if app.comment_ime {
+                let caret_x = (text_rect.left() + g.size().x).min(text_rect.right());
+                p.line_segment(
+                    [
+                        Pos2::new(caret_x, text_rect.center().y - 7.0),
+                        Pos2::new(caret_x, text_rect.center().y + 7.0),
+                    ],
+                    Stroke::new(1.5, theme::PINK),
+                );
+            }
+        }
+    }
+
+    // 整条输入栏是一个点击区，按坐标分派：输入区拉起原生键盘 / 发送 / 配图
     if bar_resp.clicked() {
         if let Some(pos) = bar_resp.interact_pointer_pos() {
             if send_btn.contains(pos) {
                 send = true;
+            } else if img_btn.contains(pos) {
+                #[cfg(target_os = "android")]
+                {
+                    // 打开系统相册选图；选完由 picked_image 回填路径
+                    app.comment_image_open = true;
+                    crate::video::pick_image();
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    app.comment_image_open = !app.comment_image_open;
+                }
+            } else if pill.contains(pos) {
+                // 每次点输入区都把原生键盘重新叫起来（系统收下去之后还能再点开）
+                app.comment_ime = true;
+                crate::video::ime_open(&app.comment_text);
             }
         }
+    }
+    if app.comment_ime && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        send = true;
     }
 
     if cancel {
         app.reply_to = None;
     }
     if send {
+        // 先收键盘，再发；文本留给 post_comment 读，失败还能重试
+        app.comment_ime = false;
+        crate::video::ime_close();
+        crate::video::ime_clear();
         app.post_comment(video_id);
     }
 }

@@ -11,6 +11,7 @@ pub mod subtitle;
 pub mod theme;
 pub mod video;
 pub mod widgets;
+pub mod wsclient;
 pub mod zones;
 
 use eframe::egui;

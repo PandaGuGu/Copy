@@ -383,14 +383,8 @@ func srsHookStreamKey(c *gin.Context) string {
 
 // SRSOnPublish POST /api/v1/live/callback/on_publish — node-media-server calls this when stream starts
 func (a *API) SRSOnPublish(c *gin.Context) {
-	streamKey := srsHookStreamKey(c)
-	if streamKey == "" {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-
-	var room model.LiveRoom
-	if err := a.DB.Where("stream_key = ?", streamKey).First(&room).Error; err != nil {
+	room, ok := a.liveRoomByStreamKey(srsHookStreamKey(c))
+	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -406,6 +400,28 @@ func (a *API) SRSOnPublish(c *gin.Context) {
 		"updated_at": now,
 	})
 	resp.OK(c, gin.H{"code": 0, "room_id": room.ID, "status": "live"})
+}
+
+// liveRoomByStreamKey 按 SRS 上报的流名找直播间。
+//
+// SRS 转码出来的多码率流是「<stream_key>_<engine>」（如 `<key>_sd`），它们同样会走
+// on_publish 回调。这些变体不是独立的房间，去掉后缀再按原始 key 查一次即可，
+// 否则 SRS 收到 404 会直接拒绝发布，转码产物就出不来（直播清晰度也就没法切）。
+func (a *API) liveRoomByStreamKey(streamKey string) (model.LiveRoom, bool) {
+	var room model.LiveRoom
+	if streamKey == "" {
+		return room, false
+	}
+	if err := a.DB.Where("stream_key = ?", streamKey).First(&room).Error; err == nil {
+		return room, true
+	}
+	if i := strings.LastIndex(streamKey, "_"); i > 0 {
+		base := streamKey[:i]
+		if err := a.DB.Where("stream_key = ?", base).First(&room).Error; err == nil {
+			return room, true
+		}
+	}
+	return room, false
 }
 
 // SRSOnDone POST /api/v1/live/callback/on_done — node-media-server calls when stream ends

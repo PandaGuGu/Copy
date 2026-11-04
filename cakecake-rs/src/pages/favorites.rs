@@ -131,7 +131,76 @@ fn folders_section(ui: &mut egui::Ui, app: &mut App) {
             if let Some(id) = del {
                 app.delete_folder(id);
             } else if let Some(folder) = pick {
+                app.fav_selected.clear();
                 app.select_favorites_folder(folder);
+            }
+
+            // 选中某个收藏夹后，才有改名 / 清理 / 批量移出
+            if let Some(fid) = app.favorites_folder {
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    if ui
+                        .add(egui::Button::new(
+                            egui::RichText::new("重命名").color(theme::TEXT2).size(11.0),
+                        ))
+                        .clicked()
+                    {
+                        app.rename_folder = fid;
+                        app.rename_title = app
+                            .favorite_folders
+                            .iter()
+                            .find(|f| f.id == fid)
+                            .map(|f| f.title.clone())
+                            .unwrap_or_default();
+                    }
+                    if ui
+                        .add(egui::Button::new(
+                            egui::RichText::new("清理失效").color(theme::TEXT2).size(11.0),
+                        ))
+                        .clicked()
+                    {
+                        app.clear_invalid_favorites(fid);
+                    }
+                });
+                if app.rename_folder == fid {
+                    ui.horizontal(|ui| {
+                        ui.add_space(14.0);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut app.rename_title)
+                                .hint_text("新的收藏夹名称")
+                                .desired_width((ui.available_width() - 120.0).max(90.0)),
+                        );
+                        if ui.button("保存").clicked() {
+                            app.rename_favorite_folder(fid);
+                        }
+                        if ui.button("取消").clicked() {
+                            app.rename_folder = 0;
+                        }
+                    });
+                }
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    let mut target = app.move_to_folder;
+                    let current = app
+                        .favorite_folders
+                        .iter()
+                        .find(|f| f.id == target)
+                        .map(|f| f.title.clone())
+                        .unwrap_or_else(|| "移动到…".to_owned());
+                    egui::ComboBox::from_id_salt("fav-move-target")
+                        .selected_text(current)
+                        .show_ui(ui, |ui| {
+                            for f in &app.favorite_folders {
+                                if f.id != fid {
+                                    ui.selectable_value(&mut target, f.id, &f.title);
+                                }
+                            }
+                        });
+                    app.move_to_folder = target;
+                    if ui.button("移动选中").clicked() {
+                        app.move_selected_favorites(fid);
+                    }
+                });
             }
         }
     }
@@ -303,9 +372,22 @@ fn videos_section(ui: &mut egui::Ui, app: &mut App) {
             if app.favorites.is_empty() {
                 hint(ui, "还没有收藏的视频");
             } else {
+                if let Some(fid) = app.favorites_folder {
+                    ui.horizontal(|ui| {
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new(format!("已选 {} 个", app.fav_selected.len()))
+                                .color(theme::TEXT3)
+                                .size(10.5),
+                        );
+                        if ui.button("移出收藏夹").clicked() {
+                            app.batch_remove_favorites(fid);
+                        }
+                    });
+                }
                 let mut open = None;
-                for it in &app.favorites {
-                    if video_row(ui, app, it) {
+                for it in app.favorites.clone() {
+                    if video_row(ui, app, &it) {
                         open = Some(it.id);
                     }
                 }
@@ -317,7 +399,7 @@ fn videos_section(ui: &mut egui::Ui, app: &mut App) {
     }
 }
 
-fn video_row(ui: &mut egui::Ui, app: &App, it: &FavoriteItem) -> bool {
+fn video_row(ui: &mut egui::Ui, app: &mut App, it: &FavoriteItem) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 82.0), Sense::click());
     let cover = Rect::from_min_size(
@@ -327,7 +409,8 @@ fn video_row(ui: &mut egui::Ui, app: &App, it: &FavoriteItem) -> bool {
     widgets::draw_cover(ui, cover, &it.cover_url, &app.covers, 4.0);
 
     let text_x = cover.right() + 12.0;
-    let text_w = (rect.right() - text_x - 12.0).max(40.0);
+    let multi = app.favorites_folder.is_some();
+    let text_w = (rect.right() - text_x - if multi { 42.0 } else { 12.0 }).max(40.0);
     let p = ui.painter();
     let lines = widgets::wrap_lines(p, &it.title, 13.0, text_w, 2);
     let mut y = rect.top() + 4.0;
@@ -367,6 +450,42 @@ fn video_row(ui: &mut egui::Ui, app: &App, it: &FavoriteItem) -> bool {
             FontId::proportional(11.0),
             theme::PINK,
         );
+    }
+
+    if multi {
+        let c = Pos2::new(rect.right() - 24.0, rect.center().y);
+        let on = app.fav_selected.contains(&it.id);
+        let box_rect = Rect::from_center_size(c, Vec2::new(18.0, 18.0));
+        if on {
+            ui.painter().rect_filled(box_rect, 9.0, theme::PINK);
+            ui.painter().add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x - 5.0, c.y),
+                    Pos2::new(c.x - 1.0, c.y + 4.0),
+                    Pos2::new(c.x + 6.0, c.y - 5.0),
+                ],
+                Stroke::new(1.6, Color32::WHITE),
+            ));
+        } else {
+            ui.painter().rect_stroke(
+                box_rect,
+                9.0,
+                Stroke::new(1.0, theme::LINE),
+                StrokeKind::Inside,
+            );
+        }
+        let hit = Rect::from_center_size(c, Vec2::new(36.0, 36.0));
+        if ui
+            .interact(hit, egui::Id::new(("fav-sel", it.id)), Sense::click())
+            .clicked()
+        {
+            if on {
+                app.fav_selected.retain(|x| *x != it.id);
+            } else {
+                app.fav_selected.push(it.id);
+            }
+            return false;
+        }
     }
 
     p.line_segment(

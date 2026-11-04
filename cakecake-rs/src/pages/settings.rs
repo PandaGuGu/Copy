@@ -31,6 +31,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut App) {
             field(ui, app, Field::Birthday);
             actions_row(ui, app, "保存资料", Btn::SaveProfile);
 
+            section(ui, "头像");
+            avatar_block(ui, app);
+
             section(ui, "空间公告");
             field(ui, app, Field::Announcement);
             actions_row(ui, app, "保存公告", Btn::SaveAnnouncement);
@@ -43,6 +46,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut App) {
             section(ui, "服务器");
             field(ui, app, Field::Server);
             actions_row(ui, app, "保存并重连", Btn::SaveServer);
+            lan_row(ui, app);
 
             section(ui, "空间隐私");
             privacy_rows(ui, app);
@@ -122,7 +126,8 @@ impl Field {
         match self {
             Field::Birthday => "2000-01-01",
             Field::Announcement => "展示在个人主页顶部",
-            Field::Server => "http://192.168.1.8:8080",
+            // 真机走 Wi-Fi 时填电脑的局域网地址（和手机在同一网段）
+            Field::Server => "http://192.168.1.100:8080",
             _ => "",
         }
     }
@@ -167,8 +172,15 @@ fn field(ui: &mut egui::Ui, app: &mut App, which: Field) {
     {
         ui.horizontal(|ui| {
             ui.add_space(14.0);
+            let hint = match which {
+                Field::Server => match crate::api::lan_base() {
+                    Some(base) => format!("局域网 {base}（下面可自动查找）"),
+                    None => "和手机同一 Wi-Fi 的电脑 IP，例如 http://192.168.1.100:8080".to_owned(),
+                },
+                _ => which.hint().to_owned(),
+            };
             let mut edit = egui::TextEdit::singleline(value)
-                .hint_text(which.hint())
+                .hint_text(hint)
                 .desired_width(ui.available_width() - 28.0);
             if which.password() {
                 edit = edit.password(true);
@@ -177,6 +189,97 @@ fn field(ui: &mut egui::Ui, app: &mut App, which: Field) {
         });
     }
     app.note_focus(focused);
+    ui.add_space(4.0);
+}
+
+/// 服务器地址下方：显示当前实际在用的地址，并提供「自动查找电脑」。
+/// 真机换 Wi-Fi / 电脑换了 IP 时，不用手敲地址也能回到局域网直连。
+fn lan_row(ui: &mut egui::Ui, app: &mut App) {
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(14.0);
+        let media = app
+            .client
+            .media_origin()
+            .unwrap_or_else(|| format!("http://{}:{}", crate::api::host_of(&app.client.base), crate::api::media_port()));
+        ui.label(
+            egui::RichText::new(format!("当前 {} · 直播源 {media}", app.client.base))
+                .color(theme::TEXT3)
+                .size(9.5),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new("自动查找电脑")
+                        .color(theme::PINK)
+                        .size(11.0),
+                )
+                .fill(theme::SURFACE)
+                .corner_radius(11.0)
+                .min_size(Vec2::new(0.0, 26.0)),
+            )
+            .clicked()
+        {
+            app.scan_for_lan();
+        }
+        ui.label(
+            egui::RichText::new("手机与电脑同一 Wi-Fi 时点这里")
+                .color(theme::TEXT3)
+                .size(9.5),
+        );
+    });
+    ui.add_space(4.0);
+}
+
+fn avatar_block(ui: &mut egui::Ui, app: &mut App) {
+    if app.image_files.is_empty() {
+        app.scan_images();
+    }
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        if ui.button("刷新本地图片").clicked() {
+            app.scan_images();
+        }
+        let label = if app.image_path.is_empty() {
+            "未选择图片"
+        } else {
+            std::path::Path::new(&app.image_path)
+                .file_name()
+                .and_then(|x| x.to_str())
+                .unwrap_or("已选择")
+        };
+        ui.label(
+            egui::RichText::new(label)
+                .color(theme::TEXT3)
+                .size(10.5),
+        );
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(14.0);
+        for path in app.image_files.clone() {
+            let name = std::path::Path::new(&path)
+                .file_name()
+                .map(|x| x.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let on = app.image_path == path;
+            if ui.selectable_label(on, name).clicked() {
+                app.image_path = path;
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        if ui.button("上传头像").clicked() {
+            app.upload_avatar();
+        }
+        ui.label(
+            egui::RichText::new("把图片放进 adb inbox 目录后点刷新")
+                .color(theme::TEXT3)
+                .size(9.5),
+        );
+    });
     ui.add_space(4.0);
 }
 

@@ -11,7 +11,7 @@
 //! 子资源在进页面时一次拉齐，切 tab 不再发请求。
 
 use crate::{
-    api::{ArticleCard, FavoriteItem, FollowUser, SpaceVideo, UserProfile},
+    api::{ArticleCard, CoinVideo, FavoriteItem, FollowUser, SpaceVideo, UserProfile},
     app::{App, LoadState, SpaceData, SpaceTab},
     theme, widgets,
 };
@@ -53,6 +53,11 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, user_id: u64) {
                         SpaceTab::Articles => articles(ui, app, &data.articles),
                         SpaceTab::Dynamics => dynamics(ui, &data),
                         SpaceTab::Favorites => favorites(ui, app, &data.favorites),
+                        SpaceTab::RecentCoins => recent_coins(ui, app, &data.recent_coins),
+                        SpaceTab::FavoriteFolders => favorite_folders(ui, app, &data),
+                        SpaceTab::ArticleFavorites => {
+                            articles(ui, app, &data.article_favorites)
+                        }
                         SpaceTab::Following => users(ui, app, &data.following, "还没有关注任何人"),
                         SpaceTab::Followers => users(ui, app, &data.followers, "还没有粉丝"),
                     }
@@ -205,11 +210,14 @@ fn tabs(ui: &mut egui::Ui, app: &mut App, data: &SpaceData) {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 40.0), Sense::hover());
     let count = |n: usize| if n > 0 { format!(" {n}") } else { String::new() };
-    let items: [(SpaceTab, String); 6] = [
+    let items: [(SpaceTab, String); 9] = [
         (SpaceTab::Videos, format!("投稿{}", count(data.videos.len()))),
         (SpaceTab::Articles, format!("文章{}", count(data.articles.len()))),
         (SpaceTab::Dynamics, format!("动态{}", count(data.dynamics.len()))),
         (SpaceTab::Favorites, format!("收藏{}", count(data.favorites.len()))),
+        (SpaceTab::RecentCoins, format!("投币{}", count(data.recent_coins.len()))),
+        (SpaceTab::FavoriteFolders, "收藏夹".to_owned()),
+        (SpaceTab::ArticleFavorites, "图文".to_owned()),
         (SpaceTab::Following, "关注".to_owned()),
         (SpaceTab::Followers, "粉丝".to_owned()),
     ];
@@ -229,12 +237,12 @@ fn tabs(ui: &mut egui::Ui, app: &mut App, data: &SpaceData) {
             Pos2::new(cx, rect.center().y - 2.0),
             Align2::CENTER_CENTER,
             label,
-            FontId::proportional(if active { 12.0 } else { 11.0 }),
+            FontId::proportional(if active { 11.0 } else { 10.0 }),
             if active { theme::TEXT } else { theme::TEXT2 },
         );
         if active {
             p.rect_filled(
-                Rect::from_center_size(Pos2::new(cx, rect.bottom() - 3.0), Vec2::new(20.0, 3.0)),
+                Rect::from_center_size(Pos2::new(cx, rect.bottom() - 3.0), Vec2::new(18.0, 3.0)),
                 1.5,
                 theme::PINK,
             );
@@ -248,6 +256,7 @@ fn tabs(ui: &mut egui::Ui, app: &mut App, data: &SpaceData) {
             .clicked()
         {
             app.space_tab = *tab;
+            app.space_folder = None;
         }
     }
 }
@@ -435,6 +444,97 @@ fn favorites(ui: &mut egui::Ui, app: &mut App, list: &[FavoriteItem]) {
     if let Some(id) = clicked {
         app.open_detail(id);
     }
+}
+
+/// 最近投币：横排视频行
+fn recent_coins(ui: &mut egui::Ui, app: &mut App, list: &[CoinVideo]) {
+    if list.is_empty() {
+        empty(ui, "还没有投币记录，或者 TA 没有公开");
+        return;
+    }
+    let mut clicked = None;
+    for c in list {
+        let v = crate::api::Video {
+            id: c.id,
+            user_id: 0,
+            title: c.title.clone(),
+            cover_url: c.cover_url.clone(),
+            duration: c.duration as u64,
+            play_count: c.play_count,
+            danmaku_count: c.danmaku_count,
+            comment_count: 0,
+            like_count: 0,
+        };
+        if widgets::video_row(ui, &v, &app.covers).clicked() {
+            clicked = Some(c.id);
+        }
+    }
+    if let Some(id) = clicked {
+        app.open_detail(id);
+    }
+}
+
+/// 收藏夹列表：点开某个夹，下面展开该夹的视频
+fn favorite_folders(ui: &mut egui::Ui, app: &mut App, data: &SpaceData) {
+    if data.favorite_folders.is_empty() {
+        empty(ui, "没有公开的收藏夹");
+        return;
+    }
+    let mut open = None;
+    for f in &data.favorite_folders {
+        let selected = app.space_folder == Some(f.id);
+        let w = ui.available_width();
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 52.0), Sense::click());
+        let p = ui.painter();
+        if selected {
+            p.rect_filled(rect, 0.0, theme::PINK_SOFT);
+        }
+        p.text(
+            Pos2::new(rect.left() + 14.0, rect.top() + 10.0),
+            Align2::LEFT_TOP,
+            &f.title,
+            FontId::proportional(13.0),
+            theme::TEXT,
+        );
+        let public = if f.is_public { "公开" } else { "私密" };
+        p.text(
+            Pos2::new(rect.left() + 14.0, rect.top() + 30.0),
+            Align2::LEFT_TOP,
+            format!("{} 个视频 · {public}", f.video_count),
+            FontId::proportional(10.5),
+            theme::TEXT3,
+        );
+        p.line_segment(
+            [
+                Pos2::new(rect.left() + 14.0, rect.bottom()),
+                Pos2::new(rect.right() - 14.0, rect.bottom()),
+            ],
+            Stroke::new(1.0, theme::LINE),
+        );
+        if resp.clicked() {
+            open = Some(f.id);
+        }
+    }
+    if let Some(id) = open {
+        app.open_space_folder(id);
+    }
+    let Some(folder_id) = app.space_folder else {
+        return;
+    };
+    ui.add_space(4.0);
+    match app.space_folder_state.clone() {
+        LoadState::Loading => empty(ui, "加载收藏夹…"),
+        LoadState::Err(e) => empty(ui, &format!("加载失败：{e}")),
+        _ => {
+            if app.space_folder_items.is_empty() {
+                empty(ui, "这个收藏夹是空的");
+            } else {
+                let list = app.space_folder_items.clone();
+                favorites(ui, app, &list);
+            }
+        }
+    }
+    let _ = folder_id;
 }
 
 /// 关注 / 粉丝列表：点头像进对方主页

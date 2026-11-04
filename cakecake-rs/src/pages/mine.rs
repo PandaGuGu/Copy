@@ -32,6 +32,11 @@ fn header(ui: &mut egui::Ui) {
 fn logged_in(ui: &mut egui::Ui, app: &mut App, me: &crate::api::Me) {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 110.0), Sense::hover());
+    // 点头像/昵称进自己的主页（和别人主页同一页，只是 id 是自己）
+    let home_hit = Rect::from_min_size(rect.min, Vec2::new(rect.width() - 90.0, 92.0));
+    let open_home = ui
+        .interact(home_hit, egui::Id::new("mine-home"), Sense::click())
+        .clicked();
     let p = ui.painter();
 
     let name = if me.nickname.is_empty() {
@@ -87,6 +92,10 @@ fn logged_in(ui: &mut egui::Ui, app: &mut App, me: &crate::api::Me) {
         theme::TEXT3,
     );
 
+    if open_home && me.user_id > 0 {
+        app.open_space(me.user_id);
+    }
+
     if !me.sign.is_empty() {
         p.text(
             Pos2::new(rect.left() + 78.0, rect.top() + 86.0),
@@ -131,6 +140,7 @@ fn logged_in(ui: &mut egui::Ui, app: &mut App, me: &crate::api::Me) {
     entry(ui, app, "稍后再看", crate::app::Route::WatchLater);
     entry(ui, app, "我的收藏", crate::app::Route::Favorites);
     entry(ui, app, "专栏", crate::app::Route::ArticleList);
+    entry(ui, app, "图文收藏", crate::app::Route::ArticleFavorites);
     entry(ui, app, "创作中心", crate::app::Route::Creator);
     entry(ui, app, "硬币与任务", crate::app::Route::Ledger);
     entry(ui, app, "专题", crate::app::Route::Specials);

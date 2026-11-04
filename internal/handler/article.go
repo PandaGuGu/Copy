@@ -451,17 +451,23 @@ func (a *API) GetArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	art, ok := loadPublishedArticle(a, id)
-	if !ok {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	var author model.User
-	_ = a.DB.First(&author, art.UserID).Error
 	var viewer uint64
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
 	}
+	art, ok := loadPublishedArticle(a, id)
+	if !ok {
+		// 作者本人要能看自己的草稿 / 审核中文章：编辑器回填、「预览」按钮
+		// 都走这个接口，只认 published 会让作者一点预览就 404。
+		var own model.Article
+		if viewer == 0 || a.DB.First(&own, id).Error != nil || own.UserID != viewer {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+			return
+		}
+		art = own
+	}
+	var author model.User
+	_ = a.DB.First(&author, art.UserID).Error
 	eng := articleEngagementByViewer(a.DB, viewer, []uint64{id})[id]
 	resp.OK(c, articleDetailPayload(a, &art, &author, eng, viewer))
 }
@@ -640,7 +646,10 @@ func (a *API) ListMyArticles(c *gin.Context) {
 	filtered := base
 	if dbSt := manuscriptArticleStatusToDB(statusQ); dbSt != "" {
 		filtered = filtered.Where("status = ?", dbSt)
-	} else {
+	} else if !strings.EqualFold(strings.TrimSpace(statusQ), "all") {
+		// 默认（不带 status）沿用「稿件管理」口径：不列草稿。
+		// 但 App 的「我的文章」要显式带 status=all —— 草稿也要看得见，
+		// 否则用户存完草稿回来列表里什么都没有，像是没保存上。
 		filtered = filtered.Where("status <> ?", articleStatusDraft)
 	}
 	if titleQ != "" {

@@ -38,7 +38,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, video_id: u64, comment_id: u64) {
     // 底部输入栏做成悬浮层，钉在「键盘/导航栏之上」。
     // Panel::bottom 在页面高度不够时会被键盘挤出可视区（整条被裁掉），
     // 所以改用 Area 按屏幕坐标定位，和视频详情页评论 tab 保持一致。
-    let bar_h = if app.reply_to.is_some() { 78.0 } else { 54.0 };
+    let bar_h = 54.0
+        + if app.reply_to.is_some() { 24.0 } else { 0.0 }
+        + if app.comment_image_open { 34.0 } else { 0.0 };
     let screen = ui.ctx().viewport_rect();
     let top = (screen.bottom() - app.bottom_inset - bar_h).max(0.0);
     egui::Area::new(egui::Id::new("comment-detail-composer"))
@@ -219,14 +221,15 @@ fn root_block(ui: &mut egui::Ui, app: &mut App, c: &Comment, reply_count: usize)
     let text_w = (w - text_x - 14.0).max(80.0);
     let lines = widgets::wrap_lines(ui.painter(), &c.content, 13.0, text_w, 40);
     let body_h = lines.len().max(1) as f32 * 19.0;
-    let h = 34.0 + body_h + 30.0;
+    let img_h = comment_ui::images_h(c);
+    let h = 34.0 + body_h + img_h + 30.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
 
     let av = Pos2::new(rect.left() + 14.0 + 14.0, rect.top() + 24.0);
     comment_ui::avatar(ui, app, c, av, 14.0);
 
-    let p = ui.painter();
-    comment_ui::name_line(p, rect.left() + text_x, rect.top() + 10.0, c);
+    let p = ui.painter().clone();
+    comment_ui::name_line(&p, rect.left() + text_x, rect.top() + 10.0, c);
 
     let mut y = rect.top() + 34.0;
     for l in &lines {
@@ -240,8 +243,18 @@ fn root_block(ui: &mut egui::Ui, app: &mut App, c: &Comment, reply_count: usize)
         y += 19.0;
     }
 
+    // 评论配图
+    comment_ui::draw_images(
+        ui,
+        app,
+        c,
+        rect.left() + text_x,
+        rect.top() + 34.0 + body_h + 4.0,
+        text_w,
+    );
+
     // 时间 · 地区 / 回复 / 赞踩
-    let meta_y = rect.top() + 34.0 + body_h + 12.0;
+    let meta_y = rect.top() + 34.0 + body_h + img_h + 12.0;
     p.text(
         Pos2::new(rect.left() + text_x, meta_y),
         Align2::LEFT_CENTER,
@@ -255,8 +268,7 @@ fn root_block(ui: &mut egui::Ui, app: &mut App, c: &Comment, reply_count: usize)
         theme::human(c.like_count)
     };
     let rects = comment_ui::action_rects(rect.right() - 14.0, meta_y, &like_text);
-    comment_ui::draw_actions(p, c, &rects, ui.ctx().pointer_hover_pos());
-
+    comment_ui::draw_actions(&p, c, &rects, ui.ctx().pointer_hover_pos());
     let _ = reply_count;
     let p = ui.painter();
     p.line_segment(
@@ -352,14 +364,15 @@ fn reply_row(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, roo
     let lines = widgets::wrap_lines(ui.painter(), &c.content, 12.5, text_w, 8);
     let body_h = lines.len().max(1) as f32 * 18.0;
     let head_h = if to_name.is_some() { 18.0 } else { 0.0 };
-    let h = 10.0 + 20.0 + head_h + body_h + 22.0 + 12.0;
+    let img_h = comment_ui::images_h(c);
+    let h = 10.0 + 20.0 + head_h + body_h + img_h + 22.0 + 12.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
 
     let av = Pos2::new(rect.left() + 14.0 + 12.0, rect.top() + 22.0);
     comment_ui::avatar(ui, app, c, av, 12.0);
 
-    let p = ui.painter();
-    comment_ui::name_line(p, rect.left() + text_x, rect.top() + 8.0, c);
+    let p = ui.painter().clone();
+    comment_ui::name_line(&p, rect.left() + text_x, rect.top() + 8.0, c);
 
     let mut y = rect.top() + 30.0;
     if to_name.is_some() {
@@ -383,7 +396,17 @@ fn reply_row(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, roo
         y += 18.0;
     }
 
-    let meta_y = rect.top() + 30.0 + head_h + body_h + 12.0;
+    // 评论配图
+    comment_ui::draw_images(
+        ui,
+        app,
+        c,
+        rect.left() + text_x,
+        rect.top() + 30.0 + head_h + body_h + 4.0,
+        text_w,
+    );
+
+    let meta_y = rect.top() + 30.0 + head_h + body_h + img_h + 12.0;
     p.text(
         Pos2::new(rect.left() + text_x, meta_y),
         Align2::LEFT_CENTER,
@@ -397,7 +420,7 @@ fn reply_row(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, roo
         theme::human(c.like_count)
     };
     let rects = comment_ui::action_rects(rect.right() - 14.0, meta_y, &like_text);
-    comment_ui::draw_actions(p, c, &rects, ui.ctx().pointer_hover_pos());
+    comment_ui::draw_actions(&p, c, &rects, ui.ctx().pointer_hover_pos());
 
     let p = ui.painter();
     p.line_segment(

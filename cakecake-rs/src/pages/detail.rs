@@ -10,7 +10,7 @@
 
 use crate::{
     api::{Danmaku, VideoDetail},
-    app::{Action, App, DetailTab, LoadState},
+    app::{Action, App, DetailTab, FsMenu, LoadState},
     theme,
     video::Phase,
     widgets,
@@ -18,20 +18,36 @@ use crate::{
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
 
 pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
-    if widgets::back_bar(ui, "", "detail-back") {
-        // back() 会先把当前进度上报再 stop，这里不能再提前 stop
-        app.back();
+    // 全屏（横屏）播放：整页只留播放画面 + 会自动隐藏的蒙层控件
+    if app.player_fullscreen {
+        if app.detail_state == LoadState::Ready {
+            if let Some(data) = app.detail.take() {
+                fullscreen_player(ui, app, &data);
+                app.detail = Some(data);
+            }
+        } else {
+            app.exit_fullscreen();
+        }
         return;
     }
 
+    // 返回键压在视频画面左上角，不再单独占一条横向导航栏
     match app.detail_state.clone() {
         LoadState::Idle | LoadState::Loading => {
+            if widgets::back_bar(ui, "", "detail-back") {
+                app.back();
+                return;
+            }
             ui.vertical_centered(|ui| {
                 ui.add_space(100.0);
                 ui.label(egui::RichText::new("加载中…").color(theme::TEXT3).size(12.0));
             });
         }
         LoadState::Err(e) => {
+            if widgets::back_bar(ui, "", "detail-back") {
+                app.back();
+                return;
+            }
             let mut retry = false;
             ui.vertical_centered(|ui| {
                 ui.add_space(90.0);
@@ -53,7 +69,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
             // Panel::bottom 在页面高度不够时会被键盘挤出可视区（整条被裁掉），
             // 所以改用 Area 按屏幕坐标定位。
             if app.detail_tab == DetailTab::Comments {
-                let bar_h = if app.reply_to.is_some() { 78.0 } else { 54.0 };
+                let bar_h = 54.0
+                    + if app.reply_to.is_some() { 24.0 } else { 0.0 }
+                    + if app.comment_image_open { 34.0 } else { 0.0 };
                 let screen = ui.ctx().viewport_rect();
                 let top = (screen.bottom() - app.bottom_inset - bar_h).max(0.0);
                 egui::Area::new(egui::Id::new("detail-composer"))
@@ -76,8 +94,10 @@ pub fn show(ui: &mut egui::Ui, app: &mut App, id: u64) {
                 .id_salt("detail-scroll")
                 .show(ui, |ui| {
                     player(ui, app, &data);
-                    controls(ui, app);
-                    options_bar(ui, app, &data);
+                    // 清晰度/字幕/倍速默认收起，点播放器「设置」才展开
+                    if app.player_settings {
+                        options_bar(ui, app, &data);
+                    }
                     tabs(ui, app, &data);
                     if let Some(msg) = app.action_msg.clone() {
                         ui.horizontal(|ui| {
@@ -124,6 +144,10 @@ fn player(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
     if has_src && phase != Phase::Failed {
         app.video.play(&url);
     }
+    // 换视频后把用户选的倍速补回去
+    if (app.video.speed() - app.speed).abs() > 0.001 {
+        app.video.set_speed(app.speed);
+    }
 
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
 
@@ -153,50 +177,190 @@ fn player(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
         }
     }
 
-    // 中央播放/暂停按钮
+    // 返回键压在画面左上角，和进度条一样平时隐藏、点画面才出现
+    let back_hit = Rect::from_center_size(
+        Pos2::new(rect.left() + 22.0, rect.top() + 22.0),
+        Vec2::splat(44.0),
+    );
+
+    // 暂停时的中央播放键（常显）
     let c = rect.center();
-    let p = ui.painter();
-    match phase {
-        Phase::Playing => {
-            let hover = ui
-                .input(|i| i.pointer.hover_pos().map(|q| rect.contains(q)).unwrap_or(false));
-            if hover {
-                p.circle_filled(c, 22.0, Color32::from_black_alpha(90));
-                p.rect_filled(
-                    Rect::from_center_size(Pos2::new(c.x - 5.0, c.y), Vec2::new(4.0, 18.0)),
-                    2.0,
-                    Color32::WHITE,
-                );
-                p.rect_filled(
-                    Rect::from_center_size(Pos2::new(c.x + 5.0, c.y), Vec2::new(4.0, 18.0)),
-                    2.0,
-                    Color32::WHITE,
-                );
+    let center_hit = Rect::from_center_size(c, Vec2::splat(72.0));
+    if matches!(phase, Phase::Paused | Phase::Failed) {
+        let p = ui.painter();
+        p.circle_filled(c, 24.0, Color32::from_black_alpha(110));
+        p.add(egui::Shape::convex_polygon(
+            vec![
+                Pos2::new(c.x - 5.0, c.y - 9.0),
+                Pos2::new(c.x - 5.0, c.y + 9.0),
+                Pos2::new(c.x + 9.0, c.y),
+            ],
+            Color32::WHITE,
+            Stroke::NONE,
+        ));
+    }
+
+    // 蒙层控件：默认什么都不显示，点一下视频才出现，3 秒后自动隐藏
+    let dur = app.video.duration_ms().max(0);
+    let shown = app.display_position_ms().max(0);
+    let ratio = if dur > 0 {
+        (shown as f32 / dur as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let cy = rect.bottom() - 18.0;
+    let play_hit = Rect::from_center_size(
+        Pos2::new(rect.left() + 18.0, cy),
+        Vec2::new(34.0, 34.0),
+    );
+    let time_pos = Pos2::new(rect.left() + 34.0, cy);
+    let track = Rect::from_min_max(
+        Pos2::new(rect.left() + 96.0, cy - 2.0),
+        Pos2::new(rect.right() - 88.0, cy + 2.0),
+    );
+    let track_hit = Rect::from_min_max(
+        Pos2::new(track.left() - 10.0, rect.bottom() - 36.0),
+        Pos2::new(track.right() + 10.0, rect.bottom()),
+    );
+    let set_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 58.0, cy),
+        Vec2::new(40.0, 32.0),
+    );
+    let fs_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 22.0, cy),
+        Vec2::new(40.0, 32.0),
+    );
+
+    let cvis = app.fs_controls_visible();
+    if cvis {
+        let p = ui.painter();
+        // 返回键（左上角）
+        p.circle_filled(back_hit.center(), 16.0, Color32::from_black_alpha(120));
+        p.add(egui::Shape::line(
+            vec![
+                Pos2::new(back_hit.center().x + 4.0, back_hit.center().y - 7.0),
+                Pos2::new(back_hit.center().x - 4.0, back_hit.center().y),
+                Pos2::new(back_hit.center().x + 4.0, back_hit.center().y + 7.0),
+            ],
+            Stroke::new(1.8, Color32::WHITE),
+        ));
+        // 底部渐变压暗，保证白字在亮画面上可读
+        for i in 0..4 {
+            let y0 = rect.bottom() - 40.0 + i as f32 * 10.0;
+            p.rect_filled(
+                Rect::from_min_max(
+                    Pos2::new(rect.left(), y0),
+                    Pos2::new(rect.right(), y0 + 10.0),
+                ),
+                0.0,
+                Color32::from_black_alpha(40 + i * 18),
+            );
+        }
+        widgets::play_icon(p, play_hit.center(), phase == Phase::Playing, Color32::WHITE);
+        p.text(
+            time_pos,
+            Align2::LEFT_CENTER,
+            format!(
+                "{}/{}",
+                theme::clock((shown / 1000) as u64),
+                theme::clock((dur / 1000) as u64)
+            ),
+            FontId::proportional(10.0),
+            Color32::WHITE,
+        );
+        p.rect_filled(track, track.height() / 2.0, Color32::from_gray(110));
+        let mut played = track;
+        played.set_right(track.left() + track.width() * ratio);
+        p.rect_filled(played, played.height() / 2.0, theme::PINK);
+        p.circle_filled(Pos2::new(played.right(), track.center().y), 5.0, theme::PINK);
+        p.text(
+            set_hit.center(),
+            Align2::CENTER_CENTER,
+            "设置",
+            FontId::proportional(10.0),
+            if app.player_settings {
+                theme::PINK
+            } else {
+                Color32::WHITE
+            },
+        );
+        widgets::fullscreen_icon(p, fs_hit.center(), Color32::WHITE, false);
+    }
+    // 进度条拖动（只在控件显示时生效，避免挡住页面滚动）
+    if cvis {
+        let seek = ui.interact(
+            track_hit,
+            egui::Id::new("detail-seek"),
+            Sense::click_and_drag(),
+        );
+        if seek.drag_started() {
+            if let Some(x) = ui.input(|i| i.pointer.interact_pos()).map(|q| q.x) {
+                app.begin_seek(ratio_at(track, x));
             }
         }
-        Phase::Paused | Phase::Failed => {
-            p.circle_filled(c, 24.0, Color32::from_black_alpha(110));
-            p.add(egui::Shape::convex_polygon(
-                vec![
-                    Pos2::new(c.x - 5.0, c.y - 9.0),
-                    Pos2::new(c.x - 5.0, c.y + 9.0),
-                    Pos2::new(c.x + 9.0, c.y),
-                ],
-                Color32::WHITE,
-                Stroke::NONE,
-            ));
+        if seek.dragged() && app.seek_preview.is_some() {
+            if let Some(x) = ui.input(|i| i.pointer.interact_pos()).map(|q| q.x) {
+                app.update_seek(ratio_at(track, x));
+            }
         }
-        _ => {}
+        if seek.drag_stopped() {
+            app.finish_seek();
+        } else if seek.clicked() {
+            if let Some(x) = seek.interact_pointer_pos().map(|q| q.x) {
+                app.seek_ratio(ratio_at(track, x));
+            }
+        }
     }
 
     if resp.clicked() {
-        match phase {
-            Phase::Playing | Phase::Paused => app.video.toggle_pause(),
-            Phase::Failed => app.video.play(&url),
-            Phase::Idle | Phase::Connecting => {
-                if has_src {
-                    app.video.play(&url);
+        if let Some(q) = resp.interact_pointer_pos() {
+            if cvis {
+                if back_hit.contains(q) {
+                    // back() 会先把当前进度上报再 stop
+                    app.back();
+                    return;
                 }
+                if play_hit.contains(q) {
+                    match phase {
+                        Phase::Failed => app.video.play(&url),
+                        Phase::Idle | Phase::Connecting => {
+                            if has_src {
+                                app.video.play(&url);
+                            }
+                        }
+                        _ => app.video.toggle_pause(),
+                    }
+                    app.poke_controls();
+                    return;
+                }
+                if set_hit.contains(q) {
+                    app.player_settings = !app.player_settings;
+                    app.poke_controls();
+                    return;
+                }
+                if fs_hit.contains(q) {
+                    app.enter_fullscreen();
+                    return;
+                }
+                if track_hit.contains(q) {
+                    app.seek_ratio(ratio_at(track, q.x));
+                    return;
+                }
+            }
+            // 暂停时点画面正中 = 继续播放
+            if !matches!(phase, Phase::Playing) && center_hit.contains(q) {
+                match phase {
+                    Phase::Failed => app.video.play(&url),
+                    _ => app.video.toggle_pause(),
+                }
+                app.poke_controls();
+                return;
+            }
+            // 点画面：切换控件显示
+            if cvis {
+                app.hide_controls();
+            } else {
+                app.poke_controls();
             }
         }
     }
@@ -215,104 +379,662 @@ fn player(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
     }
 }
 
-/// 进度条 + 时间 + 暂停键
-fn controls(ui: &mut egui::Ui, app: &mut App) {
-    let w = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 34.0), Sense::hover());
-    let pos = app.video.position_ms().max(0);
-    let dur = app.video.duration_ms().max(0);
-    let p = ui.painter();
+/// 全屏（横屏）播放：画面铺满，控件蒙层几秒后自动隐藏，点画面再叫出来
+fn fullscreen_player(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
+    let size = ui.available_size();
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
 
-    // 暂停/播放小按钮
-    let btn_c = Pos2::new(rect.left() + 16.0, rect.center().y);
-    let playing = app.video.phase() == Phase::Playing;
-    if playing {
-        p.rect_filled(
-            Rect::from_center_size(Pos2::new(btn_c.x - 3.0, btn_c.y), Vec2::new(3.0, 12.0)),
-            1.0,
-            theme::TEXT2,
-        );
-        p.rect_filled(
-            Rect::from_center_size(Pos2::new(btn_c.x + 3.0, btn_c.y), Vec2::new(3.0, 12.0)),
-            1.0,
-            theme::TEXT2,
-        );
-    } else {
-        p.add(egui::Shape::convex_polygon(
-            vec![
-                Pos2::new(btn_c.x - 4.0, btn_c.y - 6.0),
-                Pos2::new(btn_c.x - 4.0, btn_c.y + 6.0),
-                Pos2::new(btn_c.x + 6.0, btn_c.y),
-            ],
-            theme::TEXT2,
-            Stroke::NONE,
-        ));
+    let v = &data.video;
+    let url = play_url(app, data);
+    let has_src = !url.is_empty() && data.source_ready;
+    let phase = app.video.phase();
+    if has_src && phase != Phase::Failed {
+        app.video.play(&url);
+    }
+    if (app.video.speed() - app.speed).abs() > 0.001 {
+        app.video.set_speed(app.speed);
     }
 
-    let t1 = theme::clock((pos / 1000) as u64);
-    let t2 = theme::clock((dur / 1000) as u64);
-    p.text(
-        Pos2::new(rect.left() + 32.0, rect.center().y),
-        Align2::LEFT_CENTER,
-        &t1,
-        FontId::proportional(10.0),
-        theme::TEXT3,
-    );
+    // 16:9 居中，多余部分留黑边，不拉伸画面
+    let vr = widgets::fit16x9(rect);
+    ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
+    if has_src {
+        app.video.ui_in(ui, vr);
+    } else {
+        widgets::draw_cover(ui, vr, &v.cover_url, &app.covers, 0.0);
+        ui.painter()
+            .rect_filled(vr, 0.0, Color32::from_black_alpha(60));
+    }
 
-    // 轨道
-    let bar = Rect::from_min_max(
-        Pos2::new(rect.left() + 78.0, rect.center().y - 1.5),
-        Pos2::new(rect.right() - 52.0, rect.center().y + 1.5),
-    );
-    p.rect_filled(bar, 2.0, theme::SURFACE);
+    if app.danmaku_on && matches!(phase, Phase::Playing | Phase::Paused) && has_src {
+        let pos = app.video.position_ms();
+        if pos > 0 {
+            draw_danmaku(ui, vr, &data.danmakus, pos);
+        }
+    }
+    if has_src && matches!(phase, Phase::Playing | Phase::Paused) && !app.cues.is_empty() {
+        let sec = app.video.position_ms().max(0) as f64 / 1000.0;
+        if let Some(text) = crate::subtitle::at(&app.cues, sec) {
+            draw_subtitle(ui, vr, text);
+        }
+    }
+
+    // 暂停时的中央播放键
+    if !matches!(phase, Phase::Playing) {
+        let c = vr.center();
+        let p = ui.painter();
+        p.circle_filled(c, 26.0, Color32::from_black_alpha(110));
+        widgets::play_icon(p, c, false, Color32::WHITE);
+    }
+
+    let dur = app.video.duration_ms().max(0);
+    let shown = app.display_position_ms().max(0);
     let ratio = if dur > 0 {
-        (pos as f32 / dur as f32).clamp(0.0, 1.0)
+        (shown as f32 / dur as f32).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    let mut played = bar;
-    played.set_right(bar.left() + bar.width() * ratio);
-    p.rect_filled(played, 2.0, theme::PINK);
-    p.circle_filled(Pos2::new(played.right(), bar.center().y), 4.0, theme::PINK);
 
-    p.text(
-        Pos2::new(rect.right() - 14.0, rect.center().y),
-        Align2::RIGHT_CENTER,
-        &t2,
-        FontId::proportional(10.0),
-        theme::TEXT3,
+    // ── 控件位置（对齐 B 站横屏：时间在进度条上方，底部一排功能键） ──
+    let row_y = rect.bottom() - 22.0;
+    let track = Rect::from_min_max(
+        Pos2::new(rect.left() + 14.0, rect.bottom() - 52.0),
+        Pos2::new(rect.right() - 14.0, rect.bottom() - 49.5),
+    );
+    let time_pos = Pos2::new(rect.left() + 14.0, rect.bottom() - 66.0);
+    let play_hit = Rect::from_center_size(
+        Pos2::new(rect.left() + 28.0, row_y),
+        Vec2::new(48.0, 42.0),
+    );
+    let danmaku_hit = Rect::from_center_size(
+        Pos2::new(rect.left() + 80.0, row_y),
+        Vec2::new(46.0, 36.0),
+    );
+    let pill = Rect::from_min_max(
+        Pos2::new(rect.left() + 108.0, row_y - 15.0),
+        Pos2::new(rect.right() - 206.0, row_y + 15.0),
+    );
+    let sub_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 176.0, row_y),
+        Vec2::new(56.0, 36.0),
+    );
+    let speed_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 112.0, row_y),
+        Vec2::new(56.0, 36.0),
+    );
+    let quality_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 48.0, row_y),
+        Vec2::new(60.0, 36.0),
+    );
+    let center_hit = Rect::from_center_size(vr.center(), Vec2::splat(84.0));
+    let back_hit = Rect::from_min_size(
+        Pos2::new(rect.left() + 6.0, rect.top() + 4.0),
+        Vec2::new(48.0, 40.0),
+    );
+    // 顶部右侧：点赞 / 评论 / 收藏 / 稍后再看
+    let act_center = |i: f32| Pos2::new(rect.right() - 34.0 - 54.0 * i, rect.top() + 22.0);
+    let like_hit = Rect::from_center_size(act_center(0.0), Vec2::new(54.0, 40.0));
+    let comment_hit = Rect::from_center_size(act_center(1.0), Vec2::new(54.0, 40.0));
+    let fav_hit = Rect::from_center_size(act_center(2.0), Vec2::new(54.0, 40.0));
+    let later_hit = Rect::from_center_size(act_center(3.0), Vec2::new(54.0, 40.0));
+
+    // 弹幕输入条：键盘弹起时整条上移，避免被盖住
+    let ime_h = if app.danmaku_ime {
+        crate::video::ime_points(ui.ctx().pixels_per_point())
+    } else {
+        0.0
+    };
+    let input_y = rect.bottom() - ime_h - 26.0;
+    let input_pill = Rect::from_min_max(
+        Pos2::new(rect.left() + 14.0, input_y - 16.0),
+        Pos2::new(rect.right() - 64.0, input_y + 16.0),
+    );
+    let send_hit = Rect::from_center_size(
+        Pos2::new(rect.right() - 34.0, input_y),
+        Vec2::new(46.0, 40.0),
     );
 
-    // 点时间轴 = 跳转；点左侧图标 = 暂停/继续
-    let track_hit = Rect::from_min_max(
-        Pos2::new(bar.left(), rect.top() + 6.0),
-        Pos2::new(bar.right(), rect.bottom() - 6.0),
-    );
-    if ui
-        .interact(track_hit, egui::Id::new("detail-seek"), Sense::click())
-        .clicked()
-    {
-        if dur > 0 {
-            if let Some(px) = ui.ctx().pointer_interact_pos() {
-                let r = ((px.x - bar.left()) / bar.width()).clamp(0.0, 1.0);
-                app.video.seek_to((dur as f32 * r) as i64);
+    // 弹幕输入：键盘由原生 EditText 持有，内容每帧镜像回来自己画
+    if app.danmaku_ime {
+        if let Some(t) = crate::video::ime_text() {
+            if t != app.danmaku_text {
+                app.danmaku_text = t;
             }
         }
     }
-    let btn_hit = Rect::from_center_size(btn_c, Vec2::new(30.0, 30.0));
-    if ui
-        .interact(btn_hit, egui::Id::new("detail-toggle"), Sense::click())
-        .clicked()
-    {
-        app.video.toggle_pause();
+
+    let mut menu_hits: Vec<(Rect, FsPick)> = Vec::new();
+    let visible = app.fs_controls_visible();
+    if app.danmaku_ime {
+        let p = ui.painter();
+        // 输入条压在键盘正上方
+        p.rect_filled(
+            Rect::from_min_max(
+                Pos2::new(rect.left(), input_y - 32.0),
+                Pos2::new(rect.right(), rect.bottom()),
+            ),
+            0.0,
+            Color32::from_black_alpha(170),
+        );
+        p.rect_filled(input_pill, 16.0, Color32::from_black_alpha(210));
+        draw_input_text(p, input_pill, &app.danmaku_text, "发个友善的弹幕见证当下");
+        let ready = !app.danmaku_text.trim().is_empty();
+        p.circle_filled(
+            send_hit.center(),
+            16.0,
+            if ready { theme::PINK } else { Color32::from_gray(90) },
+        );
+        draw_send_icon(p, send_hit.center(), Color32::WHITE);
+    } else if visible {
+        let p = ui.painter();
+        // 上下渐变压暗，保证控件在亮画面上也看得清
+        widgets::scrim(p, rect);
+
+        // 顶部：返回 + 标题 + 右侧互动（点赞/评论/收藏/稍后再看）
+        p.add(egui::Shape::line(
+            vec![
+                Pos2::new(back_hit.center().x + 4.0, back_hit.center().y - 7.0),
+                Pos2::new(back_hit.center().x - 4.0, back_hit.center().y),
+                Pos2::new(back_hit.center().x + 4.0, back_hit.center().y + 7.0),
+            ],
+            Stroke::new(1.8, Color32::WHITE),
+        ));
+        let title_lines = widgets::wrap_lines(p, &v.title, 13.0, rect.width() - 300.0, 1);
+        if let Some(t) = title_lines.first() {
+            p.text(
+                Pos2::new(back_hit.right() + 6.0, back_hit.center().y),
+                Align2::LEFT_CENTER,
+                t,
+                FontId::proportional(13.0),
+                Color32::from_gray(235),
+            );
+        }
+        // 点赞
+        draw_thumb_icon(
+            p,
+            Pos2::new(like_hit.center().x - 10.0, like_hit.center().y),
+            if v.liked_by_me { theme::PINK } else { Color32::WHITE },
+        );
+        p.text(
+            Pos2::new(like_hit.center().x + 1.0, like_hit.center().y),
+            Align2::LEFT_CENTER,
+            theme::human(v.like_count),
+            FontId::proportional(10.0),
+            Color32::from_gray(230),
+        );
+        // 评论
+        draw_bubble_icon(
+            p,
+            Pos2::new(comment_hit.center().x - 10.0, comment_hit.center().y),
+            Color32::WHITE,
+        );
+        p.text(
+            Pos2::new(comment_hit.center().x + 1.0, comment_hit.center().y),
+            Align2::LEFT_CENTER,
+            theme::human(data.comments.len() as u64),
+            FontId::proportional(10.0),
+            Color32::from_gray(230),
+        );
+        // 收藏
+        draw_star_icon(
+            p,
+            Pos2::new(fav_hit.center().x - 10.0, fav_hit.center().y),
+            if v.favorited_by_me { theme::PINK } else { Color32::WHITE },
+        );
+        p.text(
+            Pos2::new(fav_hit.center().x + 1.0, fav_hit.center().y),
+            Align2::LEFT_CENTER,
+            theme::human(v.fav_count),
+            FontId::proportional(10.0),
+            Color32::from_gray(230),
+        );
+        // 稍后再看
+        draw_bookmark_icon(
+            p,
+            Pos2::new(later_hit.center().x - 6.0, later_hit.center().y),
+            if v.in_watch_later { theme::PINK } else { Color32::WHITE },
+        );
+
+        // 底部：播放键 / 弹幕开关 / 弹幕输入 / 时间 / 进度条 / 字幕 / 倍速 / 清晰度
+        widgets::play_icon(p, play_hit.center(), phase == Phase::Playing, Color32::WHITE);
+        let on = app.danmaku_on;
+        p.rect_stroke(
+            danmaku_hit,
+            6.0,
+            Stroke::new(1.0, if on { theme::PINK } else { Color32::from_gray(210) }),
+            StrokeKind::Inside,
+        );
+        p.text(
+            danmaku_hit.center(),
+            Align2::CENTER_CENTER,
+            "弹",
+            FontId::proportional(12.0),
+            if on { theme::PINK } else { Color32::WHITE },
+        );
+        p.rect_filled(pill, 15.0, Color32::from_white_alpha(36));
+        p.text(
+            Pos2::new(pill.left() + 14.0, pill.center().y),
+            Align2::LEFT_CENTER,
+            "发个友善的弹幕见证当下",
+            FontId::proportional(12.0),
+            Color32::from_gray(215),
+        );
+
+        p.text(
+            time_pos,
+            Align2::LEFT_CENTER,
+            format!(
+                "{}/{}",
+                theme::clock((shown / 1000) as u64),
+                theme::clock((dur / 1000) as u64)
+            ),
+            FontId::proportional(11.0),
+            Color32::from_gray(225),
+        );
+        p.rect_filled(track, track.height() / 2.0, Color32::from_gray(110));
+        let mut played = track;
+        played.set_right(track.left() + track.width() * ratio);
+        p.rect_filled(played, played.height() / 2.0, theme::PINK);
+        p.circle_filled(Pos2::new(played.right(), track.center().y), 6.5, theme::PINK);
+
+        // 右侧：字幕 / 倍速 / 清晰度（点了弹选项面板）
+        p.text(
+            sub_hit.center(),
+            Align2::CENTER_CENTER,
+            "字幕",
+            FontId::proportional(12.0),
+            Color32::WHITE,
+        );
+        p.text(
+            speed_hit.center(),
+            Align2::CENTER_CENTER,
+            if (app.speed - 1.0).abs() < 0.001 {
+                "倍速".to_owned()
+            } else {
+                speed_label(app.speed)
+            },
+            FontId::proportional(12.0),
+            Color32::WHITE,
+        );
+        p.text(
+            quality_hit.center(),
+            Align2::CENTER_CENTER,
+            quality_label(app, data),
+            FontId::proportional(12.0),
+            Color32::WHITE,
+        );
+
+        // 选项面板（倍速 / 清晰度 / 字幕）
+        if let Some(menu) = app.fs_menu {
+            let items: Vec<(String, bool, FsPick)> = match menu {
+                FsMenu::Speed => SPEEDS
+                    .iter()
+                    .map(|&s| {
+                        (
+                            speed_label(s),
+                            (app.speed - s).abs() < 0.001,
+                            FsPick::Speed(s),
+                        )
+                    })
+                    .collect(),
+                FsMenu::Quality => {
+                    let mut list: Vec<&crate::api::VideoBitrate> =
+                        data.bitrates.iter().collect();
+                    list.sort_by_key(|b| b.kbps);
+                    let mut v = vec![(
+                        "自动".to_owned(),
+                        app.quality.is_none(),
+                        FsPick::Quality(None),
+                    )];
+                    for b in list {
+                        v.push((
+                            bitrate_label(b),
+                            app.quality == Some(b.id),
+                            FsPick::Quality(Some(b.id)),
+                        ));
+                    }
+                    v
+                }
+                FsMenu::Subtitle => {
+                    let mut v = vec![(
+                        "关闭".to_owned(),
+                        app.subtitle_id.is_none(),
+                        FsPick::Subtitle(None),
+                    )];
+                    for s in &data.subtitles {
+                        let label = if s.title.is_empty() {
+                            s.lang.clone()
+                        } else {
+                            s.title.clone()
+                        };
+                        v.push((
+                            label,
+                            app.subtitle_id == Some(s.id),
+                            FsPick::Subtitle(Some(s.id)),
+                        ));
+                    }
+                    v
+                }
+            };
+            let w = 150.0;
+            let rh = 34.0;
+            let h = items.len() as f32 * rh + 8.0;
+            let panel = Rect::from_min_size(
+                Pos2::new(rect.right() - 16.0 - w, row_y - 44.0 - h),
+                Vec2::new(w, h),
+            );
+            p.rect_filled(panel, 8.0, Color32::from_black_alpha(215));
+            for (i, (label, on, pick)) in items.iter().enumerate() {
+                let r = Rect::from_min_size(
+                    Pos2::new(panel.left() + 4.0, panel.top() + 4.0 + i as f32 * rh),
+                    Vec2::new(w - 8.0, rh),
+                );
+                if *on {
+                    p.rect_filled(r, 6.0, Color32::from_white_alpha(28));
+                }
+                p.text(
+                    r.center(),
+                    Align2::CENTER_CENTER,
+                    label,
+                    FontId::proportional(12.0),
+                    if *on { theme::PINK } else { Color32::WHITE },
+                );
+                menu_hits.push((r, *pick));
+            }
+        }
+    }
+
+    // ── 交互 ──
+    let ptr = resp.interact_pointer_pos();
+
+    // 弹幕输入态：只处理发送 / 重新拉键盘 / 收起
+    if app.danmaku_ime {
+        if resp.clicked() {
+            if let Some(q) = ptr {
+                if send_hit.contains(q) {
+                    app.danmaku_ime = false;
+                    crate::video::ime_close();
+                    crate::video::ime_clear();
+                    app.send_danmaku(data.video.id);
+                } else if input_pill.contains(q) {
+                    crate::video::ime_open(&app.danmaku_text);
+                } else {
+                    app.danmaku_ime = false;
+                    crate::video::ime_close();
+                }
+            }
+        }
+        return;
+    }
+
+    if resp.drag_started() {
+        if let Some(q) = ptr {
+            if track.contains(q) {
+                app.begin_seek(ratio_at(track, q.x));
+            }
+        }
+    }
+    if resp.dragged() && app.seek_preview.is_some() {
+        if let Some(q) = ptr {
+            app.update_seek(ratio_at(track, q.x));
+        }
+    }
+    if resp.drag_stopped() {
+        app.finish_seek();
+    } else if resp.clicked() {
+        if let Some(q) = ptr {
+            // 选项面板打开时，只处理菜单项 / 点空白关闭
+            if app.fs_menu.is_some() {
+                for (r, pick) in &menu_hits {
+                    if r.contains(q) {
+                        match *pick {
+                            FsPick::Speed(s) => app.set_speed(s),
+                            FsPick::Quality(None) => app.quality = None,
+                            FsPick::Quality(Some(id)) => {
+                                if let Some(b) = data.bitrates.iter().find(|b| b.id == id) {
+                                    app.select_quality(data.video.id, b);
+                                }
+                            }
+                            FsPick::Subtitle(id) => {
+                                app.select_subtitle(&data.subtitles, id)
+                            }
+                        }
+                        app.fs_menu = None;
+                        app.poke_controls();
+                        return;
+                    }
+                }
+                app.fs_menu = None;
+                return;
+            }
+            // 暂停状态点画面正中 = 继续播放（即使蒙层已隐藏）
+            if center_hit.contains(q) && !matches!(phase, Phase::Playing) {
+                match phase {
+                    Phase::Failed => app.video.play(&url),
+                    _ => app.video.toggle_pause(),
+                }
+                app.poke_controls();
+                return;
+            }
+            if visible {
+                if back_hit.contains(q) {
+                    app.exit_fullscreen();
+                    return;
+                }
+                if play_hit.contains(q) {
+                    app.video.toggle_pause();
+                    app.poke_controls();
+                    return;
+                }
+                if danmaku_hit.contains(q) {
+                    app.danmaku_on = !app.danmaku_on;
+                    app.poke_controls();
+                    return;
+                }
+                if pill.contains(q) {
+                    app.fs_menu = None;
+                    app.danmaku_ime = true;
+                    crate::video::ime_open(&app.danmaku_text);
+                    return;
+                }
+                if sub_hit.contains(q) {
+                    app.fs_menu = if app.fs_menu == Some(FsMenu::Subtitle) {
+                        None
+                    } else {
+                        Some(FsMenu::Subtitle)
+                    };
+                    app.poke_controls();
+                    return;
+                }
+                if speed_hit.contains(q) {
+                    app.fs_menu = if app.fs_menu == Some(FsMenu::Speed) {
+                        None
+                    } else {
+                        Some(FsMenu::Speed)
+                    };
+                    app.poke_controls();
+                    return;
+                }
+                if quality_hit.contains(q) {
+                    app.fs_menu = if app.fs_menu == Some(FsMenu::Quality) {
+                        None
+                    } else {
+                        Some(FsMenu::Quality)
+                    };
+                    app.poke_controls();
+                    return;
+                }
+                if track.contains(q) {
+                    app.seek_ratio(ratio_at(track, q.x));
+                    return;
+                }
+                if like_hit.contains(q) {
+                    app.act(v.id, v.user_id, Action::Like);
+                    app.poke_controls();
+                    return;
+                }
+                if comment_hit.contains(q) {
+                    app.exit_fullscreen();
+                    app.detail_tab = DetailTab::Comments;
+                    return;
+                }
+                if fav_hit.contains(q) {
+                    app.exit_fullscreen();
+                    app.open_favorite_picker(v.id);
+                    return;
+                }
+                if later_hit.contains(q) {
+                    app.act(v.id, v.user_id, Action::WatchLater);
+                    app.poke_controls();
+                    return;
+                }
+            }
+            // 点画面空白处：切换控件显示
+            if visible {
+                app.hide_controls();
+            } else {
+                app.poke_controls();
+            }
+        }
     }
 }
 
-/// 清晰度 / 字幕切换条（两个列表都为空时整块不出现）
-fn options_bar(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
-    if data.bitrates.is_empty() && data.subtitles.is_empty() {
+fn bitrate_label(b: &crate::api::VideoBitrate) -> String {
+    if !b.label.is_empty() {
+        b.label.clone()
+    } else if b.height > 0 {
+        format!("{}P", b.height)
+    } else {
+        format!("{}kbps", b.kbps)
+    }
+}
+
+fn ratio_at(bar: Rect, x: f32) -> f32 {
+    if bar.width() > 0.0 {
+        ((x - bar.left()) / bar.width()).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+fn quality_label(app: &App, data: &crate::app::DetailData) -> String {
+    let Some(id) = app.quality else {
+        return "自动".to_owned();
+    };
+    data.bitrates
+        .iter()
+        .find(|b| b.id == id)
+        .map(|b| bitrate_label(b))
+        .unwrap_or_else(|| "自动".to_owned())
+}
+
+/// 全屏弹幕输入框里的一行文字 + 光标
+fn draw_input_text(p: &egui::Painter, pill: Rect, text: &str, hint: &str) {
+    let tr = pill.shrink2(Vec2::new(14.0, 6.0));
+    if text.is_empty() {
+        p.text(
+            Pos2::new(tr.left(), tr.center().y),
+            Align2::LEFT_CENTER,
+            hint,
+            FontId::proportional(12.0),
+            Color32::from_gray(170),
+        );
         return;
     }
+    let clipped = p.with_clip_rect(tr);
+    let g = clipped.layout_no_wrap(
+        text.to_owned(),
+        FontId::proportional(12.0),
+        Color32::WHITE,
+    );
+    let x = if g.size().x > tr.width() {
+        tr.right() - g.size().x
+    } else {
+        tr.left()
+    };
+    clipped.galley(Pos2::new(x, tr.center().y - g.size().y / 2.0), g.clone(), Color32::WHITE);
+    let caret_x = (tr.left() + g.size().x).min(tr.right());
+    p.line_segment(
+        [
+            Pos2::new(caret_x, tr.center().y - 8.0),
+            Pos2::new(caret_x, tr.center().y + 8.0),
+        ],
+        Stroke::new(1.5, theme::PINK),
+    );
+}
+
+fn draw_send_icon(p: &egui::Painter, c: Pos2, color: Color32) {
+    p.add(egui::Shape::convex_polygon(
+        vec![
+            Pos2::new(c.x - 5.0, c.y - 6.0),
+            Pos2::new(c.x + 6.0, c.y),
+            Pos2::new(c.x - 5.0, c.y + 6.0),
+        ],
+        color,
+        Stroke::NONE,
+    ));
+}
+
+fn draw_thumb_icon(p: &egui::Painter, c: Pos2, color: Color32) {
+    let s = 4.6;
+    p.add(egui::Shape::convex_polygon(
+        vec![
+            Pos2::new(c.x - s, c.y + s * 0.9),
+            Pos2::new(c.x + s, c.y + s * 0.9),
+            Pos2::new(c.x, c.y - s * 1.1),
+        ],
+        Color32::TRANSPARENT,
+        Stroke::new(1.2, color),
+    ));
+}
+
+fn draw_bubble_icon(p: &egui::Painter, c: Pos2, color: Color32) {
+    let r = Rect::from_center_size(c, Vec2::new(13.0, 10.0));
+    p.rect_stroke(r, 3.0, Stroke::new(1.1, color), StrokeKind::Inside);
+    p.add(egui::Shape::convex_polygon(
+        vec![
+            Pos2::new(c.x - 2.5, r.bottom() - 1.0),
+            Pos2::new(c.x + 2.5, r.bottom() - 1.0),
+            Pos2::new(c.x - 1.0, r.bottom() + 3.0),
+        ],
+        color,
+        Stroke::NONE,
+    ));
+}
+
+fn draw_star_icon(p: &egui::Painter, c: Pos2, color: Color32) {
+    let pts: Vec<Pos2> = (0..10)
+        .map(|i| {
+            let a = std::f32::consts::PI * 2.0 * (i as f32) / 10.0
+                - std::f32::consts::PI / 2.0;
+            let r = if i % 2 == 0 { 6.0 } else { 2.6 };
+            Pos2::new(c.x + r * a.cos(), c.y + r * a.sin())
+        })
+        .collect();
+    p.add(egui::Shape::convex_polygon(
+        pts,
+        Color32::TRANSPARENT,
+        Stroke::new(1.1, color),
+    ));
+}
+
+fn draw_bookmark_icon(p: &egui::Painter, c: Pos2, color: Color32) {
+    let r = Rect::from_center_size(c, Vec2::new(10.0, 13.0));
+    p.add(egui::Shape::line(
+        vec![
+            r.left_top(),
+            r.right_top(),
+            r.right_bottom(),
+            Pos2::new(c.x, r.bottom() - 4.0),
+            r.left_bottom(),
+            r.left_top(),
+        ],
+        Stroke::new(1.2, color),
+    ));
+}
+
+/// 清晰度 / 字幕 / 倍速切换条
+fn options_bar(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) {
     if !data.bitrates.is_empty() {
         ui.horizontal_wrapped(|ui| {
             ui.add_space(12.0);
@@ -359,7 +1081,37 @@ fn options_bar(ui: &mut egui::Ui, app: &mut App, data: &crate::app::DetailData) 
             }
         });
     }
+    // 倍速
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(12.0);
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        ui.label(egui::RichText::new("倍速").color(theme::TEXT3).size(10.0));
+        for s in SPEEDS {
+            let on = (app.speed - s).abs() < 0.001;
+            if chip(ui, &speed_label(s), on) && !on {
+                app.set_speed(s);
+            }
+        }
+    });
     ui.add_space(2.0);
+}
+
+const SPEEDS: [f32; 6] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+/// 全屏选项面板里的一个可点选项
+#[derive(Clone, Copy)]
+enum FsPick {
+    Speed(f32),
+    Quality(Option<u64>),
+    Subtitle(Option<u64>),
+}
+
+fn speed_label(s: f32) -> String {
+    if (s - s.round()).abs() < 0.001 {
+        format!("{s:.1}x")
+    } else {
+        format!("{s}x")
+    }
 }
 
 fn chip(ui: &mut egui::Ui, label: &str, on: bool) -> bool {
@@ -628,7 +1380,7 @@ fn uploader_row(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail) {
         .interact(btn, egui::Id::new("detail-follow"), Sense::click())
         .clicked()
     {
-        app.act(v.id, Action::Follow);
+        app.act(v.id, v.user_id, Action::Follow);
     }
 
     // 点头像 / 昵称这一片进 UP 主主页（右侧关注按钮已经单独占了热区）
@@ -734,7 +1486,7 @@ fn action_bar(ui: &mut egui::Ui, app: &mut App, v: &VideoDetail) {
             if *act == Action::Favorite {
                 app.open_favorite_picker(v.id);
             } else {
-                app.act(v.id, *act);
+                app.act(v.id, v.user_id, *act);
             }
         }
     }

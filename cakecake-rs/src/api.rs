@@ -21,7 +21,7 @@ pub struct Video {
     pub title: String,
     #[serde(default)]
     pub cover_url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_secs_u64")]
     pub duration: u64,
     #[serde(default)]
     pub play_count: u64,
@@ -55,6 +55,20 @@ pub struct LiveRoom {
     pub avatar_url: String,
     #[serde(default)]
     pub started_at: Option<String>,
+}
+
+/// 时长按秒取整。转码后的视频后端会回 `34.924533` 这种小数，
+/// 老数据是整数——两种都要吃得下，否则整条详情直接解析失败。
+fn de_secs_u64<'de, D>(d: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let secs = f64::deserialize(d)?;
+    Ok(if secs.is_finite() && secs > 0.0 {
+        secs.round() as u64
+    } else {
+        0
+    })
 }
 
 /// 搜索结果里的视频（B 站 aid 语义，和 `Video` 不是同一套字段）
@@ -104,7 +118,7 @@ pub struct VideoDetail {
     pub fav_count: u64,
     #[serde(default)]
     pub coin_count: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_secs_u64")]
     pub duration: u64,
     #[serde(default)]
     pub uploader: String,
@@ -134,6 +148,18 @@ pub struct VideoDetail {
     pub followed_by_me: bool,
     #[serde(default)]
     pub in_watch_later: bool,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub fail_reason: String,
+    #[serde(default)]
+    pub zone: String,
+    #[serde(default)]
+    pub comments_closed: bool,
+    #[serde(default)]
+    pub comments_curated: bool,
+    #[serde(default)]
+    pub danmaku_closed: bool,
     #[serde(default, deserialize_with = "null_vec")]
     pub tags: Vec<String>,
 }
@@ -189,7 +215,7 @@ pub struct FavoriteItem {
     pub play_count: u64,
     #[serde(default)]
     pub danmaku_count: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_secs_u64")]
     pub duration: u64,
     #[serde(default)]
     pub uploader: String,
@@ -241,6 +267,10 @@ pub struct DynItem {
     pub author_name: String,
     #[serde(default)]
     pub author_avatar: String,
+    #[serde(default)]
+    pub comments_closed: bool,
+    #[serde(default)]
+    pub comments_curated: bool,
 }
 
 /// 关注页：关注的人的投稿（/feed/subscription，直接返回 model.Video，字段是 Go 的驼峰名）
@@ -272,6 +302,8 @@ pub struct SubVideo {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Danmaku {
+    #[serde(default)]
+    pub id: u64,
     #[serde(default)]
     pub content: String,
     #[serde(default)]
@@ -316,6 +348,9 @@ pub struct Comment {
     /// 评论时所在省份（后端 iplocate 归一化后的展示名，可能为空）
     #[serde(default)]
     pub ip_location: String,
+    /// 评论配图（后端已在列表里返回完整 URL）
+    #[serde(default)]
+    pub images: Vec<String>,
 }
 
 /// 稍后再看列表项（GET /users/me/watch-later）
@@ -623,6 +658,11 @@ impl SpaceVideo {
 pub struct ArticleCard {
     #[serde(default)]
     pub id: u64,
+    /// draft / pending_review / published / rejected
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub fail_reason: String,
     #[serde(default)]
     pub title: String,
     #[serde(default)]
@@ -639,6 +679,10 @@ pub struct ArticleCard {
     pub published_at: String,
     #[serde(default)]
     pub author_name: String,
+    #[serde(default)]
+    pub favorited_at: String,
+    #[serde(default)]
+    pub unavailable: bool,
 }
 
 /// 多清晰度（GET /videos/:id/bitrates）
@@ -799,6 +843,8 @@ pub struct DmConversation {
 pub struct DmMessage {
     #[serde(default)]
     pub id: u64,
+    #[serde(default)]
+    pub conversation_id: u64,
     #[serde(default)]
     pub sender_id: u64,
     #[serde(default)]
@@ -1063,6 +1109,12 @@ pub struct Ticket {
     #[serde(default)]
     pub status: String,
     #[serde(default)]
+    pub priority: String,
+    #[serde(default)]
+    pub related_id: u64,
+    #[serde(default)]
+    pub related_type: String,
+    #[serde(default)]
     pub created_at: String,
     #[serde(default)]
     pub updated_at: String,
@@ -1077,12 +1129,168 @@ pub struct CsConversation {
     pub title: String,
     #[serde(default)]
     pub status: String,
-    #[serde(default)]
+    /// 列表接口给的是对象 `{content,…}`，会话详情里没有这个字段
+    #[serde(default, deserialize_with = "string_or_object_content")]
     pub last_message: String,
     #[serde(default)]
     pub last_message_at: String,
     #[serde(default)]
     pub unread_count: i64,
+}
+
+/// 同一个字段既可能是字符串，也可能是 `{content: "…"}`，统一取正文
+fn string_or_object_content<'de, D>(d: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(match v {
+        Some(serde_json::Value::String(s)) => s,
+        Some(serde_json::Value::Object(o)) => o
+            .get("content")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_owned(),
+        _ => String::new(),
+    })
+}
+
+/// 最近投币的视频（GET /space/:userId/recent-coins）
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CoinVideo {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub cover_url: String,
+    #[serde(default)]
+    pub play_count: u64,
+    #[serde(default)]
+    pub danmaku_count: u64,
+    #[serde(default)]
+    pub duration: f64,
+    #[serde(default)]
+    pub uploader: String,
+    #[serde(default)]
+    pub coined_at: String,
+}
+
+/// 单稿件数据（GET /users/me/creator/video-stats）
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CreatorVideoStat {
+    #[serde(default)]
+    pub video_id: u64,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub cover_url: String,
+    #[serde(default)]
+    pub play_count: u64,
+    #[serde(default)]
+    pub like_count: u64,
+    #[serde(default)]
+    pub coin_count: u64,
+    #[serde(default)]
+    pub comment_count: u64,
+    #[serde(default)]
+    pub danmaku_count: u64,
+    #[serde(default)]
+    pub fav_count: u64,
+}
+
+/// 工单消息（GET /users/me/tickets/:id）
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TicketMessage {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub sender_type: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TicketDetail {
+    #[serde(default)]
+    pub ticket: Ticket,
+    #[serde(default)]
+    pub messages: Vec<TicketMessage>,
+}
+
+/// 客服会话消息（GET /users/me/cs/conversations/:id）
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CsMessage {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub sender_type: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CsConversationDetail {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub messages: Vec<CsMessage>,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// 版权投诉（GET /users/me/copyright/complaints）
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CopyrightComplaint {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub related_id: u64,
+    #[serde(default)]
+    pub related_type: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub handler_comment: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+/// GET /users/me/view-history/settings
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ViewHistorySettings {
+    #[serde(default)]
+    pub paused: bool,
+}
+
+/// GET /config/feature-flags/:key
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FeatureFlag {
+    #[serde(default)]
+    pub key: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// GET /videos/:id/comments/config
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CommentConfig {
+    #[serde(default)]
+    pub sort_options: Vec<String>,
+    #[serde(default)]
+    pub filter_options: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -1149,6 +1357,110 @@ pub struct Client {
     auth: Arc<Mutex<AuthState>>,
     /// 串行化刷新，避免并发 40100 把同一个 refresh_token 用两次
     refresh_lock: Arc<Mutex<()>>,
+    /// 探测通过的媒体（SRS）源，例如 `http://192.168.1.100:8000`。
+    /// 直播播放地址一律从它拼，避免把回环地址丢给 MediaPlayer 后无限缓冲。
+    media: Arc<Mutex<Option<String>>>,
+}
+
+/// 局域网后端地址（打包时由 build-apk.sh 自动探测电脑 IP 烘焙进去，
+/// 也可用 CAKECAKE_LAN_API 显式指定），真机与电脑同一 Wi-Fi 时优先走它。
+pub fn lan_base() -> Option<String> {
+    std::env::var("CAKECAKE_LAN_API")
+        .ok()
+        .or_else(|| option_env!("CAKECAKE_LAN_API").map(str::to_owned))
+        .map(|s| s.trim().trim_end_matches('/').to_owned())
+        .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
+}
+
+/// 从 `http://host:port` 里取出 host 部分
+pub fn host_of(base: &str) -> &str {
+    base.split("://")
+        .nth(1)
+        .unwrap_or(base)
+        .split(':')
+        .next()
+        .unwrap_or(base)
+}
+
+/// 这些地址在真机上指向手机自己（或模拟器网关），不能拿来拉直播流
+pub fn is_loopback_host(host: &str) -> bool {
+    matches!(host, "127.0.0.1" | "localhost" | "::1" | "10.0.2.2")
+}
+
+/// 媒体（SRS HTTP）端口：docker 里 SRS 的 8080 映射到宿主的 8000
+pub fn media_port() -> u16 {
+    std::env::var("CAKECAKE_MEDIA_PORT")
+        .ok()
+        .or_else(|| option_env!("CAKECAKE_MEDIA_PORT").map(str::to_owned))
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(8000)
+}
+
+/// 本机在局域网里的 IPv4。用 UDP `connect` 让系统选一次路由（不发包），
+/// 因此不需要 JNI 也不需要额外权限，桌面和安卓都是同一套代码。
+pub fn local_ipv4() -> Option<std::net::Ipv4Addr> {
+    for probe in ["192.168.1.1:80", "8.8.8.8:53", "223.5.5.5:53"] {
+        let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") else {
+            continue;
+        };
+        if sock.connect(probe).is_err() {
+            continue;
+        }
+        if let Ok(std::net::SocketAddr::V4(addr)) = sock.local_addr() {
+            let ip = *addr.ip();
+            if !ip.is_loopback() && !ip.is_unspecified() {
+                return Some(ip);
+            }
+        }
+    }
+    None
+}
+
+/// 探一台后端是否在线（/api/v1/health 返回 200）
+pub fn probe_health(base: &str, timeout: Duration) -> bool {
+    let url = format!("{}/api/v1/health", base.trim_end_matches('/'));
+    matches!(
+        ureq::get(&url).timeout(timeout).call(),
+        Ok(resp) if resp.status() == 200
+    )
+}
+
+/// 在手机当前所在的 /24 网段里找电脑上的后端（8080），用于 IP 变了、
+/// 或者没把局域网地址烘焙进包的情况：找到后写进 server.txt，下次直接命中。
+///
+/// 只在所有已知地址都不通时才调用；并发探，通常 1~3 秒出结果。
+pub fn scan_lan_base(port: u16) -> Option<String> {
+    let local = local_ipv4()?;
+    let o = local.octets();
+    let prefix = format!("{}.{}.{}", o[0], o[1], o[2]);
+    // 排除手机自己，别把自己当成后端
+    let self_last = o[3];
+
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let next = Arc::new(std::sync::atomic::AtomicUsize::new(1));
+    let workers = 24;
+    for _ in 0..workers {
+        let tx = tx.clone();
+        let prefix = prefix.clone();
+        let next = next.clone();
+        std::thread::spawn(move || loop {
+            let host = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if host > 254 {
+                return;
+            }
+            if host == self_last as usize {
+                continue;
+            }
+            let base = format!("http://{prefix}.{host}:{port}");
+            if probe_health(&base, Duration::from_millis(900)) {
+                let _ = tx.send(base);
+                return;
+            }
+        });
+    }
+    drop(tx);
+    // 全部探完也没人应答时，最多等 4 秒就收手
+    rx.recv_timeout(Duration::from_secs(4)).ok()
 }
 
 impl Client {
@@ -1158,11 +1470,151 @@ impl Client {
             .ok()
             .or_else(|| option_env!("CAKECAKE_API").map(str::to_owned))
             .unwrap_or_else(|| "http://127.0.0.1:8080".to_owned());
-        Self {
+        let c = Self {
             base: base.trim_end_matches('/').to_owned(),
             auth: Arc::new(Mutex::new(AuthState::default())),
             refresh_lock: Arc::new(Mutex::new(())),
+            media: Arc::new(Mutex::new(None)),
+        };
+        // 登录态落盘：重装/重启后不用再登一次（token 过期会自动 refresh）
+        c.load_auth();
+        c
+    }
+
+    /// 登录态文件（和 server.txt 放同一个目录）
+    fn auth_file() -> String {
+        #[cfg(target_os = "android")]
+        {
+            "/sdcard/Android/data/com.cakecake.rust/files/auth.txt".to_owned()
         }
+        #[cfg(not(target_os = "android"))]
+        {
+            let dir = std::env::var("CAKECAKE_FILES_DIR").unwrap_or_else(|_| ".".to_owned());
+            format!("{dir}/auth.txt")
+        }
+    }
+
+    fn save_auth(&self) {
+        let (access, refresh) = {
+            let Ok(a) = self.auth.lock() else { return };
+            (a.access.clone(), a.refresh.clone())
+        };
+        let (Some(access), Some(refresh)) = (access, refresh) else {
+            return;
+        };
+        let path = Self::auth_file();
+        if let Some(dir) = std::path::Path::new(&path).parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, format!("{access}\n{refresh}\n"));
+    }
+
+    fn load_auth(&self) {
+        let Ok(text) = std::fs::read_to_string(Self::auth_file()) else {
+            return;
+        };
+        let mut lines = text.lines().map(|l| l.trim().to_owned());
+        let access = lines.next().unwrap_or_default();
+        let refresh = lines.next().unwrap_or_default();
+        if access.is_empty() {
+            return;
+        }
+        if let Ok(mut a) = self.auth.lock() {
+            a.access = Some(access);
+            a.refresh = if refresh.is_empty() { None } else { Some(refresh) };
+        }
+    }
+
+    // ---------- 媒体（SRS）地址 ----------
+
+    /// 已经探测通过的媒体源（`http://ip:port`）
+    pub fn media_origin(&self) -> Option<String> {
+        self.media.lock().ok().and_then(|m| m.clone())
+    }
+
+    pub fn set_media_origin(&self, origin: Option<String>) {
+        if let Ok(mut m) = self.media.lock() {
+            *m = origin.map(|o| o.trim_end_matches('/').to_owned());
+        }
+    }
+
+    /// 媒体源候选（优先级从高到低）：
+    /// 显式覆盖 > 已探测结果 > API 主机 > 烘焙/运行期局域网主机 > 当前 API 主机兜底。
+    pub fn media_origins(&self) -> Vec<String> {
+        let port = media_port();
+        let mut out: Vec<String> = Vec::new();
+        let push = |out: &mut Vec<String>, origin: String| {
+            let origin = origin.trim().trim_end_matches('/').to_owned();
+            if origin.is_empty() || out.iter().any(|x| x == &origin) {
+                return;
+            }
+            out.push(origin);
+        };
+
+        // 1) 显式指定完整媒体源（自建 SRS 不在 8000 端口时用）
+        for v in [
+            std::env::var("CAKECAKE_MEDIA_BASE").ok(),
+            option_env!("CAKECAKE_MEDIA_BASE").map(str::to_owned),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if v.starts_with("http://") || v.starts_with("https://") {
+                push(&mut out, v);
+            }
+        }
+        // 2) 之前探测成功的那个
+        if let Some(o) = self.media_origin() {
+            push(&mut out, o);
+        }
+        // 3) API 主机（非回环时最可信：API 和 SRS 在同一台电脑上）
+        let api_host = host_of(&self.base).to_owned();
+        if !is_loopback_host(&api_host) {
+            push(&mut out, format!("http://{api_host}:{port}"));
+        }
+        // 4) 打包时烘焙 / 运行时指定的局域网地址
+        if let Some(lan) = lan_base() {
+            let h = host_of(&lan).to_owned();
+            if !h.is_empty() {
+                push(&mut out, format!("http://{h}:{port}"));
+            }
+        }
+        // 5) 实在没有别的，把 API 主机（可能是回环）放最后一项：
+        //    这样错误信息里能看出到底试过什么，而不是凭空退回 127.0.0.1
+        push(&mut out, format!("http://{api_host}:{port}"));
+        out
+    }
+
+    /// 探测某个直播流能不能播：要求返回真正的 HLS 播放列表（`#EXTM3U`）。
+    ///
+    /// 真机连 127.0.0.1 时连接要么被拒、要么连到手机自己，MediaPlayer 会一直
+    /// 转圈；这里先用 HTTP 探一遍，只有拿到播放列表才把地址交给播放器。
+    pub fn resolve_media(&self, stream_key: &str) -> Result<String, String> {
+        if stream_key.is_empty() {
+            return Err("房间没有 stream_key（主播还没推流）".to_owned());
+        }
+        let path = format!("/live/{stream_key}.m3u8");
+        let mut tried: Vec<String> = Vec::new();
+        for origin in self.media_origins() {
+            let url = format!("{origin}{path}");
+            match ureq::get(&url)
+                .timeout(Duration::from_millis(2500))
+                .call()
+            {
+                Ok(r) if r.status() == 200 => {
+                    let body = r.into_string().unwrap_or_default();
+                    if body.contains("#EXTM3U") {
+                        self.set_media_origin(Some(origin));
+                        return Ok(url);
+                    }
+                    tried.push(format!("{url} → 不是 HLS 播放列表"));
+                }
+                Ok(r) => tried.push(format!("{url} → HTTP {}", r.status())),
+                Err(ureq::Error::Status(code, _)) => tried.push(format!("{url} → HTTP {code}")),
+                Err(e) => tried.push(format!("{url} → {e}")),
+            }
+        }
+        Err(tried.join("\n"))
     }
 
     // ---------- 登录态 ----------
@@ -1172,6 +1624,7 @@ impl Client {
             auth.access = Some(pair.access_token.clone());
             auth.refresh = Some(pair.refresh_token.clone());
         }
+        self.save_auth();
     }
 
     pub fn clear_tokens(&self) {
@@ -1179,6 +1632,7 @@ impl Client {
             auth.access = None;
             auth.refresh = None;
         }
+        let _ = std::fs::remove_file(Self::auth_file());
     }
 
     pub fn access_token(&self) -> Option<String> {
@@ -1513,6 +1967,50 @@ impl Client {
         Ok(page.items)
     }
 
+    /// GET /api/v1/space/:userId/favorite-folders（隐私关闭时后端返回空列表）
+    pub fn user_favorite_folders(&self, user_id: u64) -> Result<Vec<FavoriteFolder>, String> {
+        let page: Items<FavoriteFolder> = self.send(
+            "GET",
+            &format!("/api/v1/space/{user_id}/favorite-folders"),
+            None,
+        )?;
+        Ok(page.items)
+    }
+
+    /// GET /api/v1/space/:userId/favorites?folder_id=（某个公开收藏夹里的视频）
+    pub fn user_favorites_in_folder(
+        &self,
+        user_id: u64,
+        folder_id: u64,
+    ) -> Result<Vec<FavoriteItem>, String> {
+        let page: Items<FavoriteItem> = self.send(
+            "GET",
+            &format!("/api/v1/space/{user_id}/favorites?folder_id={folder_id}&limit=60"),
+            None,
+        )?;
+        Ok(page.items)
+    }
+
+    /// GET /api/v1/space/:userId/recent-coins（最近投币）
+    pub fn user_recent_coins(&self, user_id: u64) -> Result<Vec<CoinVideo>, String> {
+        let page: Items<CoinVideo> = self.send(
+            "GET",
+            &format!("/api/v1/space/{user_id}/recent-coins?limit=20"),
+            None,
+        )?;
+        Ok(page.items)
+    }
+
+    /// GET /api/v1/space/:userId/article-favorites（公开的图文收藏）
+    pub fn user_article_favorites(&self, user_id: u64) -> Result<Vec<ArticleCard>, String> {
+        let page: Items<ArticleCard> = self.send(
+            "GET",
+            &format!("/api/v1/space/{user_id}/article-favorites?limit=30"),
+            None,
+        )?;
+        Ok(page.items)
+    }
+
     // ---------- 视频 ----------
 
     /// GET /api/v1/videos?limit=
@@ -1631,6 +2129,84 @@ impl Client {
         )
     }
 
+    /// POST /api/v1/videos/:id/favorite-folders/:folderId（加入某个收藏夹）
+    pub fn add_video_to_favorite_folder(&self, video_id: u64, folder_id: u64) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            &format!("/api/v1/videos/{video_id}/favorite-folders/{folder_id}"),
+            Some(serde_json::json!({})),
+        )
+    }
+
+    /// DELETE /api/v1/videos/:id/favorite-folders/:folderId
+    pub fn remove_video_from_favorite_folder(
+        &self,
+        video_id: u64,
+        folder_id: u64,
+    ) -> Result<(), String> {
+        self.send_action(
+            "DELETE",
+            &format!("/api/v1/videos/{video_id}/favorite-folders/{folder_id}"),
+            None,
+        )
+    }
+
+    /// PUT /api/v1/videos/:id/favorite-folders/move（从一个收藏夹移到另一个）
+    pub fn move_video_favorite_folder(
+        &self,
+        video_id: u64,
+        from_folder_id: u64,
+        to_folder_id: u64,
+    ) -> Result<(), String> {
+        self.send_action(
+            "PUT",
+            &format!("/api/v1/videos/{video_id}/favorite-folders/move"),
+            Some(serde_json::json!({
+                "from_folder_id": from_folder_id,
+                "to_folder_id": to_folder_id,
+            })),
+        )
+    }
+
+    /// PUT /api/v1/users/me/favorite-folders/:folderId（改标题 / 简介 / 公开状态）
+    pub fn update_favorite_folder(
+        &self,
+        folder_id: u64,
+        title: &str,
+        description: &str,
+        is_public: bool,
+    ) -> Result<(), String> {
+        let _: serde_json::Value = self.send(
+            "PUT",
+            &format!("/api/v1/users/me/favorite-folders/{folder_id}"),
+            Some(serde_json::json!({
+                "title": title,
+                "description": description,
+                "is_public": is_public,
+            })),
+        )?;
+        Ok(())
+    }
+
+    /// DELETE /api/v1/users/me/favorite-folders/:folderId/invalid-favorites（清理失效收藏）
+    pub fn clear_invalid_favorites(&self, folder_id: u64) -> Result<(), String> {
+        self.send_action(
+            "DELETE",
+            &format!("/api/v1/users/me/favorite-folders/{folder_id}/invalid-favorites"),
+            None,
+        )
+    }
+
+    /// POST /api/v1/users/me/favorite-folders/:folderId/batch-remove
+    pub fn batch_remove_favorites(&self, folder_id: u64, video_ids: &[u64]) -> Result<(), String> {
+        let _: serde_json::Value = self.send(
+            "POST",
+            &format!("/api/v1/users/me/favorite-folders/{folder_id}/batch-remove"),
+            Some(serde_json::json!({ "video_ids": video_ids })),
+        )?;
+        Ok(())
+    }
+
     /// POST /api/v1/users/:id/follow
     pub fn toggle_follow(&self, user_id: u64) -> Result<(), String> {
         let _: serde_json::Value = self.send(
@@ -1663,6 +2239,31 @@ impl Client {
         Ok(page.items)
     }
 
+    /// PATCH /api/v1/videos/:id/playback（作者开关评论区 / 弹幕）
+    pub fn patch_video_playback(
+        &self,
+        id: u64,
+        comments_closed: Option<bool>,
+        comments_curated: Option<bool>,
+        danmaku_closed: Option<bool>,
+    ) -> Result<(), String> {
+        let mut body = serde_json::Map::new();
+        if let Some(v) = comments_closed {
+            body.insert("comments_closed".to_owned(), serde_json::json!(v));
+        }
+        if let Some(v) = comments_curated {
+            body.insert("comments_curated".to_owned(), serde_json::json!(v));
+        }
+        if let Some(v) = danmaku_closed {
+            body.insert("danmaku_closed".to_owned(), serde_json::json!(v));
+        }
+        self.send_action(
+            "PATCH",
+            &format!("/api/v1/videos/{id}/playback"),
+            Some(serde_json::Value::Object(body)),
+        )
+    }
+
     /// GET /api/v1/videos/:id/comments（评论树靠全量列表在本地拼，limit 给大一些）
     pub fn comments(&self, id: u64) -> Result<Vec<Comment>, String> {
         let page: Items<Comment> =
@@ -1678,6 +2279,28 @@ impl Client {
             Some(serde_json::json!({ "content": content, "parent_id": parent_id })),
         )?;
         Ok(())
+    }
+
+    /// POST /api/v1/videos/:id/comments-with-image（multipart：content + image）
+    pub fn post_comment_with_image(
+        &self,
+        id: u64,
+        content: &str,
+        path: &str,
+    ) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/videos/{id}/comments-with-image"),
+            "image",
+            &[("content", content)],
+            12 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// GET /api/v1/videos/:id/comments/config（可用排序 / 筛选选项）
+    pub fn comment_config(&self, id: u64) -> Result<CommentConfig, String> {
+        self.get(&format!("/api/v1/videos/{id}/comments/config"))
     }
 
     // ---------- 直播 ----------
@@ -1801,6 +2424,11 @@ impl Client {
             Some(serde_json::json!({ "paused": paused })),
         )
         .map(|_: serde_json::Value| ())
+    }
+
+    /// GET /api/v1/users/me/view-history/settings
+    pub fn view_history_settings(&self) -> Result<ViewHistorySettings, String> {
+        self.send("GET", "/api/v1/users/me/view-history/settings", None)
     }
 
     /// GET /api/v1/videos/:id/chapters（无需登录）
@@ -1966,6 +2594,22 @@ impl Client {
             "/api/v1/users/me/announcement",
             Some(serde_json::json!({ "announcement": text })),
         )
+    }
+
+    /// POST /api/v1/users/me/avatar（multipart，字段名 avatar）
+    pub fn upload_avatar(&self, path: &str) -> Result<String, String> {
+        let v: serde_json::Value = self.upload_multipart_file(
+            path,
+            "/api/v1/users/me/avatar",
+            "avatar",
+            &[],
+            6 * 1024 * 1024,
+        )?;
+        Ok(v
+            .get("avatar_url")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_owned())
     }
 
     /// PUT /api/v1/users/me/password
@@ -2341,9 +2985,11 @@ impl Client {
     }
 
     /// GET /api/v1/users/me/articles（我写的，含草稿/审核中）
+    /// 我的文章（含草稿）：后端默认不列草稿，这里显式要 all；
+    /// 分页参数是 page_size（不是 limit），写错只会拿到默认 10 条。
     pub fn my_articles(&self) -> Result<Vec<ArticleCard>, String> {
         let page: Items<ArticleCard> =
-            self.send("GET", "/api/v1/users/me/articles?limit=50", None)?;
+            self.send("GET", "/api/v1/users/me/articles?page_size=50&status=all", None)?;
         Ok(page.items)
     }
 
@@ -2353,22 +2999,49 @@ impl Client {
     }
 
     /// POST /api/v1/articles（新建，返回 id）
-    pub fn post_article(&self, title: &str, body_md: &str) -> Result<u64, String> {
+    /// `publish=false` 存草稿，`true` 走发布（是否立刻上线由后端审核配置决定）。
+    /// 这个字段不能省：后端默认 false，漏传就会「点了发布其实是草稿」。
+    /// 返回（文章 id, 后端落地后的状态）：开了审核时 publish=true 会得到
+    /// `pending_review` 而不是 `published`，提示语要按这个写，不能一律说「已发布」。
+    pub fn post_article(
+        &self,
+        title: &str,
+        body_md: &str,
+        publish: bool,
+    ) -> Result<(u64, String), String> {
         let v: serde_json::Value = self.send(
             "POST",
             "/api/v1/articles",
-            Some(serde_json::json!({ "title": title, "body_md": body_md })),
+            Some(serde_json::json!({
+                "title": title,
+                "body_md": body_md,
+                "publish": publish,
+            })),
         )?;
-        Ok(v.get("id").and_then(|x| x.as_u64()).unwrap_or(0))
+        Ok((
+            v.get("id").and_then(|x| x.as_u64()).unwrap_or(0),
+            v.get("status").and_then(|x| x.as_str()).unwrap_or("").to_owned(),
+        ))
     }
 
     /// PUT /api/v1/users/me/articles/:id
-    pub fn put_article(&self, id: u64, title: &str, body_md: &str) -> Result<(), String> {
-        self.send_action(
+    pub fn put_article(
+        &self,
+        id: u64,
+        title: &str,
+        body_md: &str,
+        publish: bool,
+    ) -> Result<String, String> {
+        let v: serde_json::Value = self.send(
             "PUT",
             &format!("/api/v1/users/me/articles/{id}"),
-            Some(serde_json::json!({ "title": title, "body_md": body_md })),
-        )
+            Some(serde_json::json!({
+                "title": title,
+                "body_md": body_md,
+                "publish": publish,
+            })),
+        )?;
+        Ok(v.get("status").and_then(|x| x.as_str()).unwrap_or("").to_owned())
     }
 
     /// DELETE /api/v1/users/me/articles/:id
@@ -2399,6 +3072,44 @@ impl Client {
             &format!("/api/v1/users/me/articles/{id}/playback"),
             Some(serde_json::Value::Object(body)),
         )
+    }
+
+    /// GET /api/v1/users/me/article-favorites（我的图文收藏）
+    pub fn my_article_favorites(&self) -> Result<Vec<ArticleCard>, String> {
+        let page: Items<ArticleCard> = self.send(
+            "GET",
+            "/api/v1/users/me/article-favorites?limit=30",
+            None,
+        )?;
+        Ok(page.items)
+    }
+
+    /// PUT /api/v1/users/me/articles/:id/cover（multipart，字段名 cover）
+    pub fn upload_article_cover(&self, id: u64, path: &str) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/users/me/articles/{id}/cover"),
+            "cover",
+            &[],
+            12 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// 文章评论操作：like / dislike / approve / ignore-curated / pin / delete
+    pub fn article_comment_action(&self, id: u64, action: &str) -> Result<(), String> {
+        match action {
+            "delete" => self.send_action(
+                "DELETE",
+                &format!("/api/v1/article-comments/{id}"),
+                None,
+            ),
+            _ => self.send_action(
+                "POST",
+                &format!("/api/v1/article-comments/{id}/{action}"),
+                Some(serde_json::json!({})),
+            ),
+        }
     }
 
     // ---------- 动态 ----------
@@ -2523,6 +3234,16 @@ impl Client {
         self.send("GET", "/api/v1/users/me/creator/stats", None)
     }
 
+    /// GET /api/v1/users/me/creator/video-stats（每个投稿的播放/互动数据）
+    pub fn creator_video_stats(&self) -> Result<Vec<CreatorVideoStat>, String> {
+        let page: Items<CreatorVideoStat> = self.send(
+            "GET",
+            "/api/v1/users/me/creator/video-stats",
+            None,
+        )?;
+        Ok(page.items)
+    }
+
     /// POST /api/v1/videos/:id/schedule（定时发布，publish_at="2006-01-02 15:04"）
     pub fn schedule_publish(&self, id: u64, publish_at: &str) -> Result<(), String> {
         self.send_action(
@@ -2561,6 +3282,41 @@ impl Client {
         self.send_action("DELETE", &format!("/api/v1/videos/{id}"), None)
     }
 
+    /// PUT /api/v1/videos/:id/cover（multipart，字段名 cover）
+    pub fn upload_video_cover(&self, id: u64, path: &str) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/videos/{id}/cover"),
+            "cover",
+            &[],
+            12 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// POST /api/v1/videos/:id/replace-media（multipart：file + title + description）
+    pub fn replace_video_media(
+        &self,
+        id: u64,
+        path: &str,
+        title: &str,
+        description: &str,
+    ) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/videos/{id}/replace-media"),
+            "file",
+            &[("title", title), ("description", description)],
+            512 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// GET /api/v1/users/me/videos/:id/draft-source（返回可播放的草稿源地址）
+    pub fn video_draft_source_url(&self, id: u64) -> String {
+        format!("{}/api/v1/users/me/videos/{id}/draft-source", self.base.trim_end_matches('/'))
+    }
+
     /// POST /api/v1/videos/:id/publish（草稿发布）
     pub fn publish_draft(&self, id: u64) -> Result<(), String> {
         self.send_action(
@@ -2570,14 +3326,80 @@ impl Client {
         )
     }
 
-    /// POST /api/v1/videos/:id/draft（保存草稿）
-    pub fn save_draft(&self, title: &str, description: &str) -> Result<u64, String> {
-        let v: serde_json::Value = self.send(
-            "POST",
+    /// POST /api/v1/videos/draft（multipart：file + title + description + zone，存草稿）
+    pub fn save_draft(
+        &self,
+        path: &str,
+        title: &str,
+        description: &str,
+        zone: &str,
+    ) -> Result<u64, String> {
+        let v: serde_json::Value = self.upload_multipart_file(
+            path,
             "/api/v1/videos/draft",
-            Some(serde_json::json!({ "title": title, "description": description })),
+            "file",
+            &[("title", title), ("description", description), ("zone", zone)],
+            512 * 1024 * 1024,
         )?;
         Ok(v.get("id").and_then(|x| x.as_u64()).unwrap_or(0))
+    }
+
+    /// POST/PUT /api/v1/videos/:id/draft（更新草稿的标题/简介/标签/分区）
+    pub fn update_video_draft(
+        &self,
+        id: u64,
+        title: &str,
+        description: &str,
+        tags: &[String],
+        zone: &str,
+    ) -> Result<(), String> {
+        self.send_action(
+            "PUT",
+            &format!("/api/v1/videos/{id}/draft"),
+            Some(serde_json::json!({
+                "title": title,
+                "description": description,
+                "tags": tags,
+                "zone": zone,
+            })),
+        )
+    }
+
+    /// POST /api/v1/videos/:id/subtitles（multipart：file + lang + title + format）
+    pub fn upload_subtitle(
+        &self,
+        video_id: u64,
+        path: &str,
+        lang: &str,
+        title: &str,
+        format: &str,
+    ) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/videos/{video_id}/subtitles"),
+            "file",
+            &[("lang", lang), ("title", title), ("format", format)],
+            12 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// DELETE /api/v1/videos/:id/subtitles/:subtitleId
+    pub fn delete_subtitle(&self, video_id: u64, subtitle_id: u64) -> Result<(), String> {
+        self.send_action(
+            "DELETE",
+            &format!("/api/v1/videos/{video_id}/subtitles/{subtitle_id}"),
+            None,
+        )
+    }
+
+    /// POST /api/v1/videos/:id/subtitles/asr（自动转写字幕）
+    pub fn request_subtitle_asr(&self, video_id: u64, lang: &str, title: &str) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            &format!("/api/v1/videos/{video_id}/subtitles/asr"),
+            Some(serde_json::json!({ "lang": lang, "title": title })),
+        )
     }
 
     /// POST /api/v1/videos/:id/chapters（创作者加章节）
@@ -2684,6 +3506,27 @@ impl Client {
         Ok(out)
     }
 
+    /// POST /api/v1/comments/:id/images（multipart，字段名 image）
+    pub fn upload_comment_image(&self, comment_id: u64, path: &str) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/comments/{comment_id}/images"),
+            "image",
+            &[],
+            12 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
+    /// DELETE /api/v1/comments/:id/images/:imageId
+    pub fn delete_comment_image(&self, comment_id: u64, image_id: u64) -> Result<(), String> {
+        self.send_action(
+            "DELETE",
+            &format!("/api/v1/comments/{comment_id}/images/{image_id}"),
+            None,
+        )
+    }
+
     // ---------- 弹幕 ----------
 
     /// DELETE /api/v1/danmakus/:id（发送者或 UP 主）
@@ -2706,6 +3549,15 @@ impl Client {
     /// GET /api/v1/online
     pub fn online(&self) -> Result<HomeStats, String> {
         self.get("/api/v1/online")
+    }
+
+    /// GET /api/v1/config/feature-flags/:key（未配置时后端 fail-closed 返回 enabled=false）
+    pub fn feature_flag(&self, key: &str) -> Result<FeatureFlag, String> {
+        self.send(
+            "GET",
+            &format!("/api/v1/config/feature-flags/{}", percent_encode(key)),
+            None,
+        )
     }
 
     /// GET /api/v1/specials
@@ -2801,6 +3653,18 @@ impl Client {
         )
     }
 
+    /// POST /api/v1/live/room/:id/cover（multipart，字段名 cover）
+    pub fn upload_live_cover(&self, id: u64, path: &str) -> Result<(), String> {
+        let _: serde_json::Value = self.upload_multipart_file(
+            path,
+            &format!("/api/v1/live/room/{id}/cover"),
+            "cover",
+            &[],
+            6 * 1024 * 1024,
+        )?;
+        Ok(())
+    }
+
     // ---------- 治理 / 客服 ----------
 
     /// POST /api/v1/reports（举报用户/视频/评论/动态）
@@ -2849,6 +3713,11 @@ impl Client {
         Ok(page.items)
     }
 
+    /// GET /api/v1/appeals/:id
+    pub fn appeal(&self, id: u64) -> Result<Appeal, String> {
+        self.send("GET", &format!("/api/v1/appeals/{id}"), None)
+    }
+
     /// POST /api/v1/tickets
     pub fn post_ticket(&self, category: &str, subject: &str, desc: &str) -> Result<(), String> {
         self.send_action(
@@ -2865,6 +3734,71 @@ impl Client {
     /// GET /api/v1/users/me/tickets
     pub fn my_tickets(&self) -> Result<Vec<Ticket>, String> {
         let page: Items<Ticket> = self.send("GET", "/api/v1/users/me/tickets", None)?;
+        Ok(page.items)
+    }
+
+    /// GET /api/v1/users/me/tickets/:id（工单详情 + 消息）
+    pub fn ticket_detail(&self, id: u64) -> Result<TicketDetail, String> {
+        self.send(
+            "GET",
+            &format!("/api/v1/users/me/tickets/{id}"),
+            None,
+        )
+    }
+
+    /// POST /api/v1/users/me/tickets/:id/messages（补充说明）
+    pub fn post_ticket_message(&self, id: u64, content: &str) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            &format!("/api/v1/users/me/tickets/{id}/messages"),
+            Some(serde_json::json!({ "content": content })),
+        )
+    }
+
+    /// POST /api/v1/users/me/tickets/:id/appeal（对已处理的工单申诉）
+    pub fn appeal_ticket(&self, id: u64) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            &format!("/api/v1/users/me/tickets/{id}/appeal"),
+            Some(serde_json::json!({})),
+        )
+    }
+
+    /// POST /api/v1/tickets/:id/satisfaction（满意度评价，1-5 分）
+    pub fn post_ticket_satisfaction(&self, id: u64, score: u32, comment: &str) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            &format!("/api/v1/tickets/{id}/satisfaction"),
+            Some(serde_json::json!({ "score": score, "comment": comment })),
+        )
+    }
+
+    /// POST /api/v1/copyright/complaints（版权投诉）
+    pub fn post_copyright_complaint(
+        &self,
+        related_type: &str,
+        related_id: u64,
+        description: &str,
+    ) -> Result<(), String> {
+        self.send_action(
+            "POST",
+            "/api/v1/copyright/complaints",
+            Some(serde_json::json!({
+                "related_type": related_type,
+                "related_id": related_id,
+                "description": description,
+                "evidence_urls": [],
+            })),
+        )
+    }
+
+    /// GET /api/v1/users/me/copyright/complaints（我的版权投诉）
+    pub fn my_copyright_complaints(&self) -> Result<Vec<CopyrightComplaint>, String> {
+        let page: Items<CopyrightComplaint> = self.send(
+            "GET",
+            "/api/v1/users/me/copyright/complaints",
+            None,
+        )?;
         Ok(page.items)
     }
 
@@ -2892,7 +3826,16 @@ impl Client {
         self.send_action(
             "POST",
             &format!("/api/v1/users/me/cs/conversations/{id}/messages"),
-            Some(serde_json::json!({ "message": message })),
+            Some(serde_json::json!({ "content": message })),
+        )
+    }
+
+    /// GET /api/v1/users/me/cs/conversations/:id（会话详情 + 全部消息）
+    pub fn cs_conversation(&self, id: u64) -> Result<CsConversationDetail, String> {
+        self.send(
+            "GET",
+            &format!("/api/v1/users/me/cs/conversations/{id}"),
+            None,
         )
     }
 
@@ -2917,14 +3860,109 @@ impl Client {
 
     /// 探测某台后端是否在线（换网段/断映射时用来自动找可用地址）
     pub fn probe_base(&self, base: &str) -> bool {
-        let url = format!("{}/api/v1/health", base.trim_end_matches('/'));
-        matches!(
-            ureq::get(&url).timeout(Duration::from_millis(1200)).call(),
-            Ok(resp) if resp.status() == 200
-        )
+        probe_health(base, Duration::from_millis(1200))
     }
 
     // ---------- 投稿上传 ----------
+
+    /// 单文件 multipart 上传（头像 / 封面 / 替换稿件源文件都走这里）
+    fn upload_multipart_file(
+        &self,
+        path: &str,
+        endpoint: &str,
+        file_field: &str,
+        fields: &[(&str, &str)],
+        max_bytes: u64,
+    ) -> Result<serde_json::Value, String> {
+        let meta = std::fs::metadata(path).map_err(|e| format!("读取文件失败：{e}"))?;
+        if meta.len() == 0 {
+            return Err("文件是空的".to_owned());
+        }
+        if meta.len() > max_bytes {
+            return Err(format!("文件超过 {}MB", max_bytes / 1_048_576));
+        }
+        let name = std::path::Path::new(path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "upload".to_owned());
+        let ext = std::path::Path::new(path)
+            .extension()
+            .map(|s| s.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "webp" => "image/webp",
+            "gif" => "image/gif",
+            "mov" => "video/quicktime",
+            "mkv" => "video/x-matroska",
+            "webm" => "video/webm",
+            "mp4" => "video/mp4",
+            _ => "image/jpeg",
+        };
+        let b = "----cakecakeboundary7d1f3a";
+        let mut head = Vec::new();
+        head.extend_from_slice(
+            format!(
+                "--{b}\r\nContent-Disposition: form-data; name=\"{file_field}\"; filename=\"{name}\"\r\nContent-Type: {mime}\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        let mut tail = Vec::new();
+        for (k, v) in fields {
+            if v.is_empty() {
+                continue;
+            }
+            tail.extend_from_slice(
+                format!("\r\n--{b}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}")
+                    .as_bytes(),
+            );
+        }
+        tail.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+
+        let mut retried = false;
+        loop {
+            let file = std::fs::File::open(path).map_err(|e| format!("打开文件失败：{e}"))?;
+            let reader = UploadReader {
+                head: std::io::Cursor::new(head.clone()),
+                file,
+                tail: std::io::Cursor::new(tail.clone()),
+            };
+            let token = self.access_token();
+            let mut req = ureq::post(&format!("{}{}", self.base, endpoint))
+                .timeout(Duration::from_secs(300))
+                .set(
+                    "Content-Type",
+                    &format!("multipart/form-data; boundary={b}"),
+                );
+            if let Some(t) = token.as_deref() {
+                req = req.set("Authorization", &format!("Bearer {t}"));
+            }
+            let resp = match req.send(reader) {
+                Ok(r) => r,
+                Err(ureq::Error::Status(_, r)) => r,
+                Err(e) => return Err(format!("上传失败：{e}")),
+            };
+            let text = resp.into_string().map_err(|e| e.to_string())?;
+            let env: Envelope<serde_json::Value> = serde_json::from_str(&text)
+                .map_err(|e| format!("JSON 解析失败：{e}"))?;
+            if !retried && env.code == CODE_UNAUTHORIZED {
+                if self.refresh().is_ok() {
+                    retried = true;
+                    continue;
+                }
+                self.clear_tokens();
+                return Err(EXPIRED_MSG.to_owned());
+            }
+            if env.code != 0 {
+                return Err(if env.msg.is_empty() {
+                    "上传失败".to_owned()
+                } else {
+                    env.msg
+                });
+            }
+            return Ok(env.data.unwrap_or(serde_json::Value::Null));
+        }
+    }
 
     /// POST /api/v1/videos（multipart：file + title + description + zone）
     ///
@@ -2943,7 +3981,6 @@ impl Client {
         if meta.len() > 512 * 1024 * 1024 {
             return Err("文件超过 512MB".to_owned());
         }
-        let file = std::fs::File::open(path).map_err(|e| format!("打开文件失败：{e}"))?;
         let name = std::path::Path::new(path)
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
@@ -3040,6 +4077,45 @@ Content-Disposition: form-data; name=\"{k}\"
         }
     }
 
+    /// GET /api/v1/users/me/videos/:id/draft-source（带鉴权下载草稿源文件到本地）
+    pub fn download_draft_source(&self, id: u64, dest: &str) -> Result<(), String> {
+        let mut retried = false;
+        loop {
+            let token = self.access_token();
+            let url = format!(
+                "{}/api/v1/users/me/videos/{id}/draft-source",
+                self.base.trim_end_matches('/')
+            );
+            let mut req = ureq::get(&url).timeout(Duration::from_secs(300));
+            if let Some(t) = token.as_deref() {
+                req = req.set("Authorization", &format!("Bearer {t}"));
+            }
+            let resp = match req.call() {
+                Ok(r) => r,
+                Err(ureq::Error::Status(_, r)) => r,
+                Err(e) => return Err(format!("下载失败：{e}")),
+            };
+            let status = resp.status();
+            if status == 401 && !retried {
+                if self.refresh().is_ok() {
+                    retried = true;
+                    continue;
+                }
+                self.clear_tokens();
+                return Err(EXPIRED_MSG.to_owned());
+            }
+            if !(200..300).contains(&status) {
+                return Err(format!("下载失败：HTTP {status}"));
+            }
+            let mut reader = resp.into_reader();
+            let mut file = std::fs::File::create(dest)
+                .map_err(|e| format!("创建本地文件失败：{e}"))?;
+            std::io::copy(&mut reader, &mut file)
+                .map_err(|e| format!("写入本地文件失败：{e}"))?;
+            return Ok(());
+        }
+    }
+
     /// 相对路径补成绝对地址（视频文件 / 头像这类后端直出路径）
     pub fn abs(&self, path: &str) -> String {
         if path.is_empty() {
@@ -3051,18 +4127,30 @@ Content-Disposition: form-data; name=\"{k}\"
         format!("{}{}", self.base.trim_end_matches('/'), path)
     }
 
+    /// 把 http(s) 基地址转成 WebSocket 地址（path 需自己带 query）
+    pub fn ws_url(&self, path: &str) -> String {
+        let base = if let Some(rest) = self.base.strip_prefix("https://") {
+            format!("wss://{rest}")
+        } else if let Some(rest) = self.base.strip_prefix("http://") {
+            format!("ws://{rest}")
+        } else {
+            format!("ws://{}", self.base.trim_start_matches("ws://"))
+        };
+        format!("{}{}", base.trim_end_matches('/'), path)
+    }
+
     /// 直播播放地址：SRS 的 HLS 输出。
+    /// API 在 8080，媒体（HTTP-FLV/HLS）在 8000，两者同一台主机。
     ///
-    /// API 在 8080，媒体（HTTP-FLV/HLS）在 8000，两者同一个主机；
-    /// 真机开发用 `adb reverse tcp:8000 tcp:8000` 即可直连。
+    /// 优先用探测通过的媒体源（`resolve_media` 会把 192.168.x.x 这类
+    /// 局域网地址缓存下来）；没探测过时才按 base / 烘焙的局域网地址现场拼，
+    /// 绝不会在已知局域网地址的情况下把 127.0.0.1 交给播放器。
     pub fn hls_url(&self, stream_key: &str) -> String {
-        let host = self.base.split("://").nth(1).unwrap_or("127.0.0.1:8080");
-        let hostname = host.split(':').next().unwrap_or("127.0.0.1");
-        let port = std::env::var("CAKECAKE_MEDIA_PORT")
-            .ok()
-            .or_else(|| option_env!("CAKECAKE_MEDIA_PORT").map(str::to_owned))
-            .unwrap_or_else(|| "8000".to_owned());
-        format!("http://{hostname}:{port}/live/{stream_key}.m3u8")
+        let origin = self
+            .media_origin()
+            .or_else(|| self.media_origins().into_iter().next())
+            .unwrap_or_else(|| format!("http://{}:{}", host_of(&self.base), media_port()));
+        format!("{origin}/live/{stream_key}.m3u8")
     }
 }
 

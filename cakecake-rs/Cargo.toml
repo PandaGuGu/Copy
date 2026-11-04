@@ -1,6 +1,6 @@
 [package]
 name = "cakecake-rs"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "cakecake 移动客户端的纯 Rust 实现（egui 壳 + 自绘内容层）"
 
@@ -59,3 +59,4 @@ target_sdk_version = 35
 [package.metadata.android.signing.release]
 path = "cakecake.keystore"
 keystore_password = "cakecake123"
+

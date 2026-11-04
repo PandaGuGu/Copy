@@ -10,7 +10,7 @@
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub enum Evt {
@@ -20,6 +20,8 @@ pub enum Evt {
     System(String),
     /// 在线人数
     Count(u64),
+    /// 服务端认定的自己的昵称（`user_info` 里回传，未登录是「游客」）
+    Me(String),
     Closed(String),
 }
 
@@ -94,9 +96,22 @@ fn run(url: &str, cmd_rx: Receiver<String>, evt_tx: &Sender<Evt>) -> Result<(), 
 
     let _ = evt_tx.send(Evt::System("已连接直播间".to_owned()));
 
+    // 服务端对「只看不说话」的连接有 120 秒读超时，超时直接掐线，
+    // 表现就是过一会儿聊天发不出去。这里每 25 秒发一个 WS ping 保活。
+    const PING_INTERVAL: Duration = Duration::from_secs(25);
+    let mut last_ping = Instant::now();
+
     let mut buf: Vec<u8> = Vec::with_capacity(4096);
     let mut tmp = [0u8; 4096];
     loop {
+        // 0) 心跳
+        if last_ping.elapsed() >= PING_INTERVAL {
+            if let Err(e) = send_frame(&mut stream, 0x9, b"hb") {
+                return Err(format!("心跳失败: {e}"));
+            }
+            last_ping = Instant::now();
+        }
+
         // 1) 发送待发消息
         loop {
             match cmd_rx.try_recv() {
@@ -130,6 +145,7 @@ fn run(url: &str, cmd_rx: Receiver<String>, evt_tx: &Sender<Evt>) -> Result<(), 
                     // ping → pong（同 payload）
                     let _ = send_frame(&mut stream, 0xA, &payload);
                 }
+                // 0xA pong（我们心跳的回包）与其余控制帧直接忽略
                 _ => {}
             }
         }
@@ -164,6 +180,11 @@ fn handle_text(payload: &[u8], evt_tx: &Sender<Evt>) {
             }
         }
         "user_info" => {
+            if let Some(name) = v.get("username").and_then(|c| c.as_str()) {
+                if !name.is_empty() {
+                    let _ = evt_tx.send(Evt::Me(name.to_owned()));
+                }
+            }
             if let Some(n) = v.get("user_count").and_then(|c| c.as_u64()) {
                 let _ = evt_tx.send(Evt::Count(n));
             }

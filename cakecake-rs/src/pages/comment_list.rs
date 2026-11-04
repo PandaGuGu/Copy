@@ -156,6 +156,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, kids: &[
 
     let lines = widgets::wrap_lines(ui.painter(), &c.content, 12.5, text_w, 6);
     let body_h = lines.len().max(1) as f32 * 18.0;
+    let img_h = comment_ui::images_h(c);
 
     // 预览块：第一条回复（2 行）+「共 N 条回复」
     let first = kids.first().map(|&k| &list[k]);
@@ -176,14 +177,14 @@ fn card(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, kids: &[
         8.0 + first_lines.len().max(1) as f32 * 16.0 + 20.0 + 8.0
     };
 
-    let h = 30.0 + body_h + 22.0 + preview_h + 12.0;
+    let h = 30.0 + body_h + img_h + 22.0 + preview_h + 12.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
 
     let av = Pos2::new(rect.left() + left + 13.0, rect.top() + 22.0);
     comment_ui::avatar(ui, app, c, av, 13.0);
 
-    let p = ui.painter();
-    comment_ui::name_line(p, rect.left() + text_x, rect.top() + 8.0, c);
+    let p = ui.painter().clone();
+    comment_ui::name_line(&p, rect.left() + text_x, rect.top() + 8.0, c);
 
     let mut y = rect.top() + 30.0;
     for l in &lines {
@@ -197,8 +198,18 @@ fn card(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, kids: &[
         y += 18.0;
     }
 
+    // 评论配图
+    comment_ui::draw_images(
+        ui,
+        app,
+        c,
+        rect.left() + text_x,
+        rect.top() + 30.0 + body_h + 4.0,
+        text_w,
+    );
+
     // 时间 · 地区 …… 回复 / 赞 / 踩
-    let meta_y = rect.top() + 30.0 + body_h + 10.0;
+    let meta_y = rect.top() + 30.0 + body_h + img_h + 10.0;
     p.text(
         Pos2::new(rect.left() + text_x, meta_y),
         Align2::LEFT_CENTER,
@@ -212,7 +223,7 @@ fn card(ui: &mut egui::Ui, app: &mut App, list: &[Comment], idx: usize, kids: &[
         theme::human(c.like_count)
     };
     let rects = comment_ui::action_rects(rect.right() - 14.0, meta_y, &like_text);
-    comment_ui::draw_actions(p, c, &rects, ui.ctx().pointer_hover_pos());
+    comment_ui::draw_actions(&p, c, &rects, ui.ctx().pointer_hover_pos());
 
     // 楼中楼预览块
     let mut box_rect = Rect::NOTHING;

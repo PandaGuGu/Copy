@@ -16,6 +16,29 @@ D8=$(BIN d8); APKSIGNER=$(BIN apksigner); ZIPALIGN=$(BIN zipalign); AAPT2=$(BIN 
 PLATFORM=$(ls -d "$ANDROID_HOME"/platforms/android-* | tail -1)
 
 cd "$(dirname "$0")/.."
+
+# ── 局域网直连（真机与电脑同一 Wi-Fi 时优先走 LAN，而不是 127.0.0.1）──
+# 自动探测电脑的局域网 IP 烘焙进 APK（编译期 option_env!("CAKECAKE_LAN_API")）。
+# 想手动指定：CAKECAKE_LAN_IP=192.168.x.x bash scripts/build-apk.sh
+# 想禁用：CAKECAKE_LAN_API= bash scripts/build-apk.sh
+if [ -z "${CAKECAKE_LAN_API+x}" ]; then
+  LAN_IP=${CAKECAKE_LAN_IP:-}
+  if [ -z "$LAN_IP" ] && command -v powershell.exe >/dev/null 2>&1; then
+    # 只挑「已连接且有默认网关」的物理网卡（排除虚拟/断开网卡的残留 IP）
+    LAN_IP=$(powershell.exe -NoProfile -Command \
+      "Get-NetIPConfiguration | Where-Object { \$_.NetAdapter.Status -eq 'Up' -and \$_.IPv4DefaultGateway -ne \$null -and \$_.InterfaceAlias -notmatch 'vEthernet|WSL|Docker|VPN|TAP|Loopback' } | ForEach-Object { \$_.IPv4Address.IPAddress } | Select-Object -First 1" \
+      2>/dev/null | tr -d '\r\n ')
+  fi
+  if [ -n "$LAN_IP" ]; then
+    export CAKECAKE_LAN_API="http://$LAN_IP:8080"
+  fi
+fi
+if [ -n "${CAKECAKE_LAN_API:-}" ]; then
+  echo "▶ 局域网地址烘焙进包：$CAKECAKE_LAN_API（值变化时 cargo 会自动重编）"
+else
+  echo "▶ 未配置局域网地址（回退 127.0.0.1 / 模拟器网关探测）"
+fi
+
 echo "▶ cargo apk build ($TARGET)"
 cargo apk build --lib --release --target "$TARGET" >/dev/null
 APK=target/release/apk/cakecake-rs.apk

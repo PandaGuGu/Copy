@@ -18,6 +18,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut App) {
         Route::ArticleList => article_list(ui, app),
         Route::Article(id) => article_detail(ui, app, id),
         Route::MyArticles => my_articles(ui, app),
+        Route::ArticleFavorites => article_favorites(ui, app),
         Route::Creator => creator(ui, app),
         Route::CreatorComments => creator_comments(ui, app),
         Route::CreatorDanmakus => creator_danmakus(ui, app),
@@ -25,6 +26,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut App) {
         Route::Specials => specials(ui, app),
         Route::Ledger => ledger(ui, app),
         Route::Governance => governance(ui, app),
+        Route::Appeal(id) => appeal_detail(ui, app, id),
+        Route::Ticket(id) => ticket_detail(ui, app, id),
+        Route::CsChat(id) => cs_chat(ui, app, id),
         Route::LiveHost => live_host(ui, app),
         _ => {}
     }
@@ -154,38 +158,106 @@ enum F {
     Title,
     Body,
     Text,
+    TicketText,
 }
 
 fn text_field(ui: &mut egui::Ui, app: &mut App, which: F, hint: &str) {
-    let mut focused = false;
+    // 安卓：NativeActivity 的窗口没有输入连接，egui 的 TextEdit 只能收到数字，
+    // 中文进不来。所以输入框统一改成「自己画 + 隐藏 EditText 托管」。
+    #[cfg(target_os = "android")]
     {
-        let value = match which {
-            F::Title => &mut app.f_title,
-            F::Body => &mut app.f_body,
-            F::Text => &mut app.f_text,
+        let (id, text, multi, h) = match which {
+            F::Title => ("f-title", app.f_title.clone(), false, 38.0),
+            F::Body => ("f-body", app.f_body.clone(), true, 110.0),
+            F::Text => ("f-text", app.f_text.clone(), true, 110.0),
+            F::TicketText => ("f-ticket", app.ticket_text.clone(), true, 110.0),
         };
+        let active = app.focus_field.as_deref() == Some(id);
+        let mut clicked = false;
         ui.horizontal(|ui| {
             ui.add_space(14.0);
-            let desired = ui.available_width() - 28.0;
-            if matches!(which, F::Body) {
-                let resp = ui.add(
-                    egui::TextEdit::multiline(value)
-                        .hint_text(hint)
-                        .desired_width(desired)
-                        .desired_rows(4),
-                );
-                focused = resp.has_focus();
-            } else {
-                let resp = ui.add(
-                    egui::TextEdit::singleline(value)
-                        .hint_text(hint)
-                        .desired_width(desired),
-                );
-                focused = resp.has_focus();
-            }
+            clicked = widgets::native_field(ui, &text, hint, multi, h, active);
         });
+        if clicked {
+            app.focus_field = Some(id.to_owned());
+            if multi {
+                crate::video::ime_open_multi(&text);
+            } else {
+                crate::video::ime_open(&text);
+            }
+        }
+        ui.add_space(4.0);
     }
-    app.note_focus(focused);
+
+    // 桌面：egui 自己的输入框，开发时直接敲键盘
+    #[cfg(not(target_os = "android"))]
+    {
+        let mut focused = false;
+        {
+            let value = match which {
+                F::Title => &mut app.f_title,
+                F::Body => &mut app.f_body,
+                F::Text => &mut app.f_text,
+                F::TicketText => &mut app.ticket_text,
+            };
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                let desired = ui.available_width() - 28.0;
+                if matches!(which, F::Body) {
+                    let resp = ui.add(
+                        egui::TextEdit::multiline(value)
+                            .hint_text(hint)
+                            .desired_width(desired)
+                            .desired_rows(4),
+                    );
+                    focused = resp.has_focus();
+                } else {
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(value)
+                            .hint_text(hint)
+                            .desired_width(desired),
+                    );
+                    focused = resp.has_focus();
+                }
+            });
+        }
+        app.note_focus(focused);
+        ui.add_space(4.0);
+    }
+}
+
+fn image_choices(ui: &mut egui::Ui, app: &mut App) {
+    if app.image_files.is_empty() {
+        app.scan_images();
+    }
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        if ui.button("刷新本地图片").clicked() {
+            app.scan_images();
+        }
+        let label = if app.image_path.is_empty() {
+            "未选择图片"
+        } else {
+            std::path::Path::new(&app.image_path)
+                .file_name()
+                .and_then(|x| x.to_str())
+                .unwrap_or("已选择")
+        };
+        ui.label(egui::RichText::new(label).color(theme::TEXT3).size(10.0));
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(14.0);
+        for path in app.image_files.clone() {
+            let name = std::path::Path::new(&path)
+                .file_name()
+                .map(|x| x.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let on = app.image_path == path;
+            if ui.selectable_label(on, name).clicked() {
+                app.image_path = path;
+            }
+        }
+    });
     ui.add_space(4.0);
 }
 
@@ -284,6 +356,41 @@ fn article_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
             });
             ui.add_space(10.0);
 
+            if a.is_author {
+                section(ui, "封面");
+                image_choices(ui, app);
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    if pill(ui, "上传封面", false) {
+                        app.upload_article_cover(id);
+                    }
+                });
+                ui.add_space(4.0);
+                let (closed, curated) = (a.comments_closed, a.comments_curated);
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    if pill(
+                        ui,
+                        if closed { "评论区：已关闭" } else { "评论区：开启" },
+                        closed,
+                    ) {
+                        app.more_action(move |c| {
+                            c.patch_article_playback(id, Some(!closed), None)
+                        });
+                    }
+                    if pill(
+                        ui,
+                        if curated { "精选评论：开启" } else { "精选评论：关闭" },
+                        curated,
+                    ) {
+                        app.more_action(move |c| {
+                            c.patch_article_playback(id, None, Some(!curated))
+                        });
+                    }
+                });
+                ui.add_space(8.0);
+            }
+
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
                 if pill(ui, &format!("收藏 {}", a.fav_count), a.favorited_by_me) {
@@ -308,6 +415,72 @@ fn article_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
                     };
                     let sub = format!("{} · 赞 {}", c.created_at, c.like_count);
                     row(ui, app, &format!("{name}：{body}"), &sub, "", "");
+                    ui.horizontal(|ui| {
+                        ui.add_space(14.0);
+                        let cid = c.id;
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new("赞").color(theme::PINK).size(10.5),
+                            ))
+                            .clicked()
+                        {
+                            app.more_action(move |x| x.article_comment_action(cid, "like"));
+                        }
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new("踩").color(theme::TEXT3).size(10.5),
+                            ))
+                            .clicked()
+                        {
+                            app.more_action(move |x| x.article_comment_action(cid, "dislike"));
+                        }
+                        if a.is_author {
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new("置顶").color(theme::TEXT3).size(10.5),
+                                ))
+                                .clicked()
+                            {
+                                app.more_action(move |x| x.article_comment_action(cid, "pin"));
+                            }
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new("精选")
+                                        .color(theme::TEXT3)
+                                        .size(10.5),
+                                ))
+                                .clicked()
+                            {
+                                app.more_action(move |x| {
+                                    x.article_comment_action(cid, "approve")
+                                });
+                            }
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new("忽略精选")
+                                        .color(theme::TEXT3)
+                                        .size(10.5),
+                                ))
+                                .clicked()
+                            {
+                                app.more_action(move |x| {
+                                    x.article_comment_action(cid, "ignore-curated")
+                                });
+                            }
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new("删除")
+                                        .color(theme::UP_TAG)
+                                        .size(10.5),
+                                ))
+                                .clicked()
+                            {
+                                app.more_action(move |x| {
+                                    x.article_comment_action(cid, "delete")
+                                });
+                            }
+                        }
+                    });
                 }
                 text_field(ui, app, F::Text, "写条评论…");
                 ui.horizontal(|ui| {
@@ -323,44 +496,83 @@ fn article_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
         });
 }
 
+/// 我的图文收藏
+fn article_favorites(ui: &mut egui::Ui, app: &mut App) {
+    if back(ui, app, "图文收藏", "afav-back") {
+        return;
+    }
+    if gate(ui, app) {
+        return;
+    }
+    let items = app.more.article_favorites.clone();
+    if items.is_empty() {
+        empty(ui, "还没有收藏文章");
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt("article-fav")
+        .show(ui, |ui| {
+            let mut open = None;
+            for a in &items {
+                let sub = if a.unavailable {
+                    "文章已不可用".to_owned()
+                } else if !a.favorited_at.is_empty() {
+                    format!("{} · 收藏于 {}", a.author_name, a.favorited_at)
+                } else {
+                    format!("{} · {} 阅读", a.author_name, a.view_count)
+                };
+                if row(ui, app, &a.title, &sub, "", &a.cover_url) && !a.unavailable {
+                    open = Some(a.id);
+                }
+            }
+            if let Some(id) = open {
+                app.open_article(id);
+            }
+            ui.add_space(12.0);
+        });
+}
+
 fn my_articles(ui: &mut egui::Ui, app: &mut App) {
     if back(ui, app, "我的文章", "myart-back") {
         return;
     }
+    // 这一页有「编辑器 + 列表」两块，必须能滚：否则点列表里的文章后
+    // 上面那块编辑器在视口外，用户会以为点了没反应
+    let mut sa = egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt("myart-scroll");
+    if app.scroll_top {
+        sa = sa.vertical_scroll_offset(0.0);
+        app.scroll_top = false;
+    }
+    let app_ref = app;
+    sa.show(ui, |ui| my_articles_body(ui, app_ref));
+}
 
+fn my_articles_body(ui: &mut egui::Ui, app: &mut App) {
     // 新建/编辑区（editing == 0 表示新建）
     section(ui, if app.more.editing > 0 { "编辑文章" } else { "写新文章" });
     text_field(ui, app, F::Title, "标题");
-    ui.horizontal(|ui| {
-        ui.add_space(14.0);
-        ui.add(
-            egui::TextEdit::multiline(&mut app.f_body)
-                .hint_text("正文（支持 Markdown）")
-                .desired_width(ui.available_width() - 28.0)
-                .desired_rows(4),
-        );
-    });
+    text_field(ui, app, F::Body, "正文（支持 Markdown）");
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.add_space(14.0);
         let editing = app.more.editing;
-        if pill(ui, if editing > 0 { "保存修改" } else { "发布" }, false) {
-            let (title, body) = (app.f_title.trim().to_owned(), app.f_body.clone());
-            if !title.is_empty() {
-                app.more_action(move |c| {
-                    if editing > 0 {
-                        c.put_article(editing, &title, &body)
-                    } else {
-                        c.post_article(&title, &body).map(|_| ())
-                    }
-                });
-                app.f_title.clear();
-                app.f_body.clear();
-            }
+        // 发布 / 存草稿分开：之前只有一个按钮、且没传 publish，点了永远只是草稿
+        if pill(ui, "发布", false) {
+            app.save_article(editing, true);
+        }
+        if pill(ui, "存草稿", false) {
+            app.save_article(editing, false);
+        }
+        if editing > 0 && pill(ui, "预览", false) {
+            app.open_more(Route::Article(editing));
         }
         if pill(ui, "清空", false) {
             app.f_title.clear();
             app.f_body.clear();
+            app.more.editing = 0;
         }
     });
     ui.add_space(6.0);
@@ -377,21 +589,90 @@ fn my_articles(ui: &mut egui::Ui, app: &mut App) {
     let mut del: Option<u64> = None;
     let mut edit: Option<u64> = None;
     for a in &items {
-        let sub = format!("{} 阅读 · {}", a.view_count, a.published_at);
-        if row(ui, app, &a.title, &sub, "删除", &a.cover_url) {
-            edit = Some(a.id);
-        }
+        // 草稿/审核中要明确标出来，不然用户以为提交没生效
+        let state = match a.status.as_str() {
+            "draft" => "草稿",
+            "pending_review" => "审核中",
+            "rejected" => "未通过",
+            _ => "",
+        };
+        let sub = if state.is_empty() {
+            format!("{} 阅读 · {}", a.view_count, a.published_at)
+        } else if a.status == "rejected" && !a.fail_reason.is_empty() {
+            format!("{state} · {}", a.fail_reason)
+        } else {
+            state.to_owned()
+        };
+        // 一行里同时给「编辑」「删除」：之前行尾写着删除、点下去却是编辑，
+        // 下面又单独一条删除，等于两个删除、找不到编辑
         let w = ui.available_width();
-        let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
-        ui.painter().text(
-            Pos2::new(r.right() - 60.0, r.center().y),
-            Align2::RIGHT_CENTER,
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 66.0), Sense::click());
+        let mut text_x = rect.left() + 14.0;
+        if !a.cover_url.is_empty() {
+            let c = Rect::from_min_size(
+                Pos2::new(text_x, rect.top() + 8.0),
+                Vec2::new(72.0, 50.0),
+            );
+            widgets::draw_cover(ui, c, &a.cover_url, &app.covers, 4.0);
+            text_x = c.right() + 10.0;
+        }
+        let edit_btn = Rect::from_min_size(
+            Pos2::new(rect.right() - 118.0, rect.center().y - 13.0),
+            Vec2::new(50.0, 26.0),
+        );
+        let del_btn = Rect::from_min_size(
+            Pos2::new(rect.right() - 60.0, rect.center().y - 13.0),
+            Vec2::new(46.0, 26.0),
+        );
+        let p = ui.painter();
+        let lines = widgets::wrap_lines(p, &a.title, 13.0, edit_btn.left() - text_x - 10.0, 1);
+        if let Some(l) = lines.first() {
+            p.text(
+                Pos2::new(text_x, rect.top() + 12.0),
+                Align2::LEFT_TOP,
+                l,
+                FontId::proportional(13.0),
+                theme::TEXT,
+            );
+        }
+        if !sub.is_empty() {
+            p.text(
+                Pos2::new(text_x, rect.top() + 36.0),
+                Align2::LEFT_TOP,
+                &sub,
+                FontId::proportional(10.5),
+                theme::TEXT3,
+            );
+        }
+        p.text(
+            edit_btn.center(),
+            Align2::CENTER_CENTER,
+            "编辑",
+            FontId::proportional(10.5),
+            theme::TEXT2,
+        );
+        p.text(
+            del_btn.center(),
+            Align2::CENTER_CENTER,
             "删除",
             FontId::proportional(10.5),
             theme::UP_TAG,
         );
+        p.line_segment(
+            [
+                Pos2::new(rect.left() + 14.0, rect.bottom()),
+                Pos2::new(rect.right() - 14.0, rect.bottom()),
+            ],
+            Stroke::new(1.0, theme::LINE),
+        );
         if resp.clicked() {
-            del = Some(a.id);
+            if let Some(pos) = resp.interact_pointer_pos() {
+                if del_btn.contains(pos) {
+                    del = Some(a.id);
+                } else {
+                    edit = Some(a.id);
+                }
+            }
         }
     }
     if let Some(id) = del {
@@ -463,6 +744,26 @@ fn creator(ui: &mut egui::Ui, app: &mut App) {
             app.open_more(Route::MyArticles);
         }
     });
+    section(ui, "单稿件数据");
+    let vstats = app.more.video_stats.clone();
+    if vstats.is_empty() {
+        empty(ui, "还没有已发布稿件");
+    } else {
+        for s in &vstats {
+            let sub = format!(
+                "播放 {} · 点赞 {} · 投币 {} · 评论 {} · 弹幕 {} · 收藏 {}",
+                s.play_count,
+                s.like_count,
+                s.coin_count,
+                s.comment_count,
+                s.danmaku_count,
+                s.fav_count
+            );
+            row(ui, app, &s.title, &sub, "", &s.cover_url);
+        }
+    }
+    ui.add_space(8.0);
+
     section(ui, "我的投稿");
 
     let videos = app.more.videos.clone();
@@ -637,6 +938,26 @@ fn dynamic_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
             app.more_action(move |c| c.toggle_dynamic_like(id).map(|_| ()));
         }
     });
+    if app.me.as_ref().map(|m| m.user_id) == Some(d.author_id) {
+        let (closed, curated) = (d.comments_closed, d.comments_curated);
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            if pill(
+                ui,
+                if closed { "评论区：已关闭" } else { "评论区：开启" },
+                closed,
+            ) {
+                app.more_action(move |c| c.patch_dynamic_playback(id, Some(!closed), None));
+            }
+            if pill(
+                ui,
+                if curated { "精选评论：开启" } else { "精选评论：关闭" },
+                curated,
+            ) {
+                app.more_action(move |c| c.patch_dynamic_playback(id, None, Some(!curated)));
+            }
+        });
+    }
     section(ui, &format!("评论 {}", d.comment_count));
 
     egui::ScrollArea::vertical()
@@ -788,9 +1109,15 @@ fn governance(ui: &mut egui::Ui, app: &mut App) {
             if app.more.tickets.is_empty() {
                 empty(ui, "还没有工单");
             } else {
+                let mut open = None;
                 for t in app.more.tickets.clone() {
                     let sub = format!("{} · {}", t.category, t.created_at);
-                    row(ui, app, &t.subject, &sub, &t.status, "");
+                    if row(ui, app, &t.subject, &sub, &t.status, "") {
+                        open = Some(t.id);
+                    }
+                }
+                if let Some(id) = open {
+                    app.open_ticket(id);
                 }
             }
 
@@ -798,9 +1125,15 @@ fn governance(ui: &mut egui::Ui, app: &mut App) {
             if app.more.appeals.is_empty() {
                 empty(ui, "没有进行中的申诉");
             } else {
+                let mut open = None;
                 for a in app.more.appeals.clone() {
                     let sub = format!("{} {} · {}", a.target_type, a.target_id, a.created_at);
-                    row(ui, app, &a.content, &sub, &a.status, "");
+                    if row(ui, app, &a.content, &sub, &a.status, "") {
+                        open = Some(a.id);
+                    }
+                }
+                if let Some(id) = open {
+                    app.open_appeal(id);
                 }
             }
 
@@ -808,12 +1141,254 @@ fn governance(ui: &mut egui::Ui, app: &mut App) {
             if app.more.cs.is_empty() {
                 empty(ui, "暂无客服会话");
             } else {
+                let mut open = None;
                 for c in app.more.cs.clone() {
-                    row(ui, app, &c.title, &c.last_message, &c.status, "");
+                    let right = if c.status.is_empty() {
+                        c.last_message.clone()
+                    } else {
+                        format!("{} · {}", c.status, c.last_message)
+                    };
+                    if row(ui, app, &format!("会话 #{}", c.id), &right, "", "") {
+                        open = Some(c.id);
+                    }
+                }
+                if let Some(id) = open {
+                    app.open_cs(id);
+                }
+            }
+
+            section(ui, "版权投诉");
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                for (key, label) in [("video", "视频"), ("article", "文章")] {
+                    let on = app.copyright_type == key;
+                    if pill(ui, label, on) {
+                        app.copyright_type = key.to_owned();
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.f_title)
+                        .hint_text("被投诉内容的 ID")
+                        .desired_width(ui.available_width() - 28.0),
+                );
+            });
+            text_field(ui, app, F::Text, "侵权说明");
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if pill(ui, "提交投诉", false) {
+                    if let Ok(id) = app.f_title.trim().parse::<u64>() {
+                        if !app.f_text.trim().is_empty() {
+                            let kind = app.copyright_type.clone();
+                            let desc = app.f_text.trim().to_owned();
+                            app.f_text.clear();
+                            app.more_action(move |c| {
+                                c.post_copyright_complaint(&kind, id, &desc)
+                            });
+                        }
+                    }
+                }
+            });
+            if app.more.copyrights.is_empty() {
+                empty(ui, "还没有提交过版权投诉");
+            } else {
+                for c in app.more.copyrights.clone() {
+                    let sub = format!(
+                        "{} {} · {}{}",
+                        c.related_type,
+                        c.related_id,
+                        c.created_at,
+                        if c.handler_comment.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" · {}", c.handler_comment)
+                        }
+                    );
+                    row(ui, app, &c.description, &sub, &c.status, "");
                 }
             }
             ui.add_space(16.0);
         });
+}
+
+/// 申诉详情：被处罚对象、理由、状态与官方回复
+fn appeal_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
+    if back(ui, app, "申诉详情", "appeal-back") {
+        return;
+    }
+    if gate(ui, app) {
+        return;
+    }
+    let Some(a) = app.more.appeal.clone() else {
+        empty(ui, "申诉不存在");
+        return;
+    };
+    let _ = id;
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt("appeal-scroll")
+        .show(ui, |ui| {
+            section(ui, &format!("{} {}", a.target_type, a.target_id));
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label(
+                    egui::RichText::new(format!("{} · {} · {}", a.reason_type, a.status, a.created_at))
+                        .color(theme::TEXT3)
+                        .size(10.5),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label(
+                    egui::RichText::new(&a.content)
+                        .color(theme::TEXT2)
+                        .size(12.0),
+                );
+            });
+            ui.add_space(8.0);
+            section(ui, "官方回复");
+            if a.reply.is_empty() {
+                empty(ui, "还没有回复");
+            } else {
+                row(ui, app, &a.reply, &a.created_at, &a.status, "");
+            }
+            ui.add_space(16.0);
+        });
+}
+
+/// 工单详情：描述 + 消息列表 + 补充说明 / 申诉 / 满意度
+fn ticket_detail(ui: &mut egui::Ui, app: &mut App, id: u64) {
+    if back(ui, app, "工单详情", "ticket-back") {
+        return;
+    }
+    if gate(ui, app) {
+        return;
+    }
+    let Some(d) = app.more.ticket_detail.clone() else {
+        empty(ui, "工单不存在");
+        return;
+    };
+    let t = d.ticket;
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt("ticket-scroll")
+        .show(ui, |ui| {
+            section(ui, &t.subject);
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} · {} · {}",
+                        t.category, t.status, t.created_at
+                    ))
+                    .color(theme::TEXT3)
+                    .size(10.5),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label(
+                    egui::RichText::new(&t.description)
+                        .color(theme::TEXT2)
+                        .size(12.0),
+                );
+            });
+            ui.add_space(8.0);
+
+            section(ui, "沟通记录");
+            if d.messages.is_empty() {
+                empty(ui, "暂时还没有回复");
+            } else {
+                for m in &d.messages {
+                    let who = if m.sender_type == "user" { "我" } else { "客服" };
+                    row(ui, app, &format!("{who}：{}", m.content), &m.created_at, "", "");
+                }
+            }
+
+            text_field(ui, app, F::TicketText, "补充说明…");
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                let text = app.ticket_text.trim().to_owned();
+                if pill(ui, "发送", false) && !text.is_empty() {
+                    app.ticket_text.clear();
+                    app.more_action(move |c| c.post_ticket_message(id, &text));
+                }
+                if matches!(t.status.as_str(), "resolved" | "closed")
+                    && pill(ui, "申请复审", false)
+                {
+                    app.more_action(move |c| c.appeal_ticket(id));
+                }
+            });
+
+            if t.status == "resolved" {
+                section(ui, "满意度评价");
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    for score in 1..=5u32 {
+                        if pill(ui, &format!("{score} 分"), false) {
+                            let comment = app.ticket_text.trim().to_owned();
+                            app.more_action(move |c| {
+                                c.post_ticket_satisfaction(id, score, &comment)
+                            });
+                        }
+                    }
+                });
+            }
+            ui.add_space(16.0);
+        });
+}
+
+/// 客服会话：全部消息 + 发送
+fn cs_chat(ui: &mut egui::Ui, app: &mut App, id: u64) {
+    if back(ui, app, "客服会话", "cs-back") {
+        return;
+    }
+    if gate(ui, app) {
+        return;
+    }
+    let Some(d) = app.more.cs_detail.clone() else {
+        empty(ui, "会话不存在");
+        return;
+    };
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt("cs-scroll")
+        .max_height(ui.available_height() - 70.0)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label(
+                    egui::RichText::new(format!("会话 #{} · {}", d.id, d.status))
+                        .color(theme::TEXT3)
+                        .size(10.5),
+                );
+            });
+            ui.add_space(6.0);
+            if d.messages.is_empty() {
+                empty(ui, "还没有消息");
+            } else {
+                for m in &d.messages {
+                    let who = if m.sender_type == "user" { "我" } else { "客服" };
+                    row(ui, app, &format!("{who}：{}", m.content), &m.created_at, "", "");
+                }
+            }
+        });
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        ui.add(
+            egui::TextEdit::singleline(&mut app.cs_text)
+                .hint_text("输入消息…")
+                .desired_width((ui.available_width() - 90.0).max(120.0)),
+        );
+        if pill(ui, "发送", false) && !app.cs_text.trim().is_empty() {
+            let text = app.cs_text.trim().to_owned();
+            app.cs_text.clear();
+            app.more_action(move |c| c.send_cs_message(id, &text));
+        }
+    });
+    ui.add_space(8.0);
 }
 
 pub fn live_host(ui: &mut egui::Ui, app: &mut App) {
@@ -828,7 +1403,14 @@ pub fn live_host(ui: &mut egui::Ui, app: &mut App) {
         return;
     }
     let Some(room) = app.more.live.clone() else {
-        empty(ui, "还没有直播间，点下面「创建直播间」");
+        section(ui, "创建直播间");
+        text_field(ui, app, F::Title, "直播间标题");
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            if pill(ui, "创建", false) {
+                app.create_live_room();
+            }
+        });
         return;
     };
     ui.add_space(8.0);
@@ -859,6 +1441,20 @@ pub fn live_host(ui: &mut egui::Ui, app: &mut App) {
         );
     });
     ui.add_space(10.0);
+    section(ui, "直播间信息");
+    if app.f_title.is_empty() {
+        app.f_title = room.title.clone();
+    }
+    text_field(ui, app, F::Title, "直播间标题");
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        let title = app.f_title.trim().to_owned();
+        if pill(ui, "保存标题", false) && !title.is_empty() {
+            let cover = room.cover_url.clone();
+            app.more_action(move |c| c.update_live_room(room.id, &title, &cover));
+        }
+    });
+    ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(14.0);
         let id = room.id;
@@ -874,6 +1470,22 @@ pub fn live_host(ui: &mut egui::Ui, app: &mut App) {
         }
         if pill(ui, "更换推流码", false) {
             app.more_action(move |c| c.regenerate_stream_key(id).map(|_| ()));
+        }
+    });
+    ui.add_space(8.0);
+    section(ui, "直播封面");
+    image_choices(ui, app);
+    ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        if pill(ui, "上传封面", false) {
+            app.upload_live_cover(room.id);
+        }
+        if !room.cover_url.is_empty() {
+            ui.label(
+                egui::RichText::new("已设置封面")
+                    .color(theme::TEXT3)
+                    .size(10.0),
+            );
         }
     });
 }
@@ -931,10 +1543,88 @@ pub fn video_edit(ui: &mut egui::Ui, app: &mut App, id: u64) {
                 ui.add_space(14.0);
                 if pill(ui, "保存修改", false) && !t.is_empty() {
                     let (t2, d2) = (t.clone(), d.clone());
-                    app.more_action(move |c| c.update_my_video(id, &t2, &d2, &tags));
+                    let (status, zone) = (v.status.clone(), v.zone.clone());
+                    app.more_action(move |c| {
+                        if status == "draft" {
+                            c.update_video_draft(id, &t2, &d2, &tags, &zone)
+                        } else {
+                            c.update_my_video(id, &t2, &d2, &tags)
+                        }
+                    });
                 }
                 if pill(ui, "删除稿件", false) {
                     app.more_action(move |c| c.delete_my_video(id));
+                }
+            });
+            ui.add_space(8.0);
+
+            section(ui, "封面");
+            image_choices(ui, app);
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if pill(ui, "上传封面", false) {
+                    app.upload_video_cover(id);
+                }
+            });
+            ui.add_space(8.0);
+
+            section(ui, "互动开关");
+            let (cc, curated, dc) = (v.comments_closed, v.comments_curated, v.danmaku_closed);
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if pill(ui, if cc { "评论区：已关闭" } else { "评论区：开启" }, cc) {
+                    app.more_action(move |c| {
+                        c.patch_video_playback(id, Some(!cc), None, None)
+                    });
+                }
+                if pill(
+                    ui,
+                    if curated { "精选评论：开启" } else { "精选评论：关闭" },
+                    curated,
+                ) {
+                    app.more_action(move |c| {
+                        c.patch_video_playback(id, None, Some(!curated), None)
+                    });
+                }
+                if pill(ui, if dc { "弹幕：已关闭" } else { "弹幕：开启" }, dc) {
+                    app.more_action(move |c| {
+                        c.patch_video_playback(id, None, None, Some(!dc))
+                    });
+                }
+            });
+            ui.add_space(8.0);
+
+            section(ui, "替换源文件");
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if ui.button("刷新本地视频").clicked() || app.inbox.is_empty() {
+                    app.scan_inbox();
+                }
+            });
+            ui.add_space(2.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(14.0);
+                for (path, size) in app.inbox.clone() {
+                    let name = std::path::Path::new(&path)
+                        .file_name()
+                        .map(|x| x.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let on = app.up_path.as_deref() == Some(path.as_str());
+                    let label = format!("{name} {:.1}MB", size as f64 / 1_048_576.0);
+                    if ui.selectable_label(on, label).clicked() {
+                        app.up_path = Some(path);
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if pill(ui, "替换并重新转码", false) {
+                    if let Some(path) = app.up_path.clone() {
+                        app.replace_video_media(id, &path);
+                    }
+                }
+                if pill(ui, "下载草稿预览", false) {
+                    app.download_draft_preview(id);
                 }
             });
             ui.add_space(8.0);
@@ -1028,6 +1718,87 @@ pub fn video_edit(ui: &mut egui::Ui, app: &mut App, id: u64) {
                         .size(10.0),
                 );
             });
+            ui.add_space(8.0);
+
+            section(ui, "字幕");
+            if app.more.subtitles.is_empty() {
+                empty(ui, "还没有字幕轨道");
+            } else {
+                for s in app.more.subtitles.clone() {
+                    let sub = format!("{} · {} · {}", s.lang, s.format, s.title);
+                    row(ui, app, &s.title, &sub, "删除", "");
+                    if ui.button("删除该字幕").clicked() {
+                        app.more_action(move |c| c.delete_subtitle(id, s.id));
+                    }
+                }
+            }
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if ui.button("刷新字幕文件").clicked() || app.subtitle_files.is_empty() {
+                    app.scan_subtitle_files();
+                }
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(14.0);
+                for (path, _) in app.subtitle_files.clone() {
+                    let name = std::path::Path::new(&path)
+                        .file_name()
+                        .map(|x| x.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let on = app.subtitle_path == path;
+                    if ui.selectable_label(on, name).clicked() {
+                        app.subtitle_path = path;
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.subtitle_lang)
+                        .hint_text("语言（如 zh-CN）")
+                        .desired_width(110.0),
+                );
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.subtitle_title)
+                        .hint_text("字幕标题")
+                        .desired_width((ui.available_width() - 130.0).max(80.0)),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                if pill(ui, "上传字幕", false) && !app.subtitle_path.is_empty() {
+                    let path = app.subtitle_path.clone();
+                    let lang = app.subtitle_lang.trim().to_owned();
+                    let title = app.subtitle_title.trim().to_owned();
+                    let format = std::path::Path::new(&path)
+                        .extension()
+                        .map(|x| x.to_string_lossy().to_lowercase())
+                        .unwrap_or_else(|| "vtt".to_owned());
+                    app.more_action(move |c| {
+                        c.upload_subtitle(id, &path, &lang, &title, &format)
+                    });
+                }
+                let asr_lang = if app.subtitle_lang.trim().is_empty() {
+                    "zh".to_owned()
+                } else {
+                    app.subtitle_lang.trim().to_owned()
+                };
+                let asr_title = if app.subtitle_title.trim().is_empty() {
+                    "自动转写".to_owned()
+                } else {
+                    app.subtitle_title.trim().to_owned()
+                };
+                if pill(ui, "自动生成字幕", false) {
+                    app.more_action(move |c| {
+                        c.request_subtitle_asr(id, &asr_lang, &asr_title)
+                    });
+                }
+                ui.label(
+                    egui::RichText::new("字幕文件放 inbox，支持 srt/vtt")
+                        .color(theme::TEXT3)
+                        .size(9.5),
+                );
+            });
             ui.add_space(20.0);
         });
 }
@@ -1043,9 +1814,59 @@ pub fn upload(ui: &mut egui::Ui, app: &mut App) {
     if back(ui, app, "投稿", "up-back") {
         return;
     }
+    // 整页需要登录的，不要每帧都弹窗（用户一按取消又会被弹回来），
+    // 给一个明确的入口，点了才弹
     if !app.client.logged_in() {
-        centered(ui, "登录后才能投稿");
+        let mut want = false;
+        ui.vertical_centered(|ui| {
+            ui.add_space(120.0);
+            ui.label(egui::RichText::new("投稿需要先登录").color(theme::TEXT).size(14.0));
+            ui.add_space(12.0);
+            if ui.button("登录").clicked() {
+                want = true;
+            }
+        });
+        if want {
+            app.require_login();
+        }
         return;
+    }
+
+    // 系统文件选择器选完的视频已经拷进 cacheDir，直接当投稿文件
+    if let Some(path) = crate::video::picked_video() {
+        if !path.is_empty() {
+            app.up_path = Some(path);
+        }
+    }
+
+    // 选中的视频补一张首帧 + 时长：光看文件名根本不知道选对没有
+    if let Some(path) = app.up_path.clone() {
+        let stale = app
+            .up_thumb
+            .as_ref()
+            .map(|(p, _, _)| p != &path)
+            .unwrap_or(true);
+        if stale {
+            app.up_thumb = None;
+            const TW: i32 = 240;
+            const TH: i32 = 135;
+            if let Some((ms, _w, _h)) = crate::video::video_meta(&path) {
+                if let Some(rgba) = crate::video::video_frame(&path, TW, TH) {
+                    if rgba.len() == (TW * TH * 4) as usize {
+                        let img = egui::ColorImage::from_rgba_unmultiplied(
+                            [TW as usize, TH as usize],
+                            &rgba,
+                        );
+                        let tex = ui.ctx().load_texture(
+                            format!("up-thumb-{path}"),
+                            img,
+                            egui::TextureOptions::LINEAR,
+                        );
+                        app.up_thumb = Some((path, tex, ms));
+                    }
+                }
+            }
+        }
     }
 
     egui::ScrollArea::vertical()
@@ -1055,6 +1876,9 @@ pub fn upload(ui: &mut egui::Ui, app: &mut App) {
             section(ui, "1. 选择视频");
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
+                if pill(ui, "从手机选择视频", false) {
+                    crate::video::pick_video();
+                }
                 if pill(ui, "刷新文件列表", false) {
                     app.scan_inbox();
                 }
@@ -1070,9 +1894,10 @@ pub fn upload(ui: &mut egui::Ui, app: &mut App) {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);
                     ui.label(
-                        egui::RichText::new(
-                            format!("目录里还没有视频。电脑上执行：\nadb push 你的视频.mp4 {}", App::inbox_dir()),
-                        )
+                        egui::RichText::new(format!(
+                            "点上面「从手机选择视频」挑一个；\n也可以把文件放进 {}",
+                            App::inbox_dir()
+                        ))
                         .color(theme::TEXT3)
                         .size(10.5),
                     );
@@ -1120,7 +1945,29 @@ pub fn upload(ui: &mut egui::Ui, app: &mut App) {
                     }
                 }
             }
-            ui.add_space(8.0);
+            // 选中的视频：缩略图 + 时长
+            if let Some((path, tex, ms)) = &app.up_thumb {
+                if Some(path.as_str()) == app.up_path.as_deref() {
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(14.0);
+                        let (rect, _) = ui.allocate_exact_size(Vec2::new(120.0, 68.0), Sense::hover());
+                        ui.painter().image(
+                            tex.id(),
+                            rect,
+                            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                            Color32::WHITE,
+                        );
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(format!("时长 {}", theme::clock((*ms / 1000).max(0) as u64)))
+                                .color(theme::TEXT2)
+                                .size(11.0),
+                        );
+                    });
+                    ui.add_space(4.0);
+                }
+            }
 
             section(ui, "2. 稿件信息");
             text_field(ui, app, F::Title, "标题");
@@ -1179,6 +2026,21 @@ pub fn upload(ui: &mut egui::Ui, app: &mut App) {
                     .clicked()
                 {
                     app.do_upload();
+                }
+                if ui
+                    .add_enabled(
+                        !busy,
+                        egui::Button::new(
+                            egui::RichText::new("存草稿")
+                                .color(theme::TEXT2)
+                                .size(12.0),
+                        )
+                        .corner_radius(16.0)
+                        .min_size(Vec2::new(88.0, 34.0)),
+                    )
+                    .clicked()
+                {
+                    app.do_save_draft();
                 }
             });
             if let Some(msg) = app.up_msg.clone() {
