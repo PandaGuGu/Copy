@@ -29,7 +29,8 @@ $ErrorActionPreference = 'Continue'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 
 # ── 可改配置 ────────────────────────────────────────────────
-$ProjectPath = 'C:\Project\Copy'
+# 仓库根目录 = 本脚本所在目录的上一级，避免把本机绝对路径写死进仓库
+$ProjectPath = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $DockerExe   = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
 # ES 需要的 vm.max_map_count，WSL2 默认只有 65530，不改 ES 会一直重启
 $EsMaxMapCount = 262144

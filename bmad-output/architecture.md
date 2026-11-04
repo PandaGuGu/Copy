@@ -1606,7 +1606,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 - **开发:** Windows 本地 — `go build` + `npm run dev`
 - **容器化:** `docker-compose.yml`（MySQL + Redis + RabbitMQ + nms + Go后端 + Nginx前端，6 服务）
 - **生产（2026-07-01 \~ 08-17 实际形态）:** Render（Go 后端）+ Netlify（前端 SPA）+ 阿里云 RDS（MySQL）+ Upstash（Redis）；Render 冷启动 \~30s，UptimeRobot 保活
-- **生产（2026-08-17 至今，当前现实）:** ⚠️ 公网通道全部停用（Render 后端 / Netlify 前端 / 阿里云 OSS / cloudflared 隧道均过期或下线）→ **回退本地单点**：Windows + MySQL80 本机服务 + Redis Windows 服务 + `mini-bili.exe`（:8080）；移动端真机经 `192.168.1.100:8080` 局域网访问；启动脚本已内置内部连接兜底
+- **生产（2026-08-17 至今，当前现实）:** ⚠️ 公网通道全部停用（Render 后端 / Netlify 前端 / 阿里云 OSS / cloudflared 隧道均过期或下线）→ **回退本地单点**：Windows + MySQL80 本机服务 + Redis Windows 服务 + `mini-bili.exe`（:8080）；移动端真机经 `192.168.1.10:8080` 局域网访问；启动脚本已内置内部连接兜底
 - **目标形态（设计基线，恢复公网时复用）:** 单台 Linux 服务器（阿里云 ECS）— systemd + Nginx，见下方拓扑图
 
 ### 拓扑
@@ -1706,7 +1706,7 @@ HTTP 状态码：200 成功 / 400 参数错误 / 401 未认证 / 403 无权限 /
 ### 12.2 后端地址机制
 
 - **H5 dev**：`VITE_API_BASE_URL=` 空 → axios 相对路径 `/api/` → vite dev 代理 → `VITE_PROXY_TARGET=http://127.0.0.1:8080`
-- **App 原生**：`VITE_API_BASE_URL_APP=http://192.168.1.100:8080`（电脑局域网 IP，真机经此访问）
+- **App 原生**：`VITE_API_BASE_URL_APP=http://192.168.1.10:8080`（电脑局域网 IP，真机经此访问）
 - 真机联调：HBuilderX CLI 构建 `uni build -p app` → `adb push` 到基座 `io.dcloud.HBuilder` 的 `www/` 目录 → `monkey` 启动（详见 `.workbuddy/memory/2026-08-17.md` 与 `2026-08-20.md`）
 
 ### 12.3 移动端架构决策（MD-ADR）

@@ -11,7 +11,7 @@
 
 | 工具 | 用途 | 安装 | 状态 |
 |------|------|------|------|
-| **govulncheck** v1.7.0 | Go 标准库 + 依赖 CVE | `go install golang.org/x/vuln/cmd/govulncheck@latest` | ✅ 已装 `C:/Users/Administrator/go/bin` |
+| **govulncheck** v1.7.0 | Go 标准库 + 依赖 CVE | `go install golang.org/x/vuln/cmd/govulncheck@latest` | ✅ 已装 `$GOPATH/bin` |
 | **gosec** v2.28.0 | Go 静态安全扫描（SAST） | `go install github.com/securego/gosec/v2/cmd/gosec@latest` | ✅ 已装（需 go ≥1.25 toolchain 自动切换） |
 | **npm audit** | 前端依赖漏洞 | npm 自带 | ✅ |
 | **TruffleHog / git hooks** | 敏感信息 / Secret 扫描 | 项目 `.githooks/pre-commit` 已内置 | ✅ |
@@ -20,11 +20,11 @@
 
 ```bash
 # 1. Go 依赖 + 标准库漏洞（核心）
-cd C:/Users/Administrator/Desktop/cakecake-project
-"C:/Users/Administrator/go/bin/govulncheck.exe" ./... > data/govulncheck-report.txt 2>&1
+cd <repo>
+govulncheck ./... > data/govulncheck-report.txt 2>&1
 
 # 2. Go 静态安全
-"C:/Users/Administrator/go/bin/gosec.exe" -fmt=json -out=data/gosec-report.json ./...
+gosec -fmt=json -out=data/gosec-report.json ./...
 
 # 3. 前端依赖
 cd cakecake-vue/bilibili-vue && npm audit

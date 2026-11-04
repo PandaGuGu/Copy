@@ -16,11 +16,13 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$PROJECT  = "C:\Users\Administrator\Desktop\cakecake-project"
-$NODE     = "C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2\node.exe"
-$NODE_MODULES = "C:\Users\Administrator\.workbuddy\binaries\node\workspace\node_modules"
-$RABBIT   = "C:\rabbitmq\rabbitmq_server-4.3.0\sbin\rabbitmq-server.bat"
-$ERL_HOME = "C:\Program Files\Erlang OTP"
+# 仓库根目录 = 本脚本所在目录的上一级（不要把某台机器的绝对路径写死）
+$PROJECT  = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+# Node / RabbitMQ 等工具路径：环境变量可覆盖，缺省走 PATH（换机器不用改脚本）
+$NODE     = if ($env:CAKECAKE_NODE) { $env:CAKECAKE_NODE } else { "node" }
+$NODE_MODULES = if ($env:CAKECAKE_NODE_MODULES) { $env:CAKECAKE_NODE_MODULES } else { Join-Path $PROJECT "node_modules" }
+$RABBIT   = if ($env:CAKECAKE_RABBIT) { $env:CAKECAKE_RABBIT } else { "rabbitmq-server.bat" }
+$ERL_HOME = if ($env:CAKECAKE_ERL_HOME) { $env:CAKECAKE_ERL_HOME } else { "C:\Program Files\Erlang OTP" }
 $DOCKER_DESKTOP = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 $LOG_DIR  = Join-Path $PROJECT "logs"
 $BACKEND_PORT = 18080   # 本地端口（8080 被 WSL2/Hyper-V 排除段占用；8900 被 iNode 占）

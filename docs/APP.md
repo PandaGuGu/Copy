@@ -124,8 +124,44 @@ adb install -r target/release/apk/cakecake-rs.apk
 - 文章编辑器暂不支持插图与字号（Web 端有），Markdown 文本可直接粘贴；
 - 只做了 arm64 与 x86_64 两个 Android 目标，没有 iOS。
 
-## 8. 与后端的对应
+## 8. 复用 Web 端 API（不自建接口）
 
-移动端复用**用户端端点**：认证、视频/弹幕/评论、动态、专栏、私信/通知、搜索、直播、创作中心、治理工单。
-端点清单与字段以 [API.md](./API.md) 为准，App 侧封装在 `api.rs`（一个方法对一条端点）。
-后台管理（23 个模块）只在 Web 端，App 不做。
+**结论先说：App 没有专属后端接口，调的就是 Web 端同一批 `/api/v1` 端点。**
+客户端 `api.rs` 里封装了 **141 条**路径（口径：`grep -oE '"/api/v1/[a-z0-9/:{}_-]+"' src/api.rs | sort -u | wc -l`），
+与 Vue 前端 `cakecake-vue/bilibili-vue/src/api/minibili.ts` 调的是同一套；差异只在展示层（自绘 UI vs DOM）。
+
+### 8.1 功能域 → 端点（抽样）
+
+| 功能域 | 端点（节选） |
+|--------|--------------|
+| 认证 | `POST /auth/login` · `POST /auth/refresh` · `GET /users/me` |
+| 首页/发现 | `GET /stats/home` · `GET /home-banners` · `GET /online` · `GET /zones` · `GET /rank/:kind` |
+| 视频 | `GET /videos/:id` · `GET /videos/:id/related` · `GET /videos/:id/bitrates` · `POST /videos/:id/view` |
+| 互动 | `POST /videos/:id/{like,coin,favorite}` · `POST /users/:id/follow` · `GET /users/me/watch-later` |
+| 弹幕 | `GET /videos/:id/danmakus` · `POST /videos/:id/danmakus`（WebSocket 走 `?token=`） |
+| 评论 | `GET /videos/:id/comments` · `POST /videos/:id/comments` · `POST /videos/:id/comments-with-image` |
+| 动态/专栏 | `GET /dynamics` · `GET /articles` · `GET /articles/:id` · `PUT /users/me/articles/:id` |
+| 私信/通知 | `GET /dm/conversations` · `GET /dm/conversations/:id/messages` · `GET /notifications/unread-summary` |
+| 直播 | `GET /live/rooms` · `GET /live/room/:id` · `POST /live/room/:id/start` · `POST /live/room/:id/regenerate-key` |
+| 创作中心 | `GET /users/me/videos` · `POST /videos/upload` · `GET /users/me/articles?status=all` · `POST /articles` |
+| 治理/客服 | `GET /tickets` · `GET /appeals/me` · `GET /cs/conversations` · `GET /copyright/complaints` |
+
+完整端点、字段、错误码以 [API.md](./API.md) 为准（那是唯一的接口事实来源，本文不重复维护）。
+
+### 8.2 三处复用的约定
+
+| 约定 | Web 端 | App 端 |
+|------|--------|--------|
+| 响应信封 `{code,msg,data}` | `src/utils/request.ts` 解包 | `api.rs::send()` 解包，`code != 0` 转成 `Err(msg)` |
+| JWT 双 Token | axios 拦截器 401 → refresh → 重放 | `api.rs` 401 自动 refresh（后端会轮换 refresh token），失败才回登录态 |
+| 上传 | `FormData` multipart | `upload_multipart_file()`（视频投稿、评论配图、封面） |
+| 实时通道 | WebSocket | `wsclient.rs`（弹幕 / 直播聊天 / 私信三条，同样带 `?token=`） |
+
+### 8.3 App 侧独有、但不新增接口的部分
+
+1. **媒体源直连**：后端只给 `stream_key`，HLS 实际在 SRS/nms 的 `:8000`。客户端自己探
+   `http://<host>:8000/live/<key>.m3u8`（`GET /live/room/:id` 拿 key 之后），这是播放行为，不是新接口。
+2. **服务端地址切换**：`server.txt` 记住用户手填的 API 地址；打包时也可把局域网地址烘焙进 APK。
+3. **登录态落盘**：`auth.txt` 只存本机 token，不参与任何接口。
+
+> 换句话：后端加一个端点，Web 与 App 可以各自决定要不要用；App 不会出现「只为手机开的接口」。

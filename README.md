@@ -32,7 +32,7 @@
 | 社交 | 关注/拉黑/分组 · 私信（WS 实时）· 通知聚合 · 硬币账本 |
 | 搜索/推荐 | ES 全文搜索（可选）· 协同过滤 + MMR 重排序 |
 | 直播 | Node-Media-Server（本地默认）RTMP 推流 → HTTP-FLV 播放 · SRS（Docker 正轨，可切换） · WS 聊天 + 礼物 |
-| 移动端 App | **Rust + egui 自绘**（`cakecake-rs/`）· 4 tab + 31 个二级页面 · 系统 MediaPlayer 硬解 · 输入法/系统栏原生调优（见 [docs/APP.md](./docs/APP.md)） |
+| 移动端 App | **Rust + egui 自绘**（`cakecake-rs/`）· 4 tab + 31 个二级页面 · **复用 Web 端同一套 `/api/v1`（客户端封装 141 条路径，无专属接口）** · MediaPlayer 硬解（见 [docs/APP.md](./docs/APP.md)） |
 | 运营后台 | 23 模块全前后端对齐，RBAC 权限控制（见下） |
 
 架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)；文档地图见 [docs/README.md](./docs/README.md)。

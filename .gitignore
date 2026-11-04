@@ -108,3 +108,17 @@ cakecake-vue/cakecake-app/unpackage/
 /_runtime/
 cakecake-rs/build/
 tmp-*
+
+# ── 本地部署手册（含账号口令/内网 IP/本机路径，只留本地）──
+LOCAL-DEPLOY.md
+!LOCAL-DEPLOY.example.md
+
+# ── 签名密钥与口令（绝不入库）──
+*.keystore
+*.jks
+*.p12
+*.pem
+.keystore-pass
+cakecake-rs/.keystore-pass
+.gh_tok
+.netlify/

@@ -1357,7 +1357,7 @@ pub struct Client {
     auth: Arc<Mutex<AuthState>>,
     /// 串行化刷新，避免并发 40100 把同一个 refresh_token 用两次
     refresh_lock: Arc<Mutex<()>>,
-    /// 探测通过的媒体（SRS）源，例如 `http://192.168.1.100:8000`。
+    /// 探测通过的媒体（SRS）源，例如 `http://192.168.1.10:8000`。
     /// 直播播放地址一律从它拼，避免把回环地址丢给 MediaPlayer 后无限缓冲。
     media: Arc<Mutex<Option<String>>>,
 }

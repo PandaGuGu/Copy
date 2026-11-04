@@ -57,6 +57,8 @@ min_sdk_version = 24
 target_sdk_version = 35
 
 [package.metadata.android.signing.release]
+# 密钥与口令都不入库：keystore 文件本地保留（.gitignore 已排除），
+# 口令由 scripts/build-apk.sh 在构建时从 .keystore-pass / 环境变量临时填入。
 path = "cakecake.keystore"
-keystore_password = "cakecake123"
+keystore_password = ""
 

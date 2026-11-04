@@ -629,7 +629,7 @@ if !colorRegex.MatchString(color) {
 1. **统一使用 request.ts 的 baseURL 策略**（条件编译）：
    ```ts
    // #ifdef APP-PLUS
-   const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.100:8080'
+   const baseURL = import.meta.env.VITE_API_BASE_URL_APP || 'http://192.168.1.10:8080'
    // #endif
    // #ifndef APP-PLUS
    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'

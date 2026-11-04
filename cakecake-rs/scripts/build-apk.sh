@@ -39,6 +39,26 @@ else
   echo "▶ 未配置局域网地址（回退 127.0.0.1 / 模拟器网关探测）"
 fi
 
+# ── 签名口令（密钥与口令都不入库）───────────────────────────────
+# 优先环境变量 CAKECAKE_KS_PASS，其次本地文件 cakecake-rs/.keystore-pass。
+# cargo-apk 只认 Cargo.toml 里的 keystore_password，所以这里临时写进去，
+# 构建结束（含失败）用 trap 还原，仓库里永远只有空占位。
+KS_PASS=${CAKECAKE_KS_PASS:-}
+if [ -z "$KS_PASS" ] && [ -f .keystore-pass ]; then
+  KS_PASS=$(tr -d '\r\n' < .keystore-pass)
+fi
+if [ -z "$KS_PASS" ]; then
+  echo "缺少签名口令：export CAKECAKE_KS_PASS=... 或写进 cakecake-rs/.keystore-pass" >&2
+  exit 1
+fi
+if [ ! -f cakecake.keystore ]; then
+  echo "缺少签名密钥 cakecake.keystore（本地保留，勿提交）" >&2
+  exit 1
+fi
+cp Cargo.toml Cargo.toml.ksbak
+trap 'mv -f Cargo.toml.ksbak Cargo.toml 2>/dev/null || true' EXIT
+sed -i "s|^keystore_password = .*|keystore_password = \"$KS_PASS\"|" Cargo.toml
+
 echo "▶ cargo apk build ($TARGET)"
 cargo apk build --lib --release --target "$TARGET" >/dev/null
 APK=target/release/apk/cakecake-rs.apk
@@ -63,7 +83,7 @@ python scripts/rename_activity.py build/pack/AndroidManifest.xml
 
 echo "▶ 签名"
 "$APKSIGNER" sign --ks cakecake.keystore \
-  --ks-pass pass:cakecake123 --key-pass pass:cakecake123 \
+  --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
   --out "$APK" build/aligned.apk
 
 echo "✓ $APK"

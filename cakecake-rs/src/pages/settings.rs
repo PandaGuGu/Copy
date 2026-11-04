@@ -127,7 +127,7 @@ impl Field {
             Field::Birthday => "2000-01-01",
             Field::Announcement => "展示在个人主页顶部",
             // 真机走 Wi-Fi 时填电脑的局域网地址（和手机在同一网段）
-            Field::Server => "http://192.168.1.100:8080",
+            Field::Server => "http://192.168.1.10:8080",
             _ => "",
         }
     }
@@ -175,7 +175,7 @@ fn field(ui: &mut egui::Ui, app: &mut App, which: Field) {
             let hint = match which {
                 Field::Server => match crate::api::lan_base() {
                     Some(base) => format!("局域网 {base}（下面可自动查找）"),
-                    None => "和手机同一 Wi-Fi 的电脑 IP，例如 http://192.168.1.100:8080".to_owned(),
+                    None => "和手机同一 Wi-Fi 的电脑 IP，例如 http://192.168.1.10:8080".to_owned(),
                 },
                 _ => which.hint().to_owned(),
             };

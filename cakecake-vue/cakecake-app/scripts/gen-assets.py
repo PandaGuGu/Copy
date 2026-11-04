@@ -9,7 +9,9 @@
 from PIL import Image, ImageDraw
 import os
 
-OUT = r'C:\Users\Administrator\Desktop\cakecake-project\cakecake-vue\cakecake-app\src\static'
+# 输出目录按脚本位置推导（仓库相对），不写死某台机器的绝对路径
+OUT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   '..', 'src', 'static'))
 
 # TabBar 颜色
 GRAY = (153, 153, 153, 255)
