@@ -1,3 +1,7 @@
+> ⚠️ **已弃用（2026-11）**：移动端已改为 Rust 原生客户端（`cakecake-rs/`），
+> 本工程不再维护，仅作历史留存。现行文档见 [docs/APP.md](../../docs/APP.md)，
+> 弃用原因见该文 §1。
+
 # CakeCake 移动端 App
 
 > Cakecake（mini-bili）配套移动端，基于 **uni-app + Vue3 + TypeScript + Vite** 构建

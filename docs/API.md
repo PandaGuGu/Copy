@@ -6,7 +6,9 @@
 > 认证方式: `Authorization: Bearer <token>`
 > 所有端点前缀: `/api/v1`
 
-> **移动端接入（2026-08 起）:** 本文档所有端点被移动端 App（`cakecake-vue/cakecake-app/`，uni-app）直接复用，约 90% 移动端需求已覆盖。移动端网络层 `src/utils/request.ts` 已内置 `{code,msg,data}` 信封解包 + JWT 401 自动刷新。注意：部分端点返回 `{items:[...]}` 包装时，前端需自行拆一层。地址机制与平台坑见 `docs/APP.md`。
+> **移动端接入（2026-11 起）:** 移动端已改为 Rust 客户端（`cakecake-rs/`，egui 自绘），复用同一套用户端端点；
+> 信封解包 `{code,msg,data}` 与 JWT 401 自动刷新在 `cakecake-rs/src/api.rs` 里统一实现（部分端点返回 `{items:[...]}`，客户端自行拆一层）。
+> 客户端架构、地址机制与平台坑见 [APP.md](./APP.md)。（旧 uni-app 客户端已弃用，文档见 `legacy/APP-uniapp.md`）
 
 ---
 

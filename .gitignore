@@ -107,3 +107,4 @@ cakecake-vue/cakecake-app/unpackage/
 # ── 本地运行时目录（MySQL/Redis/RabbitMQ 原生进程、模拟器、临时截图，勿提交）──
 /_runtime/
 cakecake-rs/build/
+tmp-*

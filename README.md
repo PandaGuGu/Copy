@@ -2,14 +2,14 @@
 
 <p align="center">
   <b>仿 B 站的全栈视频社交平台</b><br>
-  <sub>视频上传/异步转码 · 弹幕 WebSocket · 直播 nms（本地默认）/ SRS（Docker） · 评论/私信/硬币 · 23 模块运营后台 · Docker 一键部署</sub>
+  <sub>视频上传/异步转码 · 弹幕 WebSocket · 直播 nms（本地默认）/ SRS（Docker） · 评论/私信/硬币 · 23 模块运营后台 · 移动端 Rust 原生客户端</sub>
 </p>
 
 <p align="center">
   <a href="#docker-一键部署"><img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&style=flat-square" alt="Docker"></a>
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&style=flat-square" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&style=flat-square" alt="Vue">
-  <img src="https://img.shields.io/badge/uni--app-3.x-2C9C6F?style=flat-square" alt="uni-app">
+  <img src="https://img.shields.io/badge/Rust-egui%200.37-DEA584?logo=rust&style=flat-square" alt="Rust">
   <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-important?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/tables-92-orange?style=flat-square" alt="92 Tables">
   <img src="https://img.shields.io/badge/admin_modules-23-blueviolet?style=flat-square" alt="23 Admin Modules">
@@ -32,10 +32,13 @@
 | 社交 | 关注/拉黑/分组 · 私信（WS 实时）· 通知聚合 · 硬币账本 |
 | 搜索/推荐 | ES 全文搜索（可选）· 协同过滤 + MMR 重排序 |
 | 直播 | Node-Media-Server（本地默认）RTMP 推流 → HTTP-FLV 播放 · SRS（Docker 正轨，可切换） · WS 聊天 + 礼物 |
-| 移动端 App | uni-app（Vue3 + TS + Pinia）· 20 页面（4 tab + 16 二级）· 复用后端 43 个端点（见 [docs/APP.md](./docs/APP.md)） |
+| 移动端 App | **Rust + egui 自绘**（`cakecake-rs/`）· 4 tab + 31 个二级页面 · 系统 MediaPlayer 硬解 · 输入法/系统栏原生调优（见 [docs/APP.md](./docs/APP.md)） |
 | 运营后台 | 23 模块全前后端对齐，RBAC 权限控制（见下） |
 
-架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)。
+架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)；文档地图见 [docs/README.md](./docs/README.md)。
+
+> **移动端路线**：2026-11 起移动端从 uni-app 切到 **Rust + egui**（`cakecake-rs/`）。
+> uni-app 工程 `cakecake-vue/cakecake-app/` 已停更，原因与替代方案见 [docs/APP.md §1](./docs/APP.md#1-为什么弃用-uni-app)。
 
 ---
 
@@ -48,7 +51,7 @@
 | 存储 | MySQL 8（92 表，GORM AutoMigrate 自动建表）· Redis 7（播放计数/冷却/黑名单） |
 | 中间件 | RabbitMQ（转码队列）· WebSocket（gorilla，弹幕/私信/直播 3 通道） |
 | 直播/视频 | Node-Media-Server（本地，`scripts/rtmp-server.js`）· SRS 5（Docker）· FFmpeg 7（H.264 转码） |
-| 移动端 | uni-app + Vue3 + TS + Pinia（`cakecake-vue/cakecake-app/`，复用后端 API） |
+| 移动端 | Rust 2021 + egui 0.37（eframe / wgpu+glow）· Android NativeActivity 薄壳 · `ureq` + 自写 WS · MediaPlayer(JNI) 硬解 |
 
 ---
 
@@ -66,8 +69,10 @@ go mod tidy && go build -o ./bin/mini-bili ./cmd/mini-bili/
 cd cakecake-vue/bilibili-vue
 npm install && cp .env.example .env.local && npm run dev
 
-# 3. 移动端 H5（默认 5173）
-cd cakecake-vue/cakecake-app && npm install && npm run dev:h5
+# 3. 移动端 App（Rust，产出 APK 后 adb 安装）
+cd cakecake-rs && bash scripts/build-apk.sh aarch64-linux-android
+adb install -r target/release/apk/cakecake-rs.apk
+# 只想在本机看界面：cargo run（桌面窗口）
 ```
 
 MySQL 需先建库（如 `minibili`），**表由首次启动时 AutoMigrate 自动创建**，无需手动执行 SQL。
@@ -173,8 +178,12 @@ erDiagram
 │   └── middleware/ aigateway/ search/ storage/ ffmpeg/ ...
 ├── cakecake-vue/
 │   ├── bilibili-vue/       # PC 端前端（Vue 3 + Vite）
-│   └── cakecake-app/       # 移动端 App（uni-app，见 docs/APP.md）
-├── docs/                   # API 文档、ER 图、截图、部署手册
+│   └── cakecake-app/       # ⚠️ 已弃用的 uni-app 移动端（2026-11 起停更，仅存档）
+├── cakecake-rs/            # 移动端 App：Rust + egui（现行，见 docs/APP.md）
+│   ├── src/pages/          # 页面
+│   ├── android/java/       # Java 薄壳（返回键 / 输入法宿主 / 相册 / 视频首帧）
+│   └── scripts/build-apk.sh
+├── docs/                   # 文档索引见 docs/README.md
 ├── deploy/                 # Nginx / systemd / compose 模板
 ├── configs/                # 敏感词库等
 ├── scripts/                # 工具脚本
@@ -204,7 +213,7 @@ erDiagram
 |------|------|------|------|
 | ![个人主页](docs/images/screens/pc/个人主页.png) | ![创作中心](docs/images/screens/pc/创作中心.png) | ![动态](docs/images/screens/pc/动态.png) | ![后台管理](docs/images/screens/pc/后台管理.png) |
 
-**移动端 App**
+**移动端 App（Rust 客户端）**
 
 | 首页 | 直播间 | 消息 | 个人空间 |
 |------|------|------|------|
@@ -230,8 +239,8 @@ go test -cover ./... -count=1 # 覆盖率
 ### 前端（Vitest / Vue）
 
 ```bash
-cd cakecake-vue/bilibili-vue && npm test          # 前端单元测试（如配置）
-cd cakecake-vue/cakecake-app && npm run type-check # 移动端类型检查
+cd cakecake-vue/bilibili-vue && npm test   # 前端单元测试（如配置）
+cd cakecake-rs && cargo check --lib        # 移动端编译检查（Android 目标见 docs/APP.md）
 ```
 
 ### 性能压测与优化

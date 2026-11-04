@@ -1,5 +1,10 @@
 # 系统架构: Cakecake（Mini-Bili）全栈视频社交平台
 
+> ⚠️ **部分内容已过期（移动端）**：本文档写于 2026-06，其中移动端方案为 **uni-app + Vue3**（见 §12 与 MD-ADR-00x）。
+> 2026-11 起移动端已改为 **Rust + egui 自绘**（`cakecake-rs/`），uni-app 工程 `cakecake-vue/cakecake-app/` 停更。
+> 现行移动端架构见 [docs/APP.md](../docs/APP.md)，本文其余部分（后端/数据/直播链路）仍然有效。
+
+
 **文档版本:** 3.0
 **日期:** 2026-06-30
 **作者:** 架构师 Winston（BMAD 框架）
