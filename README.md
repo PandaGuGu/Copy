@@ -38,7 +38,7 @@
 架构细节、数据流图、算法详述见 [bmad-output/architecture.md](./bmad-output/architecture.md)；文档地图见 [docs/README.md](./docs/README.md)。
 
 > **移动端路线**：2026-11 起移动端从 uni-app 切到 **Rust + egui**（`cakecake-rs/`）。
-> uni-app 工程 `cakecake-vue/cakecake-app/` 已停更，原因与替代方案见 [docs/APP.md §1](./docs/APP.md#1-为什么弃用-uni-app)。
+> 旧的 uni-app 工程已从仓库移除，原因与替代方案见 [docs/APP.md §1](./docs/APP.md#1-为什么弃用-uni-app)。
 
 ---
 
@@ -177,8 +177,7 @@ erDiagram
 │   ├── ws/                 # WebSocket Hub（弹幕/私信/直播）
 │   └── middleware/ aigateway/ search/ storage/ ffmpeg/ ...
 ├── cakecake-vue/
-│   ├── bilibili-vue/       # PC 端前端（Vue 3 + Vite）
-│   └── cakecake-app/       # ⚠️ 已弃用的 uni-app 移动端（2026-11 起停更，仅存档）
+│   └── bilibili-vue/       # PC 端前端（Vue 3 + Vite）
 ├── cakecake-rs/            # 移动端 App：Rust + egui（现行，见 docs/APP.md）
 │   ├── src/pages/          # 页面
 │   ├── android/java/       # Java 薄壳（返回键 / 输入法宿主 / 相册 / 视频首帧）
@@ -215,13 +214,13 @@ erDiagram
 
 **移动端 App（Rust 客户端）**
 
-| 首页 | 直播间 | 消息 | 个人空间 |
+| 首页 | 直播 | 直播间 | 动态 |
 |------|------|------|------|
-| ![首页](docs/images/screens/app/首页.png) | ![直播间](docs/images/screens/app/直播间.png) | ![消息](docs/images/screens/app/消息.png) | ![个人空间](docs/images/screens/app/个人空间.png) |
+| ![首页](docs/images/screens/app/首页.png) | ![直播](docs/images/screens/app/直播.png) | ![直播间](docs/images/screens/app/直播间.png) | ![动态](docs/images/screens/app/动态.png) |
 
-| 关注页面 | 我的页面 |
-|------|------|
-| ![关注页面](docs/images/screens/app/关注页面.png) | ![我的页面](docs/images/screens/app/我的页面.png) |
+| 消息 | 个人空间 | 我的 |
+|------|------|------|
+| ![消息](docs/images/screens/app/消息.png) | ![个人空间](docs/images/screens/app/个人空间.png) | ![我的](docs/images/screens/app/我的.png) |
 
 ---
 
