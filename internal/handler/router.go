@@ -16,7 +16,9 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Use(corsMiddleware(a))
 	r.Use(securityHeadersMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
-	r.Use(middleware.TraceRecordMiddleware(a.DB))
+	traceWriter := middleware.NewTraceWriter(a.DB, middleware.DefaultTraceWriterOptions())
+	a.TraceWriter = traceWriter
+	r.Use(traceWriter.Middleware())
 
 	// Metrics (before rate limit so the endpoint is observable).
 	metricsReg := middleware.NewMetricsRegistry()

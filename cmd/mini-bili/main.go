@@ -308,6 +308,9 @@ func main() {
 	<-ch
 	log.Info("shutting down")
 	feedSvc.Shutdown()
+	if api.TraceWriter != nil {
+		api.TraceWriter.Close()
+	}
 	cancel()
 	time.Sleep(300 * time.Millisecond)
 }
